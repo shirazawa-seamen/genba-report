@@ -1,5 +1,5 @@
 import React, { useId } from "react";
-import { AlertCircle, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 export interface SelectOption {
   value: string;
@@ -26,21 +26,16 @@ export function Select({
   const generatedId = useId();
   const id = externalId ?? generatedId;
 
-  const selectStateClasses = error
-    ? "border-red-500/70 text-gray-100 focus:border-red-400 focus:ring-red-500/30"
-    : "border-gray-600/70 text-gray-100 focus:border-amber-400/80 focus:ring-amber-500/20";
+  const borderClass = error
+    ? "border-red-500/50 focus:border-red-400"
+    : "border-white/[0.1] focus:border-[#00D9FF]/50";
 
   return (
     <div className="flex flex-col gap-1.5 w-full">
       {label && (
-        <label
-          htmlFor={id}
-          className="text-sm font-semibold text-gray-300 tracking-wide"
-        >
+        <label htmlFor={id} className="text-[13px] font-medium text-white/50">
           {label}
-          {required && (
-            <span className="ml-1 text-amber-400 text-xs font-bold">必須</span>
-          )}
+          {required && <span className="ml-1 text-[#00D9FF] text-xs">*</span>}
         </label>
       )}
       <div className="relative">
@@ -48,46 +43,33 @@ export function Select({
           id={id}
           required={required}
           className={[
-            // タッチターゲット 48px 以上
-            "w-full min-h-[48px] px-4 py-3 pr-10",
-            "rounded-xl border bg-gray-800/80 transition-all duration-200",
-            "text-base leading-relaxed appearance-none cursor-pointer",
-            "focus:outline-none focus:ring-2",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-            selectStateClasses,
+            "w-full min-h-[44px] px-4 pr-10",
+            "rounded-xl border bg-white/[0.05] transition-all duration-150",
+            "text-[16px] text-white/90 appearance-none cursor-pointer",
+            "focus:outline-none focus:ring-1 focus:ring-[#00D9FF]/20",
+            "disabled:opacity-40 disabled:cursor-not-allowed",
+            borderClass,
             className,
           ]
             .filter(Boolean)
             .join(" ")}
           {...props}
         >
-          <option value="" className="bg-gray-800 text-gray-400">
+          <option value="" className="bg-[#222222] text-white/40">
             {placeholder}
           </option>
           {options.map((option) => (
-            <option
-              key={option.value}
-              value={option.value}
-              className="bg-gray-800 text-gray-100"
-            >
+            <option key={option.value} value={option.value} className="bg-[#222222] text-white/90">
               {option.label}
             </option>
           ))}
         </select>
-        {/* カスタム矢印アイコン */}
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-          {error ? (
-            <AlertCircle size={20} className="text-red-400" aria-hidden="true" />
-          ) : (
-            <ChevronDown size={20} aria-hidden="true" />
-          )}
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/30">
+          <ChevronDown size={16} aria-hidden="true" />
         </span>
       </div>
       {error && (
-        <p className="flex items-center gap-1.5 text-sm text-red-400" role="alert">
-          <AlertCircle size={14} aria-hidden="true" />
-          {error}
-        </p>
+        <p className="text-[13px] text-red-400" role="alert">{error}</p>
       )}
     </div>
   );
