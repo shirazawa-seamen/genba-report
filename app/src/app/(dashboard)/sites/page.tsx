@@ -12,6 +12,7 @@ import { AddSiteForm } from "./AddSiteForm";
 interface SiteWithReportCount {
   id: string;
   name: string;
+  site_number: string | null;
   address: string;
   start_date: string | null;
   end_date: string | null;
@@ -40,12 +41,13 @@ export default async function SitesPage() {
 
   const { data: sites, error } = await supabase
     .from("sites")
-    .select(`id, name, address, start_date, end_date, created_at, daily_reports(count)`)
+    .select(`id, name, site_number, address, start_date, end_date, created_at, daily_reports(count)`)
     .order("created_at", { ascending: false });
 
   const siteList: SiteWithReportCount[] = (sites ?? []).map((site) => ({
     id: site.id,
     name: site.name,
+    site_number: site.site_number ?? null,
     address: site.address,
     start_date: site.start_date,
     end_date: site.end_date,
@@ -93,6 +95,9 @@ export default async function SitesPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-[14px] text-white/85 truncate font-medium">{site.name}</p>
+                    {site.site_number && (
+                      <span className="text-[10px] font-mono text-[#00D9FF]/50 shrink-0">{site.site_number}</span>
+                    )}
                     <span className={`text-[11px] font-medium shrink-0 px-2 py-0.5 rounded-full ${period.bg} ${period.color}`}>
                       {period.label}
                     </span>

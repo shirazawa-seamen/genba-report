@@ -6,6 +6,7 @@ import type { DocumentType } from "@/lib/types";
 
 export async function createSite(input: {
   name: string;
+  siteNumber?: string;
   address: string;
   startDate?: string;
   endDate?: string;
@@ -23,6 +24,7 @@ export async function createSite(input: {
     .from("sites")
     .insert({
       name: input.name.trim(),
+      site_number: input.siteNumber?.trim() || null,
       address: input.address.trim(),
       start_date: input.startDate || null,
       end_date: input.endDate || null,
@@ -44,6 +46,7 @@ export async function createSite(input: {
 export async function updateSite(input: {
   siteId: string;
   name: string;
+  siteNumber?: string;
   address: string;
   startDate?: string;
   endDate?: string;
@@ -65,6 +68,7 @@ export async function updateSite(input: {
     .from("sites")
     .update({
       name: input.name.trim(),
+      site_number: input.siteNumber?.trim() || null,
       address: input.address.trim(),
       start_date: input.startDate || null,
       end_date: input.endDate || null,

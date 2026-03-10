@@ -9,6 +9,7 @@ import {
   Building2,
   Settings,
   CheckSquare,
+  Calendar,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/constants'
 
@@ -51,6 +52,7 @@ export default async function DashboardLayout({
   const allNavItems = [
     { label: 'ホーム', href: '/', icon: LayoutDashboard, roles: ['admin', 'worker_internal', 'worker_external', 'orderer'] },
     { label: '現場', href: '/sites', icon: Building2, roles: ['admin', 'worker_internal', 'worker_external', 'orderer'] },
+    { label: '予定', href: '/calendar', icon: Calendar, roles: ['admin', 'worker_internal', 'worker_external'] },
     { label: '報告', href: '/reports', icon: FileText, roles: ['admin', 'worker_internal', 'worker_external'] },
     { label: '確認', href: '/orderer', icon: CheckSquare, roles: ['orderer'] },
     { label: '新規', href: '/reports/new', icon: PlusCircle, roles: ['admin', 'worker_internal', 'worker_external'] },

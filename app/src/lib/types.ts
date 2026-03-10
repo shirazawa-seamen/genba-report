@@ -44,6 +44,7 @@ export interface Process {
 export interface Site {
   id: string;
   name: string;
+  site_number: string | null;
   address: string;
   start_date: string | null;
   end_date: string | null;

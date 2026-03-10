@@ -10,6 +10,7 @@ import { createSite } from "./actions";
 export function AddSiteForm() {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
+  const [siteNumber, setSiteNumber] = useState("");
   const [address, setAddress] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -24,12 +25,13 @@ export function AddSiteForm() {
     startTransition(async () => {
       const result = await createSite({
         name: name.trim(),
+        siteNumber: siteNumber.trim() || undefined,
         address: address.trim(),
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
       if (!result.success) { setError(result.error ?? "登録に失敗しました"); return; }
-      setName(""); setAddress(""); setStartDate(""); setEndDate(""); setIsOpen(false);
+      setName(""); setSiteNumber(""); setAddress(""); setStartDate(""); setEndDate(""); setIsOpen(false);
       router.refresh();
     });
   };
@@ -56,6 +58,7 @@ export function AddSiteForm() {
       </div>
       <div className="flex flex-col gap-4">
         <Input label="現場名" placeholder="例：○○ビル新築工事" value={name} onChange={(e) => { setName(e.target.value); setError(null); }} required autoFocus />
+        <Input label="現場番号" placeholder="例：S-2026-001" value={siteNumber} onChange={(e) => setSiteNumber(e.target.value)} helperText="社内管理用の現場番号" />
         <Input label="住所" placeholder="例：東京都千代田区..." value={address} onChange={(e) => setAddress(e.target.value)} />
         <Input label="着工日" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <Input label="完工予定日" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />

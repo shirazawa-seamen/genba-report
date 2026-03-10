@@ -39,7 +39,7 @@ export default async function SiteDetailPage({ params }: PageProps) {
 
   const { data: site, error } = await supabase
     .from("sites")
-    .select("id, name, address, start_date, end_date, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
+    .select("id, name, site_number, address, start_date, end_date, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
     .eq("id", siteId).single();
 
   if (error || !site) { console.error("Site fetch error:", error); notFound(); }
@@ -73,6 +73,9 @@ export default async function SiteDetailPage({ params }: PageProps) {
           <h1 className="text-[24px] font-bold text-white/95">{s.name}</h1>
           <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${period.bg} ${period.color}`}>{period.label}</span>
         </div>
+        {s.site_number && (
+          <p className="text-[12px] text-[#00D9FF]/60 font-mono mb-1">No. {s.site_number}</p>
+        )}
         {s.address && (
           <p className="text-[13px] text-white/40 flex items-center gap-1.5 mb-2">
             <MapPin size={13} /> {s.address}
@@ -86,7 +89,7 @@ export default async function SiteDetailPage({ params }: PageProps) {
 
       {/* Edit/Delete */}
       <div className="mb-8">
-        <EditSiteForm site={{ id: s.id, name: s.name, address: s.address, start_date: s.start_date, end_date: s.end_date }} />
+        <EditSiteForm site={{ id: s.id, name: s.name, site_number: s.site_number, address: s.address, start_date: s.start_date, end_date: s.end_date }} />
       </div>
 
       {/* Processes */}

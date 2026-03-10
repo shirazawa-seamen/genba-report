@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { updateSite, deleteSite } from "../actions";
 
 interface EditSiteFormProps {
-  site: { id: string; name: string; address: string; start_date: string | null; end_date: string | null };
+  site: { id: string; name: string; site_number: string | null; address: string; start_date: string | null; end_date: string | null };
 }
 
 export function EditSiteForm({ site }: EditSiteFormProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [name, setName] = useState(site.name);
+  const [siteNumber, setSiteNumber] = useState(site.site_number ?? "");
   const [address, setAddress] = useState(site.address);
   const [startDate, setStartDate] = useState(site.start_date ?? "");
   const [endDate, setEndDate] = useState(site.end_date ?? "");
@@ -29,7 +30,7 @@ export function EditSiteForm({ site }: EditSiteFormProps) {
     if (!name.trim()) { setError("現場名を入力してください"); return; }
     setError(null);
     startTransition(async () => {
-      const result = await updateSite({ siteId: site.id, name: name.trim(), address: address.trim(), startDate: startDate || undefined, endDate: endDate || undefined });
+      const result = await updateSite({ siteId: site.id, name: name.trim(), siteNumber: siteNumber.trim() || undefined, address: address.trim(), startDate: startDate || undefined, endDate: endDate || undefined });
       if (!result.success) { setError(result.error ?? "更新に失敗しました"); return; }
       setIsEditing(false);
       router.refresh();
@@ -46,7 +47,7 @@ export function EditSiteForm({ site }: EditSiteFormProps) {
   };
 
   const handleCancel = () => {
-    setName(site.name); setAddress(site.address); setStartDate(site.start_date ?? ""); setEndDate(site.end_date ?? "");
+    setName(site.name); setSiteNumber(site.site_number ?? ""); setAddress(site.address); setStartDate(site.start_date ?? ""); setEndDate(site.end_date ?? "");
     setError(null); setIsEditing(false); setShowDeleteConfirm(false);
   };
 
@@ -100,6 +101,7 @@ export function EditSiteForm({ site }: EditSiteFormProps) {
       </div>
       <div className="flex flex-col gap-4">
         <Input label="現場名" placeholder="例：○○ビル新築工事" value={name} onChange={(e) => { setName(e.target.value); setError(null); }} required autoFocus />
+        <Input label="現場番号" placeholder="例：S-2026-001" value={siteNumber} onChange={(e) => setSiteNumber(e.target.value)} />
         <Input label="住所" placeholder="例：東京都千代田区..." value={address} onChange={(e) => setAddress(e.target.value)} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="着工日" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
