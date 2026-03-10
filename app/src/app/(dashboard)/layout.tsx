@@ -7,6 +7,8 @@ import {
   PlusCircle,
   LogOut,
   Building2,
+  Settings,
+  CheckSquare,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/constants'
 
@@ -46,12 +48,16 @@ export default async function DashboardLayout({
     .map((s: string) => s[0].toUpperCase())
     .join('')
 
-  const navItems = [
-    { label: 'ホーム', href: '/', icon: LayoutDashboard },
-    { label: '現場', href: '/sites', icon: Building2 },
-    { label: '報告', href: '/reports', icon: FileText },
-    { label: '新規', href: '/reports/new', icon: PlusCircle },
+  const allNavItems = [
+    { label: 'ホーム', href: '/', icon: LayoutDashboard, roles: ['admin', 'worker_internal', 'worker_external', 'orderer'] },
+    { label: '現場', href: '/sites', icon: Building2, roles: ['admin', 'worker_internal', 'worker_external', 'orderer'] },
+    { label: '報告', href: '/reports', icon: FileText, roles: ['admin', 'worker_internal', 'worker_external'] },
+    { label: '確認', href: '/orderer', icon: CheckSquare, roles: ['orderer'] },
+    { label: '新規', href: '/reports/new', icon: PlusCircle, roles: ['admin', 'worker_internal', 'worker_external'] },
+    { label: '管理', href: '/admin', icon: Settings, roles: ['admin'] },
   ]
+
+  const navItems = allNavItems.filter(item => item.roles.includes(userRole))
 
   return (
     <div className="flex h-dvh bg-[#1a1a1a] text-white/90 font-sans overflow-hidden">

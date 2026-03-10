@@ -17,6 +17,9 @@ import {
   CheckCircle2,
   XCircle,
   Shield,
+  Edit3,
+  Printer,
+  StickyNote,
 } from "lucide-react";
 import { ApprovalButtons } from "./approval-buttons";
 
@@ -27,6 +30,7 @@ interface ReportDetailRaw {
   workers: string[] | null; progress_rate: number; weather: string | null;
   work_hours: number | null; issues: string | null; created_at: string;
   approval_status: string; rejection_reason: string | null;
+  admin_notes: string | null; edited_by_admin: boolean | null;
   sites: SiteData | SiteData[] | null; processes: ProcessData | ProcessData[] | null;
 }
 interface ReportPhoto { id: string; storage_path: string; photo_type: string | null; caption: string | null; media_type: string | null }
@@ -65,7 +69,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
   const { data: report, error: reportError } = await supabase
     .from("daily_reports")
-    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_reason, sites(name, address), processes(id, category, name, progress_rate, status)`)
+    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_reason, admin_notes, edited_by_admin, sites(name, address), processes(id, category, name, progress_rate, status)`)
     .eq("id", id).single();
 
   if (reportError || !report) { console.error("Report fetch error:", reportError); notFound(); }
@@ -248,9 +252,60 @@ export default async function ReportDetailPage({ params }: PageProps) {
         </div>
       )}
 
+      {/* Admin Notes */}
+      {raw.admin_notes && (
+        <div className="mb-8">
+          <div className="p-4 rounded-2xl bg-amber-500/[0.04] border border-amber-500/10">
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <StickyNote size={14} className="text-amber-400" />
+              <span className="text-[12px] font-semibold text-amber-400">管理者メモ</span>
+            </div>
+            <p className="text-[14px] text-white/70 whitespace-pre-wrap leading-relaxed">
+              {raw.admin_notes}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Admin action buttons */}
+      {userRole === "admin" && (
+        <div className="mb-8 flex flex-col sm:flex-row gap-3">
+          <Link
+            href={`/reports/${raw.id}/edit`}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] min-h-[44px] px-4 text-[14px] font-medium text-amber-400 hover:bg-amber-500/[0.12] transition-colors"
+          >
+            <Edit3 size={16} />
+            編集する
+          </Link>
+          <Link
+            href={`/reports/${raw.id}/print`}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-[#00D9FF]/20 bg-[#00D9FF]/[0.06] min-h-[44px] px-4 text-[14px] font-medium text-[#00D9FF] hover:bg-[#00D9FF]/[0.12] transition-colors"
+          >
+            <Printer size={16} />
+            PDF出力
+          </Link>
+        </div>
+      )}
+
+      {/* PDF button for orderer */}
+      {userRole === "orderer" && (
+        <div className="mb-8">
+          <Link
+            href={`/reports/${raw.id}/print`}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#00D9FF]/20 bg-[#00D9FF]/[0.06] min-h-[44px] px-5 text-[14px] font-medium text-[#00D9FF] hover:bg-[#00D9FF]/[0.12] transition-colors"
+          >
+            <Printer size={16} />
+            PDF出力
+          </Link>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="text-[11px] text-white/20 mt-4">
         <p>作成: {new Date(raw.created_at).toLocaleString("ja-JP")}</p>
+        {raw.edited_by_admin && (
+          <p className="mt-1 text-amber-400/40">※ 管理者による編集あり</p>
+        )}
       </div>
     </div>
   );
