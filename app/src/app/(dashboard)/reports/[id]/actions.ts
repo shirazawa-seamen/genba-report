@@ -1,7 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { notifyReportApproved, notifyReportRejected } from "@/lib/email";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -63,6 +65,42 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
 
+  // 管理者承認時 → 元請けへメール通知
+  if (newStatus === "admin_approved") {
+    try {
+      const adminClient = createAdminClient();
+      const { data: report } = await supabase
+        .from("daily_reports")
+        .select("report_date, sites(name)")
+        .eq("id", reportId)
+        .single();
+
+      const { data: ordererProfiles } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("role", "orderer");
+
+      if (ordererProfiles && ordererProfiles.length > 0 && report) {
+        const { data: authUsers } = await adminClient.auth.admin.listUsers();
+        const ordererIds = new Set(ordererProfiles.map((p) => p.id));
+        const ordererEmails = (authUsers?.users ?? [])
+          .filter((u) => ordererIds.has(u.id) && u.email)
+          .map((u) => u.email!);
+
+        const siteName = (report.sites as { name?: string } | null)?.name ?? "不明な現場";
+
+        notifyReportApproved({
+          siteName,
+          reportDate: report.report_date,
+          reportId,
+          ordererEmails,
+        }).catch((err) => console.error("[Email] Notification error:", err));
+      }
+    } catch (err) {
+      console.error("[Email] Failed to send approval notification:", err);
+    }
+  }
+
   return { success: true };
 }
 
@@ -118,6 +156,35 @@ export async function rejectReport(
   // キャッシュを無効化
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
+
+  // 差戻し → 報告者へメール通知
+  try {
+    const adminClient = createAdminClient();
+    const { data: report } = await supabase
+      .from("daily_reports")
+      .select("report_date, reporter_id, sites(name)")
+      .eq("id", reportId)
+      .single();
+
+    if (report?.reporter_id) {
+      const { data: authData } = await adminClient.auth.admin.getUserById(report.reporter_id);
+      const reporterEmail = authData?.user?.email;
+
+      if (reporterEmail) {
+        const siteName = (report.sites as { name?: string } | null)?.name ?? "不明な現場";
+
+        notifyReportRejected({
+          siteName,
+          reportDate: report.report_date,
+          reportId,
+          reporterEmail,
+          rejectionReason: reason,
+        }).catch((err) => console.error("[Email] Notification error:", err));
+      }
+    }
+  } catch (err) {
+    console.error("[Email] Failed to send rejection notification:", err);
+  }
 
   return { success: true };
 }

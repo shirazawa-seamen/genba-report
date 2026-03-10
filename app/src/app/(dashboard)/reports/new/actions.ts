@@ -1,7 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { notifyReportSubmitted } from "@/lib/email";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -217,6 +219,45 @@ export async function createDailyReport(
 
   // 報告一覧のキャッシュを無効化
   revalidatePath("/reports");
+
+  // メール通知（非同期・エラーは無視）
+  try {
+    const adminClient = createAdminClient();
+    const { data: adminProfiles } = await adminClient
+      .from("profiles")
+      .select("id")
+      .eq("role", "admin");
+
+    if (adminProfiles && adminProfiles.length > 0) {
+      const { data: authUsers } = await adminClient.auth.admin.listUsers();
+      const adminIds = new Set(adminProfiles.map((p) => p.id));
+      const adminEmails = (authUsers?.users ?? [])
+        .filter((u) => adminIds.has(u.id) && u.email)
+        .map((u) => u.email!);
+
+      const { data: siteData } = await supabase
+        .from("sites")
+        .select("name")
+        .eq("id", siteId)
+        .single();
+
+      const reporterName =
+        user.user_metadata?.full_name ??
+        user.user_metadata?.name ??
+        user.email?.split("@")[0] ??
+        "不明";
+
+      notifyReportSubmitted({
+        reporterName,
+        siteName: siteData?.name ?? "不明な現場",
+        reportDate: input.reportDate,
+        reportId: report.id,
+        adminEmails,
+      }).catch((err) => console.error("[Email] Notification error:", err));
+    }
+  } catch (err) {
+    console.error("[Email] Failed to send notification:", err);
+  }
 
   return { success: true, reportId: report.id };
 }
