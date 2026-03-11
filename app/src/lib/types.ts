@@ -2,10 +2,11 @@
 // ユーザーロール（新ロール体系）
 // ---------------------------------------------------------------------------
 export type UserRole =
-  | 'worker_internal'  // 社内作業員
-  | 'worker_external'  // 協力会社作業員
   | 'admin'            // 管理者
-  | 'orderer';         // 発注者
+  | 'manager'          // マネージャー
+  | 'worker_internal'  // ワーカー
+  | 'worker_external'  // パートナー
+  | 'client';          // クライアント
 
 // ---------------------------------------------------------------------------
 // 承認ステータス
@@ -13,8 +14,8 @@ export type UserRole =
 export type ApprovalStatus =
   | 'draft'               // 下書き
   | 'submitted'           // 提出済み（承認待ち）
-  | 'admin_approved'      // 管理者承認済み
-  | 'orderer_confirmed'   // 元請け確認済み
+  | 'approved'            // 承認済み（manager or admin）
+  | 'client_confirmed'    // クライアント確認済み
   | 'rejected';           // 差戻し
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ export interface Process {
   site_id: string;
   category: string;
   name: string;
+  order_index: number;
   progress_rate: number;
   status: 'in_progress' | 'completed';
   created_at: string;
@@ -46,6 +48,8 @@ export interface Site {
   name: string;
   site_number: string | null;
   address: string;
+  client_name: string | null;
+  site_color?: string | null;
   start_date: string | null;
   end_date: string | null;
   has_blueprint: boolean;

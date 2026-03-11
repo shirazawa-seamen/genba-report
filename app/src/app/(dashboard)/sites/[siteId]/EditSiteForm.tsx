@@ -1,118 +1,104 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
-import { Pencil, X, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { updateSite, deleteSite } from "../actions";
 
-interface EditSiteFormProps {
-  site: { id: string; name: string; site_number: string | null; address: string; start_date: string | null; end_date: string | null };
+export interface SiteEditDraft {
+  name: string;
+  siteNumber: string;
+  address: string;
+  clientName: string;
+  startDate: string;
+  endDate: string;
+  siteColor: string;
 }
 
-export function EditSiteForm({ site }: EditSiteFormProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [name, setName] = useState(site.name);
-  const [siteNumber, setSiteNumber] = useState(site.site_number ?? "");
-  const [address, setAddress] = useState(site.address);
-  const [startDate, setStartDate] = useState(site.start_date ?? "");
-  const [endDate, setEndDate] = useState(site.end_date ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [isDeleting, startDeleteTransition] = useTransition();
-  const router = useRouter();
+interface EditSiteFormProps {
+  draft: SiteEditDraft;
+  onChange: (next: SiteEditDraft) => void;
+  error?: string | null;
+}
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) { setError("現場名を入力してください"); return; }
-    setError(null);
-    startTransition(async () => {
-      const result = await updateSite({ siteId: site.id, name: name.trim(), siteNumber: siteNumber.trim() || undefined, address: address.trim(), startDate: startDate || undefined, endDate: endDate || undefined });
-      if (!result.success) { setError(result.error ?? "更新に失敗しました"); return; }
-      setIsEditing(false);
-      router.refresh();
-    });
-  };
-
-  const handleDelete = () => {
-    startDeleteTransition(async () => {
-      const result = await deleteSite(site.id);
-      if (!result.success) { setError(result.error ?? "削除に失敗しました"); setShowDeleteConfirm(false); return; }
-      router.push("/sites");
-      router.refresh();
-    });
-  };
-
-  const handleCancel = () => {
-    setName(site.name); setSiteNumber(site.site_number ?? ""); setAddress(site.address); setStartDate(site.start_date ?? ""); setEndDate(site.end_date ?? "");
-    setError(null); setIsEditing(false); setShowDeleteConfirm(false);
-  };
-
-  if (!isEditing) {
-    return (
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setIsEditing(true)}
-          className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl text-[13px] font-medium text-white/50 border border-white/[0.1] hover:bg-white/[0.06] hover:text-white/70 transition-all"
-        >
-          <Pencil size={14} /> 編集
-        </button>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="inline-flex items-center gap-2 min-h-[44px] px-4 rounded-xl text-[13px] font-medium text-white/50 border border-white/[0.1] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all"
-        >
-          <Trash2 size={14} /> 削除
-        </button>
-
-        {showDeleteConfirm && typeof document !== "undefined" && createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-5" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}>
-            <div className="rounded-2xl border border-white/[0.08] bg-[#222222] p-6 max-w-sm w-full">
-              <h3 className="text-[16px] font-bold text-white/90 mb-2">現場を削除しますか？</h3>
-              <p className="text-[13px] text-white/40 mb-6">
-                「{site.name}」を削除します。この操作は取り消せません。
-              </p>
-              {error && <p className="text-[13px] text-red-400 mb-4">{error}</p>}
-              <div className="flex gap-2.5">
-                <Button variant="outline" size="sm" onClick={() => { setShowDeleteConfirm(false); setError(null); }} disabled={isDeleting} className="flex-1">
-                  キャンセル
-                </Button>
-                <Button variant="danger" size="sm" onClick={handleDelete} disabled={isDeleting} loading={isDeleting} className="flex-1">
-                  {isDeleting ? "削除中..." : "削除する"}
-                </Button>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
-      </div>
-    );
-  }
-
+export function EditSiteForm({ draft, onChange, error }: EditSiteFormProps) {
+  const presetColors = ["#0EA5E9", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-[15px] font-semibold text-white/75">現場情報を編集</h3>
-        <button type="button" onClick={handleCancel} className="text-white/30 hover:text-white/50 transition-colors w-8 h-8 flex items-center justify-center">
-          <X size={18} />
-        </button>
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-5">
+        <h3 className="text-[15px] font-semibold text-gray-600">現場情報を編集</h3>
       </div>
       <div className="flex flex-col gap-4">
-        <Input label="現場名" placeholder="例：○○ビル新築工事" value={name} onChange={(e) => { setName(e.target.value); setError(null); }} required autoFocus />
-        <Input label="現場番号" placeholder="例：S-2026-001" value={siteNumber} onChange={(e) => setSiteNumber(e.target.value)} />
-        <Input label="住所" placeholder="例：東京都千代田区..." value={address} onChange={(e) => setAddress(e.target.value)} />
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="着工日" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          <Input label="完工予定日" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        <Input
+          label="現場名"
+          placeholder="例：○○ビル新築工事"
+          value={draft.name}
+          onChange={(event) =>
+            onChange({ ...draft, name: event.target.value })
+          }
+          required
+        />
+        <Input
+          label="現場番号"
+          placeholder="例：S-2026-001"
+          value={draft.siteNumber}
+          onChange={(event) =>
+            onChange({ ...draft, siteNumber: event.target.value })
+          }
+        />
+        <Input
+          label="住所"
+          placeholder="例：東京都千代田区..."
+          value={draft.address}
+          onChange={(event) =>
+            onChange({ ...draft, address: event.target.value })
+          }
+        />
+        <Input
+          label="クライアント名"
+          placeholder="例：○○建設株式会社"
+          value={draft.clientName}
+          onChange={(event) =>
+            onChange({ ...draft, clientName: event.target.value })
+          }
+        />
+        <div className="flex flex-col gap-2">
+          <span className="text-[13px] font-medium text-gray-500">現場カラー</span>
+          <div className="flex flex-wrap gap-2">
+            {presetColors.map((color) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => onChange({ ...draft, siteColor: color })}
+                className={`h-8 w-8 rounded-full border-2 ${draft.siteColor === color ? "border-gray-900" : "border-white shadow-sm"}`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+            <input
+              type="color"
+              value={draft.siteColor}
+              onChange={(event) => onChange({ ...draft, siteColor: event.target.value })}
+              className="h-8 w-10 rounded border border-gray-200 bg-white"
+            />
+          </div>
         </div>
-        {error && <p className="text-[13px] text-red-400">{error}</p>}
-        <div className="flex gap-2.5">
-          <Button type="button" variant="outline" size="sm" onClick={handleCancel} className="flex-1">キャンセル</Button>
-          <Button type="submit" variant="primary" size="sm" loading={isPending} className="flex-1">{isPending ? "保存中..." : "保存"}</Button>
+        <div className="flex flex-col gap-4">
+          <Input
+            label="着工日"
+            type="date"
+            value={draft.startDate}
+            onChange={(event) =>
+              onChange({ ...draft, startDate: event.target.value })
+            }
+          />
+          <Input
+            label="完工予定日"
+            type="date"
+            value={draft.endDate}
+            onChange={(event) =>
+              onChange({ ...draft, endDate: event.target.value })
+            }
+          />
         </div>
+        {error ? <p className="text-[13px] text-red-400">{error}</p> : null}
       </div>
-    </form>
+    </div>
   );
 }

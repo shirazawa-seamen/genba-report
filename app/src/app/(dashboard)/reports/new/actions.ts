@@ -11,20 +11,24 @@ import { notifyReportSubmitted } from "@/lib/email";
 interface CreateReportInput {
   siteName: string; // 既存（後方互換のため残す）
   siteId?: string; // 新規追加: 現場ID（ドロップダウンから選択時）
-  processId: string; // 新規追加: 工程ID
   reportDate: string;
-  workProcess: string;
   workDescription: string;
   workers: string;
-  progressRate: string;
   weather: string;
   workHours: string;
   issues: string;
+  processes: Array<{
+    processId: string;
+    workProcess: string;
+    progressRate: string;
+    name?: string;
+  }>;
 }
 
 interface CreateReportResult {
   success: boolean;
   reportId?: string;
+  reportIds?: string[];
   error?: string;
 }
 
@@ -76,9 +80,35 @@ async function getOrCreateSite(
 // ---------------------------------------------------------------------------
 export async function fetchSites() {
   const supabase = await createClient();
+
+  // ユーザーロール取得
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role === "worker_external") {
+    // 外注職人: 招待された稼働中の現場のみ
+    const { data, error } = await supabase
+      .from("site_members")
+      .select("sites!inner(id, name, status)")
+      .eq("user_id", user.id)
+      .eq("sites.status", "active");
+    if (error) throw error;
+    return (data ?? [])
+      .map((m) => m.sites as unknown as { id: string; name: string })
+      .filter(Boolean);
+  }
+
+  // その他: 稼働中の現場のみ
   const { data, error } = await supabase
     .from("sites")
     .select("id, name")
+    .eq("status", "active")
     .order("name");
   if (error) throw error;
   return data;
@@ -89,12 +119,35 @@ export async function fetchSites() {
 // ---------------------------------------------------------------------------
 export async function fetchProcesses(siteId: string) {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let data: {
+    id: string;
+    category: string;
+    name: string;
+    progress_rate: number;
+    status: string;
+    order_index?: number;
+  }[] | null = null;
+  let error: Error | null = null;
+
+  const primary = await supabase
     .from("processes")
-    .select("id, category, name, progress_rate, status")
+    .select("id, category, name, progress_rate, status, order_index")
     .eq("site_id", siteId)
-    .order("category")
-    .order("name");
+    .order("order_index");
+
+  data = primary.data;
+  error = primary.error;
+
+  if (error?.message?.includes("order_index")) {
+    const fallback = await supabase
+      .from("processes")
+      .select("id, category, name, progress_rate, status")
+      .eq("site_id", siteId)
+      .order("category")
+      .order("name");
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw error;
   return data;
 }
@@ -116,6 +169,28 @@ export async function createProcess(siteId: string, category: string, name: stri
     throw error;
   }
   return { success: true as const, process: data };
+}
+
+// ---------------------------------------------------------------------------
+// 作業者候補の取得（登録ユーザー一覧）
+// ---------------------------------------------------------------------------
+export async function fetchWorkers() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Unauthorized");
+
+  // admin, manager, worker_internal, worker_external のプロフィールを取得
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, role")
+    .in("role", ["admin", "manager", "worker_internal", "worker_external"])
+    .eq("is_active", true)
+    .order("full_name");
+
+  if (error) throw error;
+  return (data ?? [])
+    .filter((p) => p.full_name && p.full_name.trim() !== "")
+    .map((p) => ({ id: p.id, name: p.full_name!, role: p.role }));
 }
 
 // ---------------------------------------------------------------------------
@@ -163,58 +238,101 @@ export async function createDailyReport(
     siteId = siteResult.id;
   }
 
+  if (input.processes.length === 0) {
+    return { success: false, error: "工程を1つ以上選択してください" };
+  }
+
+  const duplicateProcessNames = input.processes
+    .filter(
+      (process, index, list) =>
+        list.findIndex((target) => target.processId === process.processId) !== index
+    )
+    .map((process) => process.name || "未設定工程");
+
+  if (duplicateProcessNames.length > 0) {
+    return {
+      success: false,
+      error: `同じ工程が重複しています: ${duplicateProcessNames.join("、")}`,
+    };
+  }
+
+  const selectedProcessIds = input.processes.map((process) => process.processId);
+  const { data: existingReports, error: existingReportsError } = await supabase
+    .from("daily_reports")
+    .select("process_id, processes(name)")
+    .in("process_id", selectedProcessIds)
+    .eq("report_date", input.reportDate);
+
+  if (existingReportsError) {
+    return {
+      success: false,
+      error: `既存報告の確認に失敗しました: ${existingReportsError.message}`,
+    };
+  }
+
+  if ((existingReports ?? []).length > 0) {
+    const existingNames = (existingReports ?? []).map((report) => {
+      const process = report.processes as { name?: string } | null;
+      return process?.name || "未設定工程";
+    });
+    return {
+      success: false,
+      error: `この日付で既に報告済みの工程があります: ${existingNames.join("、")}`,
+    };
+  }
+
   // 作業者リストをパース（読点区切り）
   const workersArray = input.workers
     .split(/[、,]/)
     .map((w) => w.trim())
     .filter((w) => w.length > 0);
+  const createdReportIds: string[] = [];
 
-  const progressRate = parseInt(input.progressRate, 10);
+  for (const process of input.processes) {
+    const progressRate = parseInt(process.progressRate, 10);
+    const { data: report, error: insertError } = await supabase
+      .from("daily_reports")
+      .insert({
+        site_id: siteId,
+        process_id: process.processId,
+        reporter_id: user.id,
+        report_date: input.reportDate,
+        work_process: process.workProcess,
+        work_content: input.workDescription,
+        workers: workersArray,
+        progress_rate: progressRate,
+        weather: input.weather || null,
+        work_hours: input.workHours ? parseFloat(input.workHours) : null,
+        issues: input.issues || null,
+        approval_status: "submitted",
+      })
+      .select("id")
+      .single();
 
-  // 日次報告の作成
-  const { data: report, error: insertError } = await supabase
-    .from("daily_reports")
-    .insert({
-      site_id: siteId,
-      process_id: input.processId,
-      reporter_id: user.id,
-      report_date: input.reportDate,
-      work_process: input.workProcess,
-      work_content: input.workDescription,
-      workers: workersArray,
-      progress_rate: progressRate,
-      weather: input.weather || null,
-      work_hours: input.workHours ? parseFloat(input.workHours) : null,
-      issues: input.issues || null,
-      approval_status: "submitted",
-    })
-    .select("id")
-    .single();
-
-  if (insertError) {
-    // 重複エラーのハンドリング
-    if (insertError.code === "23505") {
-      return {
-        success: false,
-        error: "この工程・日付の報告は既に存在します",
-      };
+    if (insertError) {
+      if (insertError.code === "23505") {
+        return {
+          success: false,
+          error: `この工程・日付の報告は既に存在します: ${process.name || "未設定工程"}`,
+        };
+      }
+      return { success: false, error: `報告作成エラー: ${insertError.message}` };
     }
-    return { success: false, error: `報告作成エラー: ${insertError.message}` };
-  }
 
-  // processes テーブルの progress_rate と status を更新
-  const newStatus = progressRate >= 100 ? "completed" : "in_progress";
-  const { error: processUpdateError } = await supabase
-    .from("processes")
-    .update({
-      progress_rate: progressRate,
-      status: newStatus,
-    })
-    .eq("id", input.processId);
+    createdReportIds.push(report.id);
 
-  if (processUpdateError) {
-    // 工程更新エラーは報告自体の成功には影響させない（ログのみ）
-    console.error("工程進捗率の更新エラー:", processUpdateError.message);
+    const newStatus = progressRate >= 100 ? "completed" : "in_progress";
+    const { error: processUpdateError } = await supabase
+      .from("processes")
+      .update({
+        progress_rate: progressRate,
+        status: newStatus,
+      })
+      .eq("id", process.processId);
+
+    if (processUpdateError) {
+      console.error("工程進捗率の更新エラー:", processUpdateError.message);
+    }
   }
 
   // 報告一覧のキャッシュを無効化
@@ -223,14 +341,14 @@ export async function createDailyReport(
   // メール通知（非同期・エラーは無視）
   try {
     const adminClient = createAdminClient();
-    const { data: adminProfiles } = await adminClient
+    const { data: adminManagerProfiles } = await adminClient
       .from("profiles")
       .select("id")
-      .eq("role", "admin");
+      .in("role", ["admin", "manager"]);
 
-    if (adminProfiles && adminProfiles.length > 0) {
+    if (adminManagerProfiles && adminManagerProfiles.length > 0) {
       const { data: authUsers } = await adminClient.auth.admin.listUsers();
-      const adminIds = new Set(adminProfiles.map((p) => p.id));
+      const adminIds = new Set(adminManagerProfiles.map((p) => p.id));
       const adminEmails = (authUsers?.users ?? [])
         .filter((u) => adminIds.has(u.id) && u.email)
         .map((u) => u.email!);
@@ -251,7 +369,7 @@ export async function createDailyReport(
         reporterName,
         siteName: siteData?.name ?? "不明な現場",
         reportDate: input.reportDate,
-        reportId: report.id,
+        reportId: createdReportIds[0],
         adminEmails,
       }).catch((err) => console.error("[Email] Notification error:", err));
     }
@@ -259,7 +377,11 @@ export async function createDailyReport(
     console.error("[Email] Failed to send notification:", err);
   }
 
-  return { success: true, reportId: report.id };
+  return {
+    success: true,
+    reportId: createdReportIds[0],
+    reportIds: createdReportIds,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -291,9 +413,10 @@ export async function uploadReportPhotos(
     return { success: false, error: "ログインが必要です" };
   }
 
-  // FormDataから写真・動画ファイルとタイプを取得
+  // FormDataから写真・動画ファイルとタイプ、キャプションを取得
   const files = input.photos.getAll("photos") as File[];
   const photoTypes = input.photos.getAll("photoTypes") as string[];
+  const captions = input.photos.getAll("captions") as string[];
   if (files.length === 0) {
     return { success: true, uploadedCount: 0 };
   }
@@ -337,9 +460,9 @@ export async function uploadReportPhotos(
     const { error: dbError } = await supabase.from("report_photos").insert({
       report_id: input.reportId,
       storage_path: storagePath,
-      photo_type: photoType,
+      photo_type: photoType || null,
       media_type: mediaType,
-      caption: null,
+      caption: captions[i] || null,
     });
 
     if (dbError) {

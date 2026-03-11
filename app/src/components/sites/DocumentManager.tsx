@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition, useEffect } from "react";
+import { useState, useRef, useTransition, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   FileText,
@@ -75,54 +75,57 @@ interface Document {
 
 interface DocumentManagerProps {
   siteId: string;
+  canManage?: boolean;
 }
 
-export function DocumentManager({ siteId }: DocumentManagerProps) {
+export function DocumentManager({ siteId, canManage = false }: DocumentManagerProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const fetchDocuments = async () => {
-    setIsLoading(true);
+  const fetchDocuments = useCallback(async () => {
     const result = await getSiteDocuments(siteId);
     if (result.success && result.documents) {
       setDocuments(result.documents);
     }
     setIsLoading(false);
-  };
-
-  useEffect(() => {
-    fetchDocuments();
   }, [siteId]);
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchDocuments();
+  }, [fetchDocuments]);
+
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <FileText size={16} className="text-[#00D9FF]" />
-          <h2 className="text-[13px] font-semibold text-white/70 tracking-wide">
+          <FileText size={16} className="text-[#0EA5E9]" />
+          <h2 className="text-[13px] font-semibold text-gray-600 tracking-wide">
             ドキュメント管理
           </h2>
         </div>
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={() => setShowUploadModal(true)}
-        >
-          <Upload size={16} />
-          アップロード
-        </Button>
+        {canManage && (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => setShowUploadModal(true)}
+          >
+            <Upload size={16} />
+            アップロード
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
-          <Loader2 size={24} className="animate-spin text-[#00D9FF]" />
+          <Loader2 size={24} className="animate-spin text-[#0EA5E9]" />
         </div>
       ) : documents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 text-white/30">
-          <File size={32} className="mb-2 text-white/15" />
+        <div className="flex flex-col items-center justify-center py-8 text-gray-300">
+          <File size={32} className="mb-2 text-gray-200" />
           <p className="text-[13px]">ドキュメントがありません</p>
         </div>
       ) : (
@@ -135,25 +138,25 @@ export function DocumentManager({ siteId }: DocumentManagerProps) {
             return (
               <div
                 key={doc.id}
-                className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 min-h-[52px] py-2.5"
+                className="flex items-center gap-3.5 rounded-xl border border-gray-200 bg-white px-4 min-h-[52px] py-2.5"
               >
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[#00D9FF]/10">
-                  <Icon size={16} className="text-[#00D9FF]" />
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-cyan-50">
+                  <Icon size={16} className="text-[#0EA5E9]" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[13px] font-medium text-white/80 truncate">
+                    <span className="text-[13px] font-medium text-gray-700 truncate">
                       {doc.title}
                     </span>
-                    <span className="text-[10px] font-medium text-[#00D9FF]/70 bg-[#00D9FF]/10 px-1.5 py-0.5 rounded">
+                    <span className="text-[10px] font-medium text-[#0EA5E9] bg-cyan-50 px-1.5 py-0.5 rounded">
                       {DOCUMENT_TYPE_LABELS[doc.document_type] || doc.document_type}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] text-white/35">
+                  <div className="flex items-center gap-2 text-[11px] text-gray-400">
                     <span className="truncate">{doc.file_name}</span>
-                    <span className="text-white/15">|</span>
+                    <span className="text-gray-200">|</span>
                     <span>{formatFileSize(doc.file_size)}</span>
-                    <span className="text-white/15">|</span>
+                    <span className="text-gray-200">|</span>
                     <span>{formatDate(doc.created_at)}</span>
                   </div>
                 </div>
@@ -168,7 +171,7 @@ export function DocumentManager({ siteId }: DocumentManagerProps) {
                       setDownloadingId(null);
                     }}
                     disabled={isDownloading}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.04] text-white/35 hover:bg-white/[0.08] hover:text-white/60 transition-colors disabled:opacity-50"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
                     title="ダウンロード"
                   >
                     {isDownloading ? (
@@ -177,25 +180,28 @@ export function DocumentManager({ siteId }: DocumentManagerProps) {
                       <Download size={14} />
                     )}
                   </button>
-                  <button
-                    onClick={async () => {
-                      if (confirm("このドキュメントを削除しますか？")) {
-                        setUploadingDoc(doc.id);
-                        await deleteSiteDocument(doc.id, siteId);
-                        await fetchDocuments();
-                        setUploadingDoc(null);
-                      }
-                    }}
-                    disabled={isDeleting}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.04] text-white/35 hover:bg-red-500/15 hover:text-red-400 transition-colors disabled:opacity-50"
-                    title="削除"
-                  >
-                    {isDeleting ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Trash2 size={14} />
-                    )}
-                  </button>
+                  {canManage && (
+                    <button
+                      onClick={async () => {
+                        if (confirm("このドキュメントを削除しますか？")) {
+                          setIsLoading(true);
+                          setUploadingDoc(doc.id);
+                          await deleteSiteDocument(doc.id, siteId);
+                          await fetchDocuments();
+                          setUploadingDoc(null);
+                        }
+                      }}
+                      disabled={isDeleting}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-400 transition-colors disabled:opacity-50"
+                      title="削除"
+                    >
+                      {isDeleting ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -203,10 +209,11 @@ export function DocumentManager({ siteId }: DocumentManagerProps) {
         </div>
       )}
 
-      {showUploadModal && (
+      {canManage && showUploadModal && (
         <UploadModal
           siteId={siteId}
           onClose={async () => {
+            setIsLoading(true);
             setShowUploadModal(false);
             await fetchDocuments();
           }}
@@ -294,13 +301,13 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
   };
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-5" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}>
-      <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#222222] p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-5" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}>
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-[17px] font-bold text-white/90">ドキュメントをアップロード</h3>
+          <h3 className="text-[17px] font-bold text-gray-900">ドキュメントをアップロード</h3>
           <button
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/35 hover:bg-white/[0.06] hover:text-white/60 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
           >
             <X size={18} />
           </button>
@@ -308,9 +315,9 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
 
         <div className="space-y-4">
           <div>
-            <label className="text-[13px] font-medium text-white/50 mb-1.5 block">
+            <label className="text-[13px] font-medium text-gray-500 mb-1.5 block">
               ファイル
-              <span className="ml-1 text-[#00D9FF] text-xs">*</span>
+              <span className="ml-1 text-[#0EA5E9] text-xs">*</span>
             </label>
             <input
               ref={fileInputRef}
@@ -323,8 +330,8 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
               className={[
                 "w-full min-h-[48px] px-4 py-3 rounded-xl border transition-all duration-200 text-left text-[14px]",
                 file
-                  ? "border-emerald-500/40 bg-emerald-500/[0.06] text-emerald-300"
-                  : "border-white/[0.1] bg-white/[0.05] text-white/40 hover:border-white/[0.2]",
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-600"
+                  : "border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300",
               ].join(" ")}
             >
               {file ? file.name : "ファイルを選択"}
@@ -355,7 +362,7 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
           />
 
           {error && (
-            <p className="text-[13px] text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5">
+            <p className="text-[13px] text-red-400 bg-red-50 rounded-xl px-4 py-2.5">
               {error}
             </p>
           )}

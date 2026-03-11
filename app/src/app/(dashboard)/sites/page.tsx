@@ -1,126 +1,130 @@
 import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
-import {
-  Building2,
-  MapPin,
-  FileText,
-  ArrowRight,
-  FolderOpen,
-} from "lucide-react";
-import { AddSiteForm } from "./AddSiteForm";
+import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
+import { SitesPageClient } from "./SitesPageClient";
 
-interface SiteWithReportCount {
-  id: string;
-  name: string;
-  site_number: string | null;
-  address: string;
-  start_date: string | null;
-  end_date: string | null;
-  created_at: string;
-  report_count: number;
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "未設定";
-  return new Date(dateStr).toLocaleDateString("ja-JP", { month: "short", day: "numeric" });
-}
-
-function getPeriodLabel(startDate: string | null, endDate: string | null): { label: string; color: string; bg: string } {
+function getPeriodLabel(startDate: string | null, endDate: string | null, siteStatus: string): { label: string; color: string; bg: string } {
+  if (siteStatus === "completed") return { label: "完了", color: "text-emerald-500", bg: "bg-emerald-50" };
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  if (!startDate) return { label: "未定", color: "text-white/35", bg: "bg-white/[0.06]" };
+  if (!startDate) return { label: "未定", color: "text-gray-400", bg: "bg-gray-100" };
   const start = new Date(startDate);
   const end = endDate ? new Date(endDate) : null;
-  if (today < start) return { label: "着工前", color: "text-blue-400", bg: "bg-blue-500/10" };
-  if (end && today > end) return { label: "完了", color: "text-emerald-400", bg: "bg-emerald-500/10" };
-  return { label: "施工中", color: "text-[#00D9FF]", bg: "bg-[#00D9FF]/10" };
+  if (today < start) return { label: "着工前", color: "text-blue-500", bg: "bg-blue-50" };
+  if (end && today > end) return { label: "完了", color: "text-emerald-500", bg: "bg-emerald-50" };
+  return { label: "施工中", color: "text-[#0EA5E9]", bg: "bg-cyan-50" };
 }
 
-export default async function SitesPage() {
+export default async function SitesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
+  const params = await searchParams;
+  const showCompleted = params.show === "completed";
   const supabase = await createClient();
+  const { user, role: userRole } = await requireUserContext();
 
-  const { data: sites, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let sites: any[] | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let error: any = null;
+
+  const statusFilter = showCompleted ? "completed" : "active";
+
+  if (userRole === "worker_external" && user) {
+    const { data: memberRows, error: memberError } = await supabase
+      .from("site_members")
+      .select("site_id")
+      .eq("user_id", user.id);
+    error = memberError;
+    const siteIds = (memberRows ?? []).map((m) => m.site_id);
+    if (siteIds.length > 0) {
+      const result = await supabase
+        .from("sites")
+        .select(`id, name, site_number, address, start_date, end_date, status, created_at, daily_reports(count)`)
+        .in("id", siteIds)
+        .eq("status", statusFilter)
+        .order("created_at", { ascending: false });
+      sites = result.data;
+      error = error || result.error;
+    } else {
+      sites = [];
+    }
+  } else {
+    const result = await supabase
+      .from("sites")
+      .select(`id, name, site_number, address, start_date, end_date, status, created_at, daily_reports(count)`)
+      .eq("status", statusFilter)
+      .order("created_at", { ascending: false });
+    sites = result.data;
+    error = result.error;
+  }
+
+  // 全サイトIDの工程データを一括取得して進捗率を計算
+  const siteIds = (sites ?? []).map((s) => s.id);
+  let processMap: Record<string, { total: number; avgProgress: number }> = {};
+  if (siteIds.length > 0) {
+    const { data: allProcesses } = await supabase
+      .from("processes")
+      .select("site_id, progress_rate")
+      .in("site_id", siteIds);
+    if (allProcesses) {
+      const grouped: Record<string, number[]> = {};
+      for (const p of allProcesses) {
+        if (!grouped[p.site_id]) grouped[p.site_id] = [];
+        grouped[p.site_id].push(p.progress_rate);
+      }
+      processMap = Object.fromEntries(
+        Object.entries(grouped).map(([siteId, rates]) => [
+          siteId,
+          { total: rates.length, avgProgress: Math.round(rates.reduce((a, b) => a + b, 0) / rates.length) },
+        ])
+      );
+    }
+  }
+
+  // 完了件数も取得
+  const { count: completedCount } = await supabase
     .from("sites")
-    .select(`id, name, site_number, address, start_date, end_date, created_at, daily_reports(count)`)
-    .order("created_at", { ascending: false });
+    .select("*", { count: "exact", head: true })
+    .eq("status", "completed");
 
-  const siteList: SiteWithReportCount[] = (sites ?? []).map((site) => ({
-    id: site.id,
-    name: site.name,
-    site_number: site.site_number ?? null,
-    address: site.address,
-    start_date: site.start_date,
-    end_date: site.end_date,
-    created_at: site.created_at,
-    report_count: (site.daily_reports as { count: number }[])?.[0]?.count ?? 0,
-  }));
+  const { count: activeCount } = await supabase
+    .from("sites")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "active");
+
+  // クライアントコンポーネント用にデータ整形
+  const siteItems = (sites ?? []).map((site) => {
+    const period = getPeriodLabel(site.start_date, site.end_date, site.status ?? "active");
+    const progress = processMap[site.id];
+    return {
+      id: site.id,
+      name: site.name,
+      siteNumber: site.site_number ?? null,
+      address: site.address,
+      reportCount: (site.daily_reports as { count: number }[])?.[0]?.count ?? 0,
+      periodLabel: period.label,
+      periodColor: period.color,
+      periodBg: period.bg,
+      progressRate: progress?.avgProgress ?? null,
+      processCount: progress?.total ?? 0,
+    };
+  });
 
   return (
     <div className="flex-1 flex flex-col px-5 py-8 md:px-8 md:py-10 max-w-3xl w-full mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[22px] font-bold text-white/95">現場一覧</h1>
-          <p className="text-[13px] text-white/35 mt-0.5">{siteList.length}件の現場</p>
+          <h1 className="text-[22px] font-bold text-gray-900">現場一覧</h1>
+          <p className="text-[13px] text-gray-400 mt-0.5">{siteItems.length}件の現場</p>
         </div>
       </div>
 
-      {/* 現場追加フォーム */}
-      <AddSiteForm />
-
-      {error && (
-        <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20">
-          <p className="text-[13px] text-red-400">データの取得に失敗しました</p>
-        </div>
-      )}
-
-      {siteList.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-white/25 rounded-2xl border border-white/[0.06] bg-white/[0.02]">
-          <FolderOpen size={36} className="mb-3 text-white/15" />
-          <p className="text-[15px]">現場がまだありません</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden divide-y divide-white/[0.06]">
-          {siteList.map((site) => {
-            const period = getPeriodLabel(site.start_date, site.end_date);
-            return (
-              <Link
-                key={site.id}
-                href={`/sites/${site.id}`}
-                className="group flex items-center gap-3.5 px-4 py-4 hover:bg-white/[0.03] transition-colors active:bg-white/[0.05]"
-              >
-                <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-[#00D9FF]/10 shrink-0">
-                  <Building2 size={18} className="text-[#00D9FF]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-[14px] text-white/85 truncate font-medium">{site.name}</p>
-                    {site.site_number && (
-                      <span className="text-[10px] font-mono text-[#00D9FF]/50 shrink-0">{site.site_number}</span>
-                    )}
-                    <span className={`text-[11px] font-medium shrink-0 px-2 py-0.5 rounded-full ${period.bg} ${period.color}`}>
-                      {period.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-[12px] text-white/35">
-                    {site.address && (
-                      <span className="flex items-center gap-1 truncate">
-                        <MapPin size={11} className="shrink-0" />
-                        {site.address}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1 shrink-0">
-                      <FileText size={11} />
-                      {site.report_count}件
-                    </span>
-                  </div>
-                </div>
-                <ArrowRight size={16} className="text-white/15 group-hover:text-white/30 transition-colors shrink-0" />
-              </Link>
-            );
-          })}
-        </div>
-      )}
+      <SitesPageClient
+        showCompleted={showCompleted}
+        activeCount={activeCount ?? 0}
+        completedCount={completedCount ?? 0}
+        siteItems={siteItems}
+        error={Boolean(error)}
+      />
     </div>
   );
 }

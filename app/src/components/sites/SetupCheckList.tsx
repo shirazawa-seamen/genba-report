@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useTransition } from "react";
 import {
   FileSpreadsheet,
   FileText,
@@ -8,10 +7,7 @@ import {
   CalendarRange,
   Monitor,
   Check,
-  Loader2,
 } from "lucide-react";
-import { updateSetupCheck } from "@/app/(dashboard)/sites/actions";
-import type { Site } from "@/lib/types";
 
 const SETUP_ITEMS = [
   { key: "has_blueprint", label: "図面", icon: FileSpreadsheet },
@@ -21,44 +17,45 @@ const SETUP_ITEMS = [
   { key: "is_monitor", label: "モニター施工", icon: Monitor },
 ] as const;
 
-interface SetupCheckListProps {
-  site: Pick<Site, "id" | "has_blueprint" | "has_specification" | "has_purchase_order" | "has_schedule" | "is_monitor">;
+export interface SetupCheckDraft {
+  has_blueprint: boolean;
+  has_specification: boolean;
+  has_purchase_order: boolean;
+  has_schedule: boolean;
+  is_monitor: boolean;
 }
 
-export function SetupCheckList({ site }: SetupCheckListProps) {
-  const [isPending, startTransition] = useTransition();
-  const [checks, setChecks] = useState({
-    has_blueprint: site.has_blueprint,
-    has_specification: site.has_specification,
-    has_purchase_order: site.has_purchase_order,
-    has_schedule: site.has_schedule,
-    is_monitor: site.is_monitor,
-  });
-  const [updatingKey, setUpdatingKey] = useState<string | null>(null);
+interface SetupCheckListProps {
+  checks: SetupCheckDraft;
+  editable?: boolean;
+  onChange?: (next: SetupCheckDraft) => void;
+}
 
-  const handleToggle = (key: keyof typeof checks, currentValue: boolean) => {
-    setUpdatingKey(key);
-    startTransition(async () => {
-      const result = await updateSetupCheck(site.id, key, !currentValue);
-      if (result.success) {
-        setChecks((prev) => ({ ...prev, [key]: !currentValue }));
-      }
-      setUpdatingKey(null);
+export function SetupCheckList({
+  checks,
+  editable = false,
+  onChange,
+}: SetupCheckListProps) {
+  const checkedCount = Object.values(checks).filter(Boolean).length;
+
+  const handleToggle = (key: keyof SetupCheckDraft) => {
+    if (!editable || !onChange) return;
+    onChange({
+      ...checks,
+      [key]: !checks[key],
     });
   };
 
-  const checkedCount = Object.values(checks).filter(Boolean).length;
-
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Check size={16} className="text-[#00D9FF]" />
-          <h2 className="text-[13px] font-semibold text-white/70 tracking-wide">
+          <Check size={16} className="text-[#0EA5E9]" />
+          <h2 className="text-[13px] font-semibold tracking-wide text-gray-600">
             セットアップチェック
           </h2>
         </div>
-        <span className="text-[12px] text-white/35">
+        <span className="text-[12px] text-gray-400">
           {checkedCount} / {SETUP_ITEMS.length} 完了
         </span>
       </div>
@@ -66,30 +63,27 @@ export function SetupCheckList({ site }: SetupCheckListProps) {
       <div className="space-y-2">
         {SETUP_ITEMS.map(({ key, label, icon: Icon }) => {
           const isChecked = checks[key];
-          const isUpdating = updatingKey === key;
 
           return (
             <button
               key={key}
-              onClick={() => handleToggle(key, isChecked)}
-              disabled={isPending}
+              type="button"
+              onClick={() => handleToggle(key)}
+              disabled={!editable}
               className={[
-                "w-full flex items-center gap-3.5 rounded-xl border px-4 min-h-[52px] transition-all duration-200",
+                "flex min-h-[52px] w-full items-center gap-3.5 rounded-xl border px-4 transition-all duration-200",
                 isChecked
-                  ? "bg-emerald-500/[0.06] border-emerald-500/20"
-                  : "bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1]",
-                isPending && "cursor-wait",
-                !isPending && "cursor-pointer",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-gray-200 bg-white",
+                editable ? "cursor-pointer hover:border-gray-300" : "cursor-default",
+              ].join(" ")}
             >
               <div
                 className={[
-                  "flex h-9 w-9 items-center justify-center rounded-lg transition-colors shrink-0",
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
                   isChecked
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "bg-white/[0.06] text-white/35",
+                    ? "bg-emerald-100 text-emerald-500"
+                    : "bg-gray-100 text-gray-400",
                 ].join(" ")}
               >
                 <Icon size={18} />
@@ -97,22 +91,18 @@ export function SetupCheckList({ site }: SetupCheckListProps) {
               <span
                 className={[
                   "flex-1 text-left text-[13px] font-medium",
-                  isChecked ? "text-emerald-300" : "text-white/65",
+                  isChecked ? "text-emerald-600" : "text-gray-500",
                 ].join(" ")}
               >
                 {label}
               </span>
-              <div className="flex items-center justify-center h-6 w-6 shrink-0">
-                {isUpdating ? (
-                  <Loader2 size={16} className="animate-spin text-[#00D9FF]" />
-                ) : isChecked ? (
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500">
-                    <Check size={14} className="text-[#0e0e0e]" />
-                  </div>
-                ) : (
-                  <div className="h-6 w-6 rounded-full border-2 border-white/[0.15]" />
-                )}
-              </div>
+              {isChecked ? (
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500">
+                  <Check size={14} className="text-white" />
+                </div>
+              ) : (
+                <div className="h-6 w-6 shrink-0 rounded-full border-2 border-gray-300" />
+              )}
             </button>
           );
         })}

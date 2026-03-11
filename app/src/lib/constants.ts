@@ -3,9 +3,10 @@
 // ---------------------------------------------------------------------------
 export const ROLE_LABELS: Record<string, string> = {
   admin: "管理者",
-  orderer: "発注者（元請け）",
-  worker_internal: "現場員（自社）",
-  worker_external: "現場員（外注）",
+  manager: "マネージャー",
+  worker_internal: "ワーカー",
+  worker_external: "パートナー",
+  client: "クライアント",
 };
 
 // ---------------------------------------------------------------------------
@@ -14,8 +15,8 @@ export const ROLE_LABELS: Record<string, string> = {
 export const APPROVAL_STATUS_LABELS: Record<string, string> = {
   draft: "下書き",
   submitted: "提出済み",
-  admin_approved: "管理者承認",
-  orderer_confirmed: "元請け確認済み",
+  approved: "承認済み",
+  client_confirmed: "クライアント確認済み",
   rejected: "差戻し",
 };
 
@@ -28,13 +29,13 @@ export function getApprovalStatusColor(status: string): {
   border: string;
 } {
   switch (status) {
-    case "admin_approved":
+    case "approved":
       return {
         bg: "bg-emerald-500/10",
         text: "text-emerald-400",
         border: "border-emerald-500/20",
       };
-    case "orderer_confirmed":
+    case "client_confirmed":
       return {
         bg: "bg-amber-500/10",
         text: "text-amber-400",
@@ -83,6 +84,59 @@ export const WORK_PROCESS_LABELS: Record<string, string> = WORK_PROCESS_CATEGORI
 export const WORK_PROCESS_OPTIONS = Object.entries(WORK_PROCESS_CATEGORIES).map(
   ([value, label]) => ({ value, label })
 );
+
+export interface ProcessTemplateItem {
+  phaseKey: "A" | "B" | "C" | "D";
+  processCode: string;
+  category: string;
+  name: string;
+  parallelGroup: number | null;
+  sortOrder: number;
+}
+
+export const DEFAULT_PROCESS_TEMPLATES: ProcessTemplateItem[] = [
+  { phaseKey: "A", processCode: "A-1", category: "foundation", name: "地盤調査", parallelGroup: null, sortOrder: 1 },
+  { phaseKey: "A", processCode: "A-2", category: "foundation", name: "地盤改良", parallelGroup: null, sortOrder: 2 },
+  { phaseKey: "A", processCode: "A-3-1", category: "electrical", name: "仮設電気", parallelGroup: 1, sortOrder: 3 },
+  { phaseKey: "A", processCode: "A-3-2", category: "plumbing", name: "仮設水道", parallelGroup: 1, sortOrder: 4 },
+  { phaseKey: "A", processCode: "A-4", category: "foundation", name: "基礎工事", parallelGroup: null, sortOrder: 5 },
+  { phaseKey: "A", processCode: "A-5", category: "foundation", name: "防蟻処理", parallelGroup: null, sortOrder: 6 },
+  { phaseKey: "A", processCode: "A-6", category: "framing", name: "土台敷き", parallelGroup: null, sortOrder: 7 },
+  { phaseKey: "A", processCode: "A-7", category: "plumbing", name: "先行配管（給排水）", parallelGroup: null, sortOrder: 8 },
+  { phaseKey: "A", processCode: "A-8", category: "framing", name: "仮設足場", parallelGroup: null, sortOrder: 9 },
+  { phaseKey: "A", processCode: "A-9", category: "framing", name: "建て方・上棟", parallelGroup: null, sortOrder: 10 },
+  { phaseKey: "A", processCode: "A-10", category: "framing", name: "屋根下地（ルーフィング）", parallelGroup: null, sortOrder: 11 },
+  { phaseKey: "B", processCode: "B-1-1", category: "exterior", name: "屋根仕上げ", parallelGroup: 2, sortOrder: 12 },
+  { phaseKey: "B", processCode: "B-1-2", category: "exterior", name: "サッシ取り付け", parallelGroup: 2, sortOrder: 13 },
+  { phaseKey: "B", processCode: "B-2", category: "exterior", name: "透湿防水シート", parallelGroup: null, sortOrder: 14 },
+  { phaseKey: "B", processCode: "B-3", category: "exterior", name: "バルコニー防水", parallelGroup: null, sortOrder: 15 },
+  { phaseKey: "B", processCode: "B-4-1", category: "exterior", name: "外壁施工", parallelGroup: 3, sortOrder: 16 },
+  { phaseKey: "B", processCode: "B-4-2", category: "electrical", name: "電気 外回り", parallelGroup: 3, sortOrder: 17 },
+  { phaseKey: "B", processCode: "B-5", category: "exterior", name: "コーキング", parallelGroup: null, sortOrder: 18 },
+  { phaseKey: "B", processCode: "B-6", category: "exterior", name: "塗装", parallelGroup: null, sortOrder: 19 },
+  { phaseKey: "B", processCode: "B-7", category: "exterior", name: "雨トイ", parallelGroup: null, sortOrder: 20 },
+  { phaseKey: "B", processCode: "B-8", category: "exterior", name: "外部周りチェック", parallelGroup: null, sortOrder: 21 },
+  { phaseKey: "B", processCode: "B-9", category: "exterior", name: "足場バラシ", parallelGroup: null, sortOrder: 22 },
+  { phaseKey: "B", processCode: "B-10", category: "exterior", name: "外構", parallelGroup: null, sortOrder: 23 },
+  { phaseKey: "C", processCode: "C-1", category: "interior", name: "断熱材施工", parallelGroup: null, sortOrder: 24 },
+  { phaseKey: "C", processCode: "C-2-1", category: "electrical", name: "電気配線", parallelGroup: 4, sortOrder: 25 },
+  { phaseKey: "C", processCode: "C-2-2", category: "plumbing", name: "水道配管", parallelGroup: 4, sortOrder: 26 },
+  { phaseKey: "C", processCode: "C-2-3", category: "plumbing", name: "ガス配管", parallelGroup: 4, sortOrder: 27 },
+  { phaseKey: "C", processCode: "C-3", category: "interior", name: "ユニットバス搬入・設置", parallelGroup: null, sortOrder: 28 },
+  { phaseKey: "C", processCode: "C-4", category: "interior", name: "天井ボード", parallelGroup: null, sortOrder: 29 },
+  { phaseKey: "C", processCode: "C-5", category: "interior", name: "壁ボード", parallelGroup: null, sortOrder: 30 },
+  { phaseKey: "C", processCode: "C-6", category: "interior", name: "床下地・フローリング", parallelGroup: null, sortOrder: 31 },
+  { phaseKey: "C", processCode: "C-7", category: "interior", name: "内装・クロス", parallelGroup: null, sortOrder: 32 },
+  { phaseKey: "C", processCode: "C-8-1", category: "interior", name: "キッチン設置", parallelGroup: 5, sortOrder: 33 },
+  { phaseKey: "C", processCode: "C-8-2", category: "interior", name: "トイレ設置", parallelGroup: 5, sortOrder: 34 },
+  { phaseKey: "C", processCode: "C-8-3", category: "interior", name: "洗面台設置", parallelGroup: 5, sortOrder: 35 },
+  { phaseKey: "C", processCode: "C-9", category: "finishing", name: "建具取り付け", parallelGroup: null, sortOrder: 36 },
+  { phaseKey: "C", processCode: "C-10", category: "finishing", name: "巾木・廻り縁", parallelGroup: null, sortOrder: 37 },
+  { phaseKey: "C", processCode: "C-11", category: "electrical", name: "電気器具取り付け", parallelGroup: null, sortOrder: 38 },
+  { phaseKey: "C", processCode: "C-12", category: "cleanup", name: "ハウスクリーニング", parallelGroup: null, sortOrder: 39 },
+  { phaseKey: "D", processCode: "D-1", category: "finishing", name: "完了検査", parallelGroup: null, sortOrder: 40 },
+  { phaseKey: "D", processCode: "D-2", category: "finishing", name: "引き渡し", parallelGroup: null, sortOrder: 41 },
+];
 
 // 進捗率に応じた色を返す
 export function getProgressColor(rate: number): string {

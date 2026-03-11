@@ -28,14 +28,14 @@ export function Select({
 
   const borderClass = error
     ? "border-red-500/50 focus:border-red-400"
-    : "border-white/[0.1] focus:border-[#00D9FF]/50";
+    : "border-gray-200 focus:border-[#0EA5E9]/50";
 
   return (
     <div className="flex flex-col gap-1.5 w-full">
       {label && (
-        <label htmlFor={id} className="text-[13px] font-medium text-white/50">
+        <label htmlFor={id} className="text-[13px] font-medium text-gray-500">
           {label}
-          {required && <span className="ml-1 text-[#00D9FF] text-xs">*</span>}
+          {required && <span className="ml-1 text-[#0EA5E9] text-xs">*</span>}
         </label>
       )}
       <div className="relative">
@@ -44,9 +44,9 @@ export function Select({
           required={required}
           className={[
             "w-full min-h-[44px] px-4 pr-10",
-            "rounded-xl border bg-white/[0.05] transition-all duration-150",
-            "text-[16px] text-white/90 appearance-none cursor-pointer",
-            "focus:outline-none focus:ring-1 focus:ring-[#00D9FF]/20",
+            "rounded-xl border bg-white transition-all duration-150",
+            "text-[16px] text-gray-900 appearance-none cursor-pointer",
+            "focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]/20",
             "disabled:opacity-40 disabled:cursor-not-allowed",
             borderClass,
             className,
@@ -55,16 +55,16 @@ export function Select({
             .join(" ")}
           {...props}
         >
-          <option value="" className="bg-[#222222] text-white/40">
+          <option value="" className="bg-white text-gray-400">
             {placeholder}
           </option>
           {options.map((option) => (
-            <option key={option.value} value={option.value} className="bg-[#222222] text-white/90">
+            <option key={option.value} value={option.value} className="bg-white text-gray-900">
               {option.label}
             </option>
           ))}
         </select>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-white/30">
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
           <ChevronDown size={16} aria-hidden="true" />
         </span>
       </div>

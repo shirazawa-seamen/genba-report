@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Edit3 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { WORK_PROCESS_LABELS } from "@/lib/constants";
 import { ReportEditForm } from "./edit-form";
 
@@ -25,7 +25,7 @@ export default async function ReportEditPage({ params }: PageProps) {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") redirect("/");
+  if (profile?.role !== "admin" && profile?.role !== "manager") redirect("/");
 
   // Fetch report
   const { data: report, error } = await supabase
@@ -53,21 +53,18 @@ export default async function ReportEditPage({ params }: PageProps) {
         {/* Back */}
         <Link
           href={`/reports/${id}`}
-          className="inline-flex items-center gap-1.5 text-[13px] text-[#00D9FF]/60 hover:text-[#00D9FF] transition-colors mb-6 w-fit min-h-[44px]"
+          className="inline-flex items-center gap-1.5 text-[13px] text-[#0EA5E9]/60 hover:text-[#0EA5E9] transition-colors mb-6 w-fit min-h-[44px]"
         >
           <ArrowLeft size={14} /> 報告詳細
         </Link>
 
         {/* Header */}
-        <div className="mb-8 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/15">
-            <Edit3 size={22} className="text-amber-400" />
-          </div>
+        <div className="mb-8">
           <div>
-            <h1 className="text-[22px] font-bold text-white/95 tracking-tight">
+            <h1 className="text-[22px] font-bold text-gray-900 tracking-tight">
               報告を編集
             </h1>
-            <p className="text-[13px] text-white/40">
+            <p className="text-[13px] text-gray-400">
               {siteName} / {report.report_date} / {processLabel}
             </p>
           </div>

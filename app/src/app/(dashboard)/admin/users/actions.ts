@@ -4,8 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
-// Helper to verify the current user is admin
-async function verifyAdmin() {
+// Helper to verify the current user is admin or manager
+async function verifyAdminOrManager() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -18,12 +18,12 @@ async function verifyAdmin() {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") throw new Error("Forbidden");
+  if (profile?.role !== "admin" && profile?.role !== "manager") throw new Error("Forbidden");
   return user;
 }
 
 export async function inviteUser(formData: FormData) {
-  await verifyAdmin();
+  await verifyAdminOrManager();
 
   const email = formData.get("email") as string;
   const role = formData.get("role") as string;
@@ -33,7 +33,7 @@ export async function inviteUser(formData: FormData) {
     return { success: false, error: "メールアドレスとロールは必須です" };
   }
 
-  const validRoles = ["admin", "worker_internal", "worker_external", "orderer"];
+  const validRoles = ["admin", "manager", "worker_internal", "worker_external", "client"];
   if (!validRoles.includes(role)) {
     return { success: false, error: "無効なロールです" };
   }
@@ -57,12 +57,13 @@ export async function inviteUser(formData: FormData) {
     }
 
     if (newUser?.user) {
-      // Update profile role
+      // Update profile role and full_name
       await adminClient
         .from("profiles")
         .upsert({
           id: newUser.user.id,
           role,
+          full_name: fullName || email.split("@")[0],
           is_active: true,
         });
     }
@@ -76,9 +77,9 @@ export async function inviteUser(formData: FormData) {
 }
 
 export async function updateUserRole(userId: string, newRole: string) {
-  await verifyAdmin();
+  await verifyAdminOrManager();
 
-  const validRoles = ["admin", "worker_internal", "worker_external", "orderer"];
+  const validRoles = ["admin", "manager", "worker_internal", "worker_external", "client"];
   if (!validRoles.includes(newRole)) {
     return { success: false, error: "無効なロールです" };
   }
@@ -103,7 +104,7 @@ export async function updateUserRole(userId: string, newRole: string) {
 }
 
 export async function toggleUserActive(userId: string, isActive: boolean) {
-  await verifyAdmin();
+  await verifyAdminOrManager();
 
   try {
     const adminClient = createAdminClient();

@@ -1,6 +1,12 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend() {
+  if (!_resend && process.env.RESEND_API_KEY) {
+    _resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resend;
+}
 
 const FROM_EMAIL = process.env.EMAIL_FROM ?? "noreply@example.com";
 const APP_NAME = "現場報告システム";
@@ -21,6 +27,8 @@ async function sendEmail({ to, subject, html }: SendEmailParams) {
   }
 
   try {
+    const resend = getResend();
+    if (!resend) return { success: false, error: "Resend not configured" };
     const { data, error } = await resend.emails.send({
       from: `${APP_NAME} <${FROM_EMAIL}>`,
       to: Array.isArray(to) ? to : [to],
@@ -94,25 +102,25 @@ export async function notifyReportSubmitted({
 }
 
 // ---------------------------------------------------------------------------
-// 管理者承認時 → 元請けへ通知
+// 承認時 → クライアントへ通知
 // ---------------------------------------------------------------------------
 export async function notifyReportApproved({
   siteName,
   reportDate,
   reportId,
-  ordererEmails,
+  clientEmails,
 }: {
   siteName: string;
   reportDate: string;
   reportId: string;
-  ordererEmails: string[];
+  clientEmails: string[];
 }) {
-  if (ordererEmails.length === 0) return;
+  if (clientEmails.length === 0) return;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
   return sendEmail({
-    to: ordererEmails,
+    to: clientEmails,
     subject: `[${APP_NAME}] 報告承認: ${siteName} (${reportDate})`,
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
@@ -130,7 +138,7 @@ export async function notifyReportApproved({
           </tr>
           <tr>
             <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5; font-weight: bold;">ステータス</td>
-            <td style="padding: 8px; border: 1px solid #ddd; color: #22c55e; font-weight: bold;">管理者承認済み</td>
+            <td style="padding: 8px; border: 1px solid #ddd; color: #22c55e; font-weight: bold;">承認済み</td>
           </tr>
         </table>
         <a href="${appUrl}/reports/${reportId}" style="display: inline-block; background: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 8px;">

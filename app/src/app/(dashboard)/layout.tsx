@@ -1,5 +1,3 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import {
   LayoutDashboard,
@@ -12,35 +10,16 @@ import {
   Calendar,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/constants'
+import { MobileBottomNav } from '@/components/MobileBottomNav'
+import { requireUserContext } from '@/lib/auth/getCurrentUserContext'
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single()
-
-  const userRole = profile?.role ?? 'worker_internal'
+  const { role: userRole, displayName } = await requireUserContext()
   const roleLabel = ROLE_LABELS[userRole] ?? userRole
-
-  const displayName =
-    user.user_metadata?.full_name ??
-    user.user_metadata?.name ??
-    user.email?.split('@')[0] ??
-    'User'
 
   const initials = displayName
     .split(/[\s@]/)
@@ -49,32 +28,34 @@ export default async function DashboardLayout({
     .map((s: string) => s[0].toUpperCase())
     .join('')
 
+  // サイドバー: フルラベル / モバイル: 短縮ラベル
+  // iconName is the string key used by MobileBottomNav (client component)
   const allNavItems = [
-    { label: 'ホーム', href: '/', icon: LayoutDashboard, roles: ['admin', 'worker_internal', 'worker_external', 'orderer'] },
-    { label: '現場', href: '/sites', icon: Building2, roles: ['admin', 'worker_internal', 'worker_external', 'orderer'] },
-    { label: '予定', href: '/calendar', icon: Calendar, roles: ['admin', 'worker_internal', 'worker_external'] },
-    { label: '報告', href: '/reports', icon: FileText, roles: ['admin', 'worker_internal', 'worker_external'] },
-    { label: '確認', href: '/orderer', icon: CheckSquare, roles: ['orderer'] },
-    { label: '新規', href: '/reports/new', icon: PlusCircle, roles: ['admin', 'worker_internal', 'worker_external'] },
-    { label: '管理', href: '/admin', icon: Settings, roles: ['admin'] },
+    { label: 'ホーム', shortLabel: 'ホーム', href: '/', icon: LayoutDashboard, iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
+    { label: '現場一覧', shortLabel: '現場', href: '/sites', icon: Building2, iconName: 'Building2', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
+    { label: '現場カレンダー', shortLabel: '予定', href: '/calendar', icon: Calendar, iconName: 'Calendar', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
+    { label: '報告一覧', shortLabel: '報告', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
+    { label: '確認', shortLabel: '確認', href: '/client', icon: CheckSquare, iconName: 'CheckSquare', roles: ['client'] },
+    { label: '新規報告', shortLabel: '新規', href: '/reports/new', icon: PlusCircle, iconName: 'PlusCircle', roles: ['worker_internal', 'worker_external'] },
+    { label: '管理', shortLabel: '管理', href: '/admin', icon: Settings, iconName: 'Settings', roles: ['admin', 'manager'] },
   ]
 
   const navItems = allNavItems.filter(item => item.roles.includes(userRole))
 
   return (
-    <div className="flex h-dvh bg-[#1a1a1a] text-white/90 font-sans overflow-hidden">
+    <div className="flex h-dvh bg-[#F5F6F8] text-gray-900 font-sans overflow-hidden">
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden md:flex flex-col w-60 border-r border-white/[0.06] bg-[#161616] shrink-0">
+      <aside className="hidden md:flex flex-col w-60 border-r border-gray-200 bg-white shrink-0">
         {/* Brand */}
-        <div className="flex items-center gap-3 px-5 h-16 border-b border-white/[0.06]">
-          <div className="w-8 h-8 rounded-lg bg-[#00D9FF]/15 flex items-center justify-center">
-            <Building2 size={16} className="text-[#00D9FF]" />
+        <div className="flex items-center gap-3 px-5 h-16 border-b border-gray-200">
+          <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
+            <Building2 size={16} className="text-[#0EA5E9]" />
           </div>
           <div>
-            <span className="text-[14px] font-semibold tracking-tight text-white/90 block leading-tight">
+            <span className="text-[14px] font-semibold tracking-tight text-gray-900 block leading-tight">
               現場報告
             </span>
-            <span className="text-[10px] text-white/30 leading-tight">
+            <span className="text-[10px] text-gray-400 leading-tight">
               Construction Report
             </span>
           </div>
@@ -86,7 +67,7 @@ export default async function DashboardLayout({
             <Link
               key={href}
               href={href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] text-white/50 hover:text-[#00D9FF] hover:bg-[#00D9FF]/[0.06] transition-all"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] text-gray-500 hover:text-[#0EA5E9] hover:bg-sky-50 transition-all"
             >
               <Icon size={18} className="shrink-0" />
               {label}
@@ -95,20 +76,20 @@ export default async function DashboardLayout({
         </nav>
 
         {/* User */}
-        <div className="px-3 py-4 border-t border-white/[0.06] space-y-2">
+        <div className="px-3 py-4 border-t border-gray-200 space-y-2">
           <div className="flex items-center gap-3 px-2">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#00D9FF]/15 text-[#00D9FF] text-[12px] font-semibold shrink-0">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#0EA5E9] text-[12px] font-semibold shrink-0">
               {initials}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-medium text-white/80 truncate">{displayName}</p>
-              <p className="text-[11px] text-white/30">{roleLabel}</p>
+              <p className="text-[13px] font-medium text-gray-700 truncate">{displayName}</p>
+              <p className="text-[11px] text-gray-400">{roleLabel}</p>
             </div>
           </div>
           <form action="/auth/signout" method="POST">
             <button
               type="submit"
-              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[12px] text-white/30 hover:text-white/60 hover:bg-white/[0.04] transition-colors"
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-xl text-[12px] text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             >
               <LogOut size={14} />
               ログアウト
@@ -119,21 +100,21 @@ export default async function DashboardLayout({
 
       {/* ── Mobile + Main ── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header */}
-        <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-white/[0.06] bg-[#1a1a1a] shrink-0">
+        {/* Mobile header — Liquid Glass */}
+        <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-gray-200 shrink-0 bg-white">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-[#00D9FF]/15 flex items-center justify-center">
-              <Building2 size={14} className="text-[#00D9FF]" />
+            <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center">
+              <Building2 size={14} className="text-[#0EA5E9]" />
             </div>
-            <span className="text-[15px] font-semibold text-white/90">現場報告</span>
+            <span className="text-[15px] font-bold text-gray-900">現場報告</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-white/30 hidden min-[400px]:block">{roleLabel}</span>
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#00D9FF]/15 text-[#00D9FF] text-[11px] font-semibold">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[11px] text-gray-500 hidden min-[400px]:block font-medium">{roleLabel}</span>
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#0EA5E9] text-[11px] font-bold">
               {initials}
             </div>
             <form action="/auth/signout" method="POST">
-              <button type="submit" className="flex items-center justify-center w-8 h-8 rounded-lg text-white/30 hover:text-white/60 transition-colors">
+              <button type="submit" className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
                 <LogOut size={16} />
               </button>
             </form>
@@ -141,25 +122,12 @@ export default async function DashboardLayout({
         </div>
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
+        <main className="dashboard-main flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
 
-        {/* Mobile bottom nav - always visible with safe area */}
-        <nav className="md:hidden border-t border-white/[0.06] shrink-0 bg-[#1a1a1a]" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)' }}>
-          <div className="flex items-center">
-            {navItems.map(({ label, href, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className="flex flex-col items-center justify-center flex-1 min-h-[52px] gap-0.5 text-white/35 hover:text-[#00D9FF] active:text-[#00D9FF] transition-colors"
-              >
-                <Icon size={20} />
-                <span className="text-[10px] font-medium">{label}</span>
-              </Link>
-            ))}
-          </div>
-        </nav>
+        {/* Mobile bottom nav — Liquid Glass floating pill */}
+        <MobileBottomNav items={navItems.map(({ shortLabel, href, iconName }) => ({ shortLabel, href, iconName }))} />
       </div>
     </div>
   )

@@ -7,16 +7,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createSite } from "./actions";
 
-export function AddSiteForm() {
+export function AddSiteForm({ onOpenChange }: { onOpenChange?: (isOpen: boolean) => void } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [siteNumber, setSiteNumber] = useState("");
   const [address, setAddress] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+const [clientName, setClientName] = useState("");
+  const [siteColor, setSiteColor] = useState("#0EA5E9");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+
+  const setOpen = (next: boolean) => {
+    setIsOpen(next);
+    onOpenChange?.(next);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,11 +34,13 @@ export function AddSiteForm() {
         name: name.trim(),
         siteNumber: siteNumber.trim() || undefined,
         address: address.trim(),
+        clientName: clientName.trim() || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        siteColor,
       });
       if (!result.success) { setError(result.error ?? "登録に失敗しました"); return; }
-      setName(""); setSiteNumber(""); setAddress(""); setStartDate(""); setEndDate(""); setIsOpen(false);
+      setName(""); setSiteNumber(""); setAddress(""); setClientName(""); setStartDate(""); setEndDate(""); setSiteColor("#0EA5E9"); setOpen(false);
       router.refresh();
     });
   };
@@ -39,8 +48,8 @@ export function AddSiteForm() {
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
-        className="mb-6 w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-white/[0.12] py-4 text-[13px] text-white/40 hover:border-[#00D9FF]/30 hover:text-[#00D9FF]/70 hover:bg-[#00D9FF]/[0.03] transition-all min-h-[56px]"
+        onClick={() => setOpen(true)}
+        className="mb-6 w-full flex items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-300 py-4 text-[13px] text-gray-400 hover:border-cyan-300 hover:text-[#0EA5E9]/70 hover:bg-cyan-50/50 transition-all min-h-[56px]"
       >
         <Plus size={16} />
         現場を追加
@@ -49,10 +58,10 @@ export function AddSiteForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mb-6 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-5">
+    <form onSubmit={handleSubmit} className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between mb-5">
-        <h3 className="text-[15px] font-semibold text-white/75">新規現場を追加</h3>
-        <button type="button" onClick={() => { setIsOpen(false); setError(null); }} className="text-white/30 hover:text-white/50 transition-colors w-8 h-8 flex items-center justify-center">
+        <h3 className="text-[15px] font-semibold text-gray-600">新規現場を追加</h3>
+        <button type="button" onClick={() => { setOpen(false); setError(null); }} className="text-gray-400 hover:text-gray-500 transition-colors w-8 h-8 flex items-center justify-center">
           <X size={18} />
         </button>
       </div>
@@ -60,6 +69,8 @@ export function AddSiteForm() {
         <Input label="現場名" placeholder="例：○○ビル新築工事" value={name} onChange={(e) => { setName(e.target.value); setError(null); }} required autoFocus />
         <Input label="現場番号" placeholder="例：S-2026-001" value={siteNumber} onChange={(e) => setSiteNumber(e.target.value)} helperText="社内管理用の現場番号" />
         <Input label="住所" placeholder="例：東京都千代田区..." value={address} onChange={(e) => setAddress(e.target.value)} />
+        <Input label="クライアント名" placeholder="例：○○建設株式会社" value={clientName} onChange={(e) => setClientName(e.target.value)} helperText="この現場のクライアント会社名" />
+        <Input label="現場カラー" type="color" value={siteColor} onChange={(e) => setSiteColor(e.target.value)} />
         <Input label="着工日" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <Input label="完工予定日" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         {error && <p className="text-[13px] text-red-400">{error}</p>}

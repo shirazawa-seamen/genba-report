@@ -38,7 +38,7 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
   return (
     <form action={handleSubmit} className="space-y-6">
       {error && (
-        <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+        <div className="rounded-xl bg-red-50 border border-red-200 p-4">
           <p className="text-[13px] text-red-400 flex items-center gap-2">
             <AlertTriangle size={14} />
             {error}
@@ -48,34 +48,34 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
 
       {/* Work Content */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[13px] font-medium text-white/50">
-          作業内容 <span className="text-[#00D9FF] text-xs">*</span>
+        <label className="text-[13px] font-medium text-gray-500">
+          作業内容 <span className="text-[#0EA5E9] text-xs">*</span>
         </label>
         <textarea
           name="work_content"
           required
           defaultValue={initialData.work_content}
           rows={5}
-          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[16px] text-white/90 placeholder-white/25 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20 resize-none"
+          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20 resize-none"
         />
       </div>
 
       {/* Workers */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[13px] font-medium text-white/50">作業者</label>
+        <label className="text-[13px] font-medium text-gray-500">作業者</label>
         <input
           name="workers"
           type="text"
           defaultValue={initialData.workers}
           placeholder="田中、山田、佐藤"
-          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[16px] text-white/90 placeholder-white/25 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20"
+          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
         />
       </div>
 
       {/* Progress & Weather */}
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
-          <label className="text-[13px] font-medium text-white/50">
+          <label className="text-[13px] font-medium text-gray-500">
             進捗率 (%)
           </label>
           <input
@@ -84,24 +84,24 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
             min="0"
             max="100"
             defaultValue={initialData.progress_rate}
-            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[16px] text-white/90 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20"
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label className="text-[13px] font-medium text-white/50">天候</label>
+          <label className="text-[13px] font-medium text-gray-500">天候</label>
           <input
             name="weather"
             type="text"
             defaultValue={initialData.weather}
             placeholder="晴れ"
-            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[16px] text-white/90 placeholder-white/25 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20"
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
           />
         </div>
       </div>
 
       {/* Work Hours */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[13px] font-medium text-white/50">
+        <label className="text-[13px] font-medium text-gray-500">
           作業時間 (h)
         </label>
         <input
@@ -110,20 +110,20 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
           step="0.5"
           min="0"
           defaultValue={initialData.work_hours ?? ""}
-          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[16px] text-white/90 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20"
+          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
         />
       </div>
 
       {/* Issues */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[13px] font-medium text-white/50">
+        <label className="text-[13px] font-medium text-gray-500">
           課題・懸念事項
         </label>
         <textarea
           name="issues"
           defaultValue={initialData.issues}
           rows={3}
-          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[16px] text-white/90 placeholder-white/25 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20 resize-none"
+          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20 resize-none"
         />
       </div>
 
@@ -137,7 +137,7 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
           defaultValue={initialData.admin_notes}
           rows={3}
           placeholder="管理者のみ編集可能なメモ欄"
-          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] text-[16px] text-white/90 placeholder-white/25 focus:outline-none focus:border-amber-400/50 focus:ring-1 focus:ring-amber-400/20 resize-none"
+          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50/50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-amber-400/50 focus:ring-1 focus:ring-amber-400/20 resize-none"
         />
       </div>
 
@@ -146,14 +146,14 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
         <button
           type="button"
           onClick={() => router.back()}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.12] min-h-[48px] px-4 text-[14px] font-medium text-white/70 hover:bg-white/[0.06] transition-colors"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 min-h-[48px] px-4 text-[14px] font-medium text-gray-600 hover:bg-gray-100 transition-colors"
         >
           キャンセル
         </button>
         <button
           type="submit"
           disabled={isPending}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#00D9FF] min-h-[48px] px-5 text-[14px] font-bold text-[#0e0e0e] transition-all hover:bg-[#00D9FF]/90 active:scale-[0.98] disabled:opacity-50"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#0EA5E9] min-h-[48px] px-5 text-[14px] font-bold text-white transition-all hover:bg-[#0284C7] active:scale-[0.98] disabled:opacity-50"
         >
           {isPending ? (
             <Loader2 size={18} className="animate-spin" />

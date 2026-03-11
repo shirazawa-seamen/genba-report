@@ -30,8 +30,8 @@ export async function updateReport(
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") {
-    return { success: false, error: "管理者権限が必要です" };
+  if (profile?.role !== "admin" && profile?.role !== "manager") {
+    return { success: false, error: "管理者または現場管理者の権限が必要です" };
   }
 
   const workContent = formData.get("work_content") as string;

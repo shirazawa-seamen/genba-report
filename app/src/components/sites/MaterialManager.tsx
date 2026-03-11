@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   Package,
@@ -30,29 +30,31 @@ interface Material {
 
 interface MaterialManagerProps {
   siteId: string;
+  canManage?: boolean;
 }
 
-export function MaterialManager({ siteId }: MaterialManagerProps) {
+export function MaterialManager({ siteId, canManage = false }: MaterialManagerProps) {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const fetchMaterials = async () => {
-    setIsLoading(true);
+  const fetchMaterials = useCallback(async () => {
     const result = await getSiteMaterials(siteId);
     if (result.success && result.materials) {
       setMaterials(result.materials);
     }
     setIsLoading(false);
-  };
+  }, [siteId]);
 
   useEffect(() => {
-    fetchMaterials();
-  }, [siteId]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchMaterials();
+  }, [fetchMaterials]);
 
   const handleDelete = async (materialId: string) => {
     if (!confirm("この材料を削除しますか？")) return;
+    setIsLoading(true);
     setDeletingId(materialId);
     await deleteSiteMaterial(materialId, siteId);
     await fetchMaterials();
@@ -60,31 +62,33 @@ export function MaterialManager({ siteId }: MaterialManagerProps) {
   };
 
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Package size={16} className="text-[#00D9FF]" />
-          <h2 className="text-[13px] font-semibold text-white/70 tracking-wide">
+          <Package size={16} className="text-[#0EA5E9]" />
+          <h2 className="text-[13px] font-semibold text-gray-600 tracking-wide">
             使用材料（{materials.length}件）
           </h2>
         </div>
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={() => setShowAddModal(true)}
-        >
-          <Plus size={16} />
-          材料を追加
-        </Button>
+        {canManage && (
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={16} />
+            材料を追加
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
-          <Loader2 size={24} className="animate-spin text-[#00D9FF]" />
+          <Loader2 size={24} className="animate-spin text-[#0EA5E9]" />
         </div>
       ) : materials.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 text-white/30">
-          <Package size={32} className="mb-2 text-white/15" />
+        <div className="flex flex-col items-center justify-center py-8 text-gray-300">
+          <Package size={32} className="mb-2 text-gray-200" />
           <p className="text-[13px]">使用材料が登録されていません</p>
         </div>
       ) : (
@@ -94,23 +98,23 @@ export function MaterialManager({ siteId }: MaterialManagerProps) {
             return (
               <div
                 key={mat.id}
-                className="flex items-center gap-3.5 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 min-h-[52px] py-2.5"
+                className="flex items-center gap-3.5 rounded-xl border border-gray-200 bg-white px-4 min-h-[52px] py-2.5"
               >
-                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[#00D9FF]/10">
-                  <Package size={16} className="text-[#00D9FF]" />
+                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-cyan-50">
+                  <Package size={16} className="text-[#0EA5E9]" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[13px] font-medium text-white/80 truncate">
+                    <span className="text-[13px] font-medium text-gray-700 truncate">
                       {mat.material_name}
                     </span>
                     {mat.product_number && (
-                      <span className="text-[10px] font-medium text-white/40 bg-white/[0.06] px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
                         {mat.product_number}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-[11px] text-white/35 flex-wrap">
+                  <div className="flex items-center gap-2 text-[11px] text-gray-400 flex-wrap">
                     {mat.quantity != null && (
                       <span>
                         {mat.quantity}{mat.unit || ""}
@@ -118,40 +122,43 @@ export function MaterialManager({ siteId }: MaterialManagerProps) {
                     )}
                     {mat.supplier && (
                       <>
-                        <span className="text-white/15">|</span>
+                        <span className="text-gray-200">|</span>
                         <span>{mat.supplier}</span>
                       </>
                     )}
                     {mat.note && (
                       <>
-                        <span className="text-white/15">|</span>
+                        <span className="text-gray-200">|</span>
                         <span className="truncate">{mat.note}</span>
                       </>
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleDelete(mat.id)}
-                  disabled={isDeleting}
-                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-white/30 hover:bg-red-500/15 hover:text-red-400 transition-colors disabled:opacity-50"
-                  title="削除"
-                >
-                  {isDeleting ? (
-                    <Loader2 size={14} className="animate-spin" />
-                  ) : (
-                    <Trash2 size={14} />
-                  )}
-                </button>
+                {canManage && (
+                  <button
+                    onClick={() => handleDelete(mat.id)}
+                    disabled={isDeleting}
+                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-400 transition-colors disabled:opacity-50"
+                    title="削除"
+                  >
+                    {isDeleting ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
       )}
 
-      {showAddModal && (
+      {canManage && showAddModal && (
         <AddMaterialModal
           siteId={siteId}
           onClose={async () => {
+            setIsLoading(true);
             setShowAddModal(false);
             await fetchMaterials();
           }}
@@ -203,15 +210,15 @@ function AddMaterialModal({ siteId, onClose }: AddMaterialModalProps) {
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-5"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-5"
       style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
     >
-      <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#222222] p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-[17px] font-bold text-white/90">材料を追加</h3>
+          <h3 className="text-[17px] font-bold text-gray-900">材料を追加</h3>
           <button
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-white/35 hover:bg-white/[0.06] hover:text-white/60 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
           >
             <X size={18} />
           </button>
@@ -262,7 +269,7 @@ function AddMaterialModal({ siteId, onClose }: AddMaterialModalProps) {
           />
 
           {error && (
-            <p className="text-[13px] text-red-400 bg-red-500/10 rounded-xl px-4 py-2.5">
+            <p className="text-[13px] text-red-400 bg-red-50 rounded-xl px-4 py-2.5">
               {error}
             </p>
           )}

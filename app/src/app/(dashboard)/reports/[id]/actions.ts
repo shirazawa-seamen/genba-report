@@ -40,12 +40,12 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
     return { success: false, error: "ユーザー情報の取得に失敗しました" };
   }
 
-  if (profile.role !== "admin" && profile.role !== "orderer") {
+  if (profile.role !== "admin" && profile.role !== "manager" && profile.role !== "client") {
     return { success: false, error: "承認権限がありません" };
   }
 
   // ロールに応じた承認ステータスを決定
-  const newStatus = profile.role === "admin" ? "admin_approved" : "orderer_confirmed";
+  const newStatus = (profile.role === "admin" || profile.role === "manager") ? "approved" : "client_confirmed";
 
   // 報告のステータスを更新
   const { error: updateError } = await supabase
@@ -65,8 +65,8 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
 
-  // 管理者承認時 → 元請けへメール通知
-  if (newStatus === "admin_approved") {
+  // 管理者/現場管理者承認時 → 元請けへメール通知
+  if (newStatus === "approved") {
     try {
       const adminClient = createAdminClient();
       const { data: report } = await supabase
@@ -75,16 +75,16 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
         .eq("id", reportId)
         .single();
 
-      const { data: ordererProfiles } = await adminClient
+      const { data: clientProfiles } = await adminClient
         .from("profiles")
         .select("id")
-        .eq("role", "orderer");
+        .eq("role", "client");
 
-      if (ordererProfiles && ordererProfiles.length > 0 && report) {
+      if (clientProfiles && clientProfiles.length > 0 && report) {
         const { data: authUsers } = await adminClient.auth.admin.listUsers();
-        const ordererIds = new Set(ordererProfiles.map((p) => p.id));
-        const ordererEmails = (authUsers?.users ?? [])
-          .filter((u) => ordererIds.has(u.id) && u.email)
+        const clientIds = new Set(clientProfiles.map((p) => p.id));
+        const clientEmails = (authUsers?.users ?? [])
+          .filter((u) => clientIds.has(u.id) && u.email)
           .map((u) => u.email!);
 
         const siteName = (report.sites as { name?: string } | null)?.name ?? "不明な現場";
@@ -93,7 +93,7 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
           siteName,
           reportDate: report.report_date,
           reportId,
-          ordererEmails,
+          clientEmails,
         }).catch((err) => console.error("[Email] Notification error:", err));
       }
     } catch (err) {
@@ -134,7 +134,7 @@ export async function rejectReport(
     return { success: false, error: "ユーザー情報の取得に失敗しました" };
   }
 
-  if (profile.role !== "admin" && profile.role !== "orderer") {
+  if (profile.role !== "admin" && profile.role !== "manager" && profile.role !== "client") {
     return { success: false, error: "差戻し権限がありません" };
   }
 
@@ -208,4 +208,68 @@ export async function getCurrentUserRole(): Promise<string | null> {
     .single();
 
   return profile?.role ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// 報告の再提出（差戻し後に再送信）
+// ---------------------------------------------------------------------------
+export async function resubmitReport(reportId: string): Promise<ApprovalResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { success: false, error: "ログインが必要です" };
+  }
+
+  // ユーザーのロールを確認
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) {
+    return { success: false, error: "ユーザー情報の取得に失敗しました" };
+  }
+
+  // 報告のステータスを確認（rejectedのみ再提出可能）
+  const { data: report } = await supabase
+    .from("daily_reports")
+    .select("approval_status, reporter_id")
+    .eq("id", reportId)
+    .single();
+
+  if (!report || report.approval_status !== "rejected") {
+    return { success: false, error: "差戻しされた報告のみ再提出できます" };
+  }
+
+  // 報告者本人、または admin/manager のみ再提出可能
+  const isReporter = report.reporter_id === user.id;
+  const isAdminOrManager = profile.role === "admin" || profile.role === "manager";
+  if (!isReporter && !isAdminOrManager) {
+    return { success: false, error: "再提出権限がありません" };
+  }
+
+  const { error: updateError } = await supabase
+    .from("daily_reports")
+    .update({
+      approval_status: "submitted",
+      rejection_comment: null,
+      approved_by: null,
+      approved_at: null,
+    })
+    .eq("id", reportId);
+
+  if (updateError) {
+    return { success: false, error: `再提出エラー: ${updateError.message}` };
+  }
+
+  revalidatePath("/reports");
+  revalidatePath(`/reports/${reportId}`);
+
+  return { success: true };
 }

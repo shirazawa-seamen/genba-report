@@ -63,10 +63,10 @@ export default async function ReportPrintPage({ params }: PageProps) {
   return (
     <>
       {/* Screen-only controls */}
-      <div className="print:hidden bg-[#1a1a1a] p-5 flex items-center gap-4 border-b border-white/[0.06]">
+      <div className="print:hidden bg-gray-50 p-5 flex items-center gap-4 border-b border-gray-200">
         <Link
           href={`/reports/${id}`}
-          className="inline-flex items-center gap-1.5 text-[13px] text-[#00D9FF]/60 hover:text-[#00D9FF] transition-colors min-h-[44px]"
+          className="inline-flex items-center gap-1.5 text-[13px] text-[#0EA5E9]/60 hover:text-[#0EA5E9] transition-colors min-h-[44px]"
         >
           <ArrowLeft size={14} /> 報告詳細に戻る
         </Link>
@@ -285,7 +285,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
 
         {/* Signature area */}
         <div className="mt-8 grid grid-cols-3 gap-6">
-          {["報告者", "管理者", "元請け"].map((label) => (
+          {["報告者", "管理者", "クライアント"].map((label) => (
             <div key={label} className="text-center">
               <div className="border border-gray-400 h-20 mb-1" />
               <p className="text-sm text-gray-600">{label}</p>

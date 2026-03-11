@@ -24,14 +24,14 @@ export function Input({
     ? "border-red-500/50 focus:border-red-400"
     : success
       ? "border-emerald-500/50 focus:border-emerald-400"
-      : "border-white/[0.1] focus:border-[#00D9FF]/50";
+      : "border-gray-200 focus:border-[#0EA5E9]/50";
 
   return (
     <div className="flex flex-col gap-1.5 w-full overflow-hidden">
       {label && (
-        <label htmlFor={id} className="text-[13px] font-medium text-white/50">
+        <label htmlFor={id} className="text-[13px] font-medium text-gray-500">
           {label}
-          {required && <span className="ml-1 text-[#00D9FF] text-xs">*</span>}
+          {required && <span className="ml-1 text-[#0EA5E9] text-xs">*</span>}
         </label>
       )}
       <input
@@ -39,9 +39,9 @@ export function Input({
         required={required}
         className={[
           "w-full min-h-[44px] px-4 py-2.5",
-          "rounded-xl border bg-white/[0.05] transition-all duration-150",
-          "text-[16px] text-white/90 placeholder-white/25",
-          "focus:outline-none focus:ring-1 focus:ring-[#00D9FF]/20",
+          "rounded-xl border bg-white transition-all duration-150",
+          "text-[16px] text-gray-900 placeholder-gray-400",
+          "focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]/20",
           "disabled:opacity-40 disabled:cursor-not-allowed",
           borderClass,
           className,
@@ -54,7 +54,7 @@ export function Input({
         <p className="text-[13px] text-red-400" role="alert">{error}</p>
       )}
       {helperText && !error && (
-        <p className="text-xs text-white/30">{helperText}</p>
+        <p className="text-xs text-gray-400">{helperText}</p>
       )}
     </div>
   );

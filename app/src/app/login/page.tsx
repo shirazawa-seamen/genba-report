@@ -62,7 +62,7 @@ function LoginForm() {
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       {serverError && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3.5 text-[13px] text-red-400">
+        <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-[13px] text-red-400">
           <AlertTriangle size={15} className="mt-0.5 shrink-0" />
           <span>{serverError}</span>
         </div>
@@ -70,9 +70,9 @@ function LoginForm() {
 
       {/* Email */}
       <div>
-        <label className="text-[13px] font-medium text-white/50 mb-1.5 block">メールアドレス</label>
+        <label className="text-[13px] font-medium text-gray-500 mb-1.5 block">メールアドレス</label>
         <div className="relative">
-          <Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/25" />
+          <Mail size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
           <input
             type="email"
             autoComplete="email"
@@ -81,7 +81,7 @@ function LoginForm() {
             onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(validateEmail(e.target.value)); }}
             onBlur={() => setEmailError(validateEmail(email))}
             disabled={loading}
-            className="w-full min-h-[48px] pl-11 pr-4 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[15px] text-white/90 placeholder-white/25 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20 transition-all disabled:opacity-40"
+            className="w-full min-h-[48px] pl-11 pr-4 rounded-xl border border-gray-200 bg-gray-50 text-[15px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20 transition-all disabled:opacity-40"
           />
         </div>
         {emailError && <p className="text-[12px] text-red-400 mt-1.5">{emailError}</p>}
@@ -89,9 +89,9 @@ function LoginForm() {
 
       {/* Password */}
       <div>
-        <label className="text-[13px] font-medium text-white/50 mb-1.5 block">パスワード</label>
+        <label className="text-[13px] font-medium text-gray-500 mb-1.5 block">パスワード</label>
         <div className="relative">
-          <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/25" />
+          <Lock size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
           <input
             type={showPassword ? "text" : "password"}
             autoComplete="current-password"
@@ -100,12 +100,12 @@ function LoginForm() {
             onChange={(e) => { setPassword(e.target.value); if (passwordError) setPasswordError(validatePassword(e.target.value)); }}
             onBlur={() => setPasswordError(validatePassword(password))}
             disabled={loading}
-            className="w-full min-h-[48px] pl-11 pr-14 rounded-xl border border-white/[0.1] bg-white/[0.05] text-[15px] text-white/90 placeholder-white/25 focus:outline-none focus:border-[#00D9FF]/50 focus:ring-1 focus:ring-[#00D9FF]/20 transition-all disabled:opacity-40"
+            className="w-full min-h-[48px] pl-11 pr-14 rounded-xl border border-gray-200 bg-gray-50 text-[15px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20 transition-all disabled:opacity-40"
           />
           <button
             type="button"
             onClick={() => setShowPassword((p) => !p)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/50 transition-colors w-8 h-8 flex items-center justify-center"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors w-8 h-8 flex items-center justify-center"
             tabIndex={0}
             disabled={loading}
           >
@@ -124,33 +124,33 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-[#1a1a1a] px-5">
+    <main className="flex min-h-dvh items-center justify-center bg-gray-50 px-5">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-[#00D9FF]/15 flex items-center justify-center mx-auto mb-4">
-            <Building2 size={24} className="text-[#00D9FF]" />
+          <div className="w-14 h-14 rounded-2xl bg-cyan-100 flex items-center justify-center mx-auto mb-4">
+            <Building2 size={24} className="text-[#0EA5E9]" />
           </div>
-          <h1 className="text-[24px] font-bold text-white/95 mb-1">現場報告システム</h1>
-          <p className="text-[14px] text-white/35">アカウントにサインイン</p>
+          <h1 className="text-[24px] font-bold text-gray-900 mb-1">現場報告システム</h1>
+          <p className="text-[14px] text-gray-400">アカウントにサインイン</p>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6">
+        <div className="rounded-2xl border border-gray-200 bg-white p-6">
           <Suspense fallback={
             <div className="flex flex-col gap-5">
               {[0, 1].map((i) => (
                 <div key={i}>
-                  <div className="h-4 w-24 rounded bg-white/[0.04] mb-2" />
-                  <div className="h-12 w-full rounded-xl bg-white/[0.04]" />
+                  <div className="h-4 w-24 rounded bg-gray-100 mb-2" />
+                  <div className="h-12 w-full rounded-xl bg-gray-100" />
                 </div>
               ))}
-              <div className="h-12 w-full rounded-xl bg-white/[0.04] mt-2" />
+              <div className="h-12 w-full rounded-xl bg-gray-100 mt-2" />
             </div>
           }>
             <LoginForm />
           </Suspense>
         </div>
 
-        <p className="text-center text-[11px] text-white/20 mt-6">
+        <p className="text-center text-[11px] text-gray-300 mt-6">
           アクセスに問題がある場合は管理者にお問い合わせください
         </p>
       </div>
