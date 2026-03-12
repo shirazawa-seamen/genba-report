@@ -4,6 +4,7 @@ import { WORK_PROCESS_LABELS, PHOTO_TYPE_LABELS, APPROVAL_STATUS_LABELS } from "
 import { PrintButton } from "./print-button";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { canAccessReport } from "@/lib/siteAccess";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -13,10 +14,20 @@ export default async function ReportPrintPage({ params }: PageProps) {
   const { id } = await params;
   const supabase = await createClient();
 
+  // 認証・認可チェック
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) notFound();
+  const hasAccess = await canAccessReport(user.id, id);
+  if (!hasAccess) notFound();
+
+  // クライアントは個別の職人報告にアクセスできない
+  const { data: viewerProfile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (viewerProfile?.role === "client") notFound();
+
   const { data: report, error } = await supabase
     .from("daily_reports")
     .select(
-      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_reason, admin_notes, sites(name, address), processes(id, category, name, progress_rate, status)"
+      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_comment, admin_notes, sites(name, address), processes(id, category, name, progress_rate, status)"
     )
     .eq("id", id)
     .single();

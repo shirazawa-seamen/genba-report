@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
-import { notifyReportApproved, notifyReportRejected } from "@/lib/email";
+import { notifyReportRejected } from "@/lib/email";
+import { canAccessReport } from "@/lib/siteAccess";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -40,12 +41,19 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
     return { success: false, error: "ユーザー情報の取得に失敗しました" };
   }
 
-  if (profile.role !== "admin" && profile.role !== "manager" && profile.role !== "client") {
+  // クライアントは個別の職人報告を承認しない（サマリー経由で確認する）
+  if (profile.role !== "admin" && profile.role !== "manager") {
     return { success: false, error: "承認権限がありません" };
   }
 
-  // ロールに応じた承認ステータスを決定
-  const newStatus = (profile.role === "admin" || profile.role === "manager") ? "approved" : "client_confirmed";
+  // この報告のサイトにアクセス権があるか確認
+  const hasAccess = await canAccessReport(user.id, reportId);
+  if (!hasAccess) {
+    return { success: false, error: "この報告にアクセスする権限がありません" };
+  }
+
+  // 承認ステータス
+  const newStatus = "approved";
 
   // 報告のステータスを更新
   const { error: updateError } = await supabase
@@ -65,41 +73,8 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
 
-  // 管理者/現場管理者承認時 → 元請けへメール通知
-  if (newStatus === "approved") {
-    try {
-      const adminClient = createAdminClient();
-      const { data: report } = await supabase
-        .from("daily_reports")
-        .select("report_date, sites(name)")
-        .eq("id", reportId)
-        .single();
-
-      const { data: clientProfiles } = await adminClient
-        .from("profiles")
-        .select("id")
-        .eq("role", "client");
-
-      if (clientProfiles && clientProfiles.length > 0 && report) {
-        const { data: authUsers } = await adminClient.auth.admin.listUsers();
-        const clientIds = new Set(clientProfiles.map((p) => p.id));
-        const clientEmails = (authUsers?.users ?? [])
-          .filter((u) => clientIds.has(u.id) && u.email)
-          .map((u) => u.email!);
-
-        const siteName = (report.sites as { name?: string } | null)?.name ?? "不明な現場";
-
-        notifyReportApproved({
-          siteName,
-          reportDate: report.report_date,
-          reportId,
-          clientEmails,
-        }).catch((err) => console.error("[Email] Notification error:", err));
-      }
-    } catch (err) {
-      console.error("[Email] Failed to send approval notification:", err);
-    }
-  }
+  // 注: 個別の職人報告承認時にはクライアントへ通知しない
+  // クライアントへはマネージャーが二次報告（サマリー）を提出した時点で通知する
 
   return { success: true };
 }
@@ -134,8 +109,14 @@ export async function rejectReport(
     return { success: false, error: "ユーザー情報の取得に失敗しました" };
   }
 
-  if (profile.role !== "admin" && profile.role !== "manager" && profile.role !== "client") {
+  if (profile.role !== "admin" && profile.role !== "manager") {
     return { success: false, error: "差戻し権限がありません" };
+  }
+
+  // この報告のサイトにアクセス権があるか確認
+  const hasReportAccess = await canAccessReport(user.id, reportId);
+  if (!hasReportAccess) {
+    return { success: false, error: "この報告にアクセスする権限がありません" };
   }
 
   // 報告のステータスを更新
@@ -234,6 +215,12 @@ export async function resubmitReport(reportId: string): Promise<ApprovalResult> 
 
   if (!profile) {
     return { success: false, error: "ユーザー情報の取得に失敗しました" };
+  }
+
+  // この報告のサイトにアクセス権があるか確認
+  const hasResubmitAccess = await canAccessReport(user.id, reportId);
+  if (!hasResubmitAccess) {
+    return { success: false, error: "この報告にアクセスする権限がありません" };
   }
 
   // 報告のステータスを確認（rejectedのみ再提出可能）

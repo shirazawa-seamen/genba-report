@@ -22,6 +22,7 @@ import {
   StickyNote,
 } from "lucide-react";
 import { ApprovalButtons, ApprovalFlowBar, ResubmitButton } from "./approval-buttons";
+import { canAccessReport } from "@/lib/siteAccess";
 
 interface SiteData { name: string; address: string | null }
 interface ProcessData { id: string; category: string; name: string; progress_rate: number; status: string }
@@ -29,7 +30,7 @@ interface ReportDetailRaw {
   id: string; report_date: string; work_process: string; work_content: string;
   workers: string[] | null; progress_rate: number; weather: string | null;
   work_hours: number | null; issues: string | null; created_at: string;
-  approval_status: string; rejection_reason: string | null;
+  approval_status: string; rejection_comment: string | null;
   admin_notes: string | null; edited_by_admin: boolean | null;
   reporter_id: string | null;
   sites: SiteData | SiteData[] | null; processes: ProcessData | ProcessData[] | null;
@@ -70,18 +71,25 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
   const { data: report, error: reportError } = await supabase
     .from("daily_reports")
-    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_reason, admin_notes, edited_by_admin, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)`)
+    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_comment, admin_notes, edited_by_admin, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)`)
     .eq("id", id).single();
 
   if (reportError || !report) { console.error("Report fetch error:", reportError); notFound(); }
 
   const raw = report as ReportDetailRaw;
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) notFound();
+
+  // 認可チェック: ユーザーがこの報告の現場にアクセスできるか確認
+  const hasAccess = await canAccessReport(user.id, id);
+  if (!hasAccess) notFound();
+
   let userRole: string | null = null;
-  if (user) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    userRole = profile?.role ?? null;
-  }
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  userRole = profile?.role ?? null;
+
+  // クライアントは個別の職人報告ではなく、マネージャーのサマリーのみ閲覧
+  if (userRole === "client") notFound();
   const canApprove = userRole === "admin" || userRole === "manager" || userRole === "client";
 
   let reporterName: string | null = null;
@@ -140,10 +148,10 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
       <ApprovalFlowBar status={status} />
 
-      {raw.rejection_reason && (
+      {raw.rejection_comment && (
         <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200">
           <div className="flex items-center gap-1.5 mb-2"><AlertTriangle size={14} className="text-red-400" /><span className="text-[13px] font-semibold text-red-400">差戻し理由</span></div>
-          <p className="text-[14px] text-gray-600 whitespace-pre-wrap leading-relaxed">{raw.rejection_reason}</p>
+          <p className="text-[14px] text-gray-600 whitespace-pre-wrap leading-relaxed">{raw.rejection_comment}</p>
         </div>
       )}
 
@@ -230,7 +238,10 @@ export default async function ReportDetailPage({ params }: PageProps) {
         <div className="mb-8 p-5 rounded-2xl border border-amber-200 bg-amber-50/50">
           <div className="flex items-center gap-2 mb-4"><Shield size={16} className="text-amber-400" /><span className="text-[14px] font-semibold text-amber-400">再提出</span></div>
           <p className="text-[13px] text-gray-500 mb-4">差戻しされた報告を修正して再提出できます。</p>
-          <ResubmitButton reportId={raw.id} />
+          <div className="flex flex-wrap gap-3">
+            <Link href={`/reports/${raw.id}/edit`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white min-h-[44px] px-4 text-[14px] font-medium text-amber-500 hover:bg-amber-50 transition-colors"><Edit3 size={16} />修正する</Link>
+            <ResubmitButton reportId={raw.id} />
+          </div>
         </div>
       )}
 

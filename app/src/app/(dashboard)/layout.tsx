@@ -8,6 +8,7 @@ import {
   Settings,
   CheckSquare,
   Calendar,
+  Send,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/constants'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
@@ -34,13 +35,23 @@ export default async function DashboardLayout({
     { label: 'ホーム', shortLabel: 'ホーム', href: '/', icon: LayoutDashboard, iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場一覧', shortLabel: '現場', href: '/sites', icon: Building2, iconName: 'Building2', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場カレンダー', shortLabel: '予定', href: '/calendar', icon: Calendar, iconName: 'Calendar', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
-    { label: '報告一覧', shortLabel: '報告', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
+    { label: '1次報告', shortLabel: '1次', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
+    { label: '2次報告', shortLabel: '2次', href: '/manager/summaries', icon: Send, iconName: 'Send', roles: ['admin', 'manager'] },
     { label: '確認', shortLabel: '確認', href: '/client', icon: CheckSquare, iconName: 'CheckSquare', roles: ['client'] },
     { label: '新規報告', shortLabel: '新規', href: '/reports/new', icon: PlusCircle, iconName: 'PlusCircle', roles: ['worker_internal', 'worker_external'] },
     { label: '管理', shortLabel: '管理', href: '/admin', icon: Settings, iconName: 'Settings', roles: ['admin', 'manager'] },
   ]
 
-  const navItems = allNavItems.filter(item => item.roles.includes(userRole))
+  const isManagerOrAdmin = userRole === 'admin' || userRole === 'manager'
+  const navItems = allNavItems
+    .filter(item => item.roles.includes(userRole))
+    .map(item => {
+      // ワーカーには「報告一覧」、管理者/マネージャーには「1次報告」と表示
+      if (item.href === '/reports' && !isManagerOrAdmin) {
+        return { ...item, label: '報告一覧', shortLabel: '報告' }
+      }
+      return item
+    })
 
   return (
     <div className="flex h-dvh bg-[#F5F6F8] text-gray-900 font-sans overflow-hidden">
