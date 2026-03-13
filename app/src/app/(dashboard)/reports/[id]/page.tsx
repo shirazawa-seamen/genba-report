@@ -18,10 +18,8 @@ import {
   XCircle,
   Shield,
   Edit3,
-  Printer,
-  StickyNote,
 } from "lucide-react";
-import { ApprovalButtons, ApprovalFlowBar, ResubmitButton } from "./approval-buttons";
+import { ApprovalButtons, ResubmitButton } from "./approval-buttons";
 import { canAccessReport } from "@/lib/siteAccess";
 
 interface SiteData { name: string; address: string | null }
@@ -90,6 +88,11 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
   // クライアントは個別の職人報告ではなく、マネージャーのサマリーのみ閲覧
   if (userRole === "client") notFound();
+
+  // ワーカーは自分の報告のみ閲覧可能
+  const isWorker = userRole === "worker_internal" || userRole === "worker_external";
+  if (isWorker && raw.reporter_id !== user.id) notFound();
+
   const canApprove = userRole === "admin" || userRole === "manager" || userRole === "client";
 
   let reporterName: string | null = null;
@@ -103,7 +106,52 @@ export default async function ReportDetailPage({ params }: PageProps) {
   );
 
   const sites = Array.isArray(raw.sites) ? raw.sites[0] ?? null : raw.sites;
-  const process = Array.isArray(raw.processes) ? raw.processes[0] ?? null : raw.processes;
+
+  // 同じ報告者・同じ日・同じ現場の兄弟レポートを取得（複数工程対応）
+  const siteId = (sites as SiteData & { id?: string } | null) ? undefined : undefined;
+  let siblingReports: Array<{ id: string; progress_rate: number; processes: { id: string; name: string; category: string } | null }> = [];
+  {
+    // 現在のレポートのsite_idを取得
+    const { data: currentReport } = await supabase
+      .from("daily_reports")
+      .select("site_id")
+      .eq("id", id)
+      .single();
+
+    if (currentReport?.site_id && raw.reporter_id) {
+      const { data: siblings } = await supabase
+        .from("daily_reports")
+        .select("id, progress_rate, processes(id, name, category)")
+        .eq("site_id", currentReport.site_id)
+        .eq("reporter_id", raw.reporter_id)
+        .eq("report_date", raw.report_date)
+        .order("created_at");
+
+      siblingReports = (siblings ?? []).map((s) => {
+        const proc = Array.isArray(s.processes) ? s.processes[0] : s.processes;
+        return {
+          id: s.id as string,
+          progress_rate: s.progress_rate as number,
+          processes: proc as { id: string; name: string; category: string } | null,
+        };
+      });
+    }
+  }
+
+  // 工程ごとの進捗率リスト（報告時の値を使用）
+  const processProgressList = siblingReports.length > 0
+    ? siblingReports.map((s) => ({
+        id: s.id,
+        name: s.processes?.name ?? WORK_PROCESS_LABELS[raw.work_process] ?? "工程未設定",
+        progressRate: s.progress_rate ?? 0,
+        isCurrent: s.id === id,
+      }))
+    : [{
+        id: raw.id,
+        name: WORK_PROCESS_LABELS[raw.work_process] ?? raw.work_process,
+        progressRate: raw.progress_rate ?? 0,
+        isCurrent: true,
+      }];
 
   const { data: photos } = await supabase.from("report_photos").select("id, storage_path, photo_type, caption, media_type").eq("report_id", id).order("created_at", { ascending: true });
 
@@ -114,8 +162,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
     })
   );
 
-  const rate = raw.progress_rate ?? 0;
-  const processLabel = process?.name ?? WORK_PROCESS_LABELS[raw.work_process] ?? raw.work_process;
+  const processLabel = processProgressList.map((p) => p.name).join("、");
   const siteName = sites?.name ?? "不明な現場";
   const status = raw.approval_status ?? "draft";
   const { Icon: SIcon, color: sColor } = statusIcon(status);
@@ -138,15 +185,20 @@ export default async function ReportDetailPage({ params }: PageProps) {
             'bg-gray-100 text-gray-400'
           }`}>{statusLabel}</span>
         </div>
-        <h1 className="text-[24px] font-bold text-gray-900 mb-1.5">{siteName}</h1>
-        <div className="flex items-center gap-4 text-[13px] text-gray-400 flex-wrap">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-[24px] font-bold text-gray-900">{siteName}</h1>
+          {(raw.reporter_id === user.id) && (
+            <Link href={`/reports/${raw.id}/edit`} className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 min-h-[36px] text-[13px] font-medium text-gray-500 hover:bg-gray-50 transition-colors">
+              <Edit3 size={14} />編集
+            </Link>
+          )}
+        </div>
+        <div className="flex items-center gap-4 text-[13px] text-gray-400 flex-wrap mt-1.5">
           <span className="flex items-center gap-1.5"><CalendarDays size={14} />{formatDate(raw.report_date)}</span>
           <span className="flex items-center gap-1.5"><HardHat size={14} />{processLabel}</span>
           {reporterName && (<span className="flex items-center gap-1.5"><Users size={14} />報告者: {reporterName}</span>)}
         </div>
       </div>
-
-      <ApprovalFlowBar status={status} />
 
       {raw.rejection_comment && (
         <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200">
@@ -156,22 +208,28 @@ export default async function ReportDetailPage({ params }: PageProps) {
       )}
 
       <div className="mb-8 p-5 rounded-2xl border border-gray-200 bg-white">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[13px] text-gray-400 flex items-center gap-2"><TrendingUp size={15} />進捗率</span>
-          <span className={`text-[22px] font-bold ${progressText(rate)}`}>{rate}%</span>
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp size={15} className="text-gray-400" />
+          <span className="text-[13px] text-gray-400">工程進捗（担当者見込み）</span>
         </div>
-        <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
-          <div className={`h-full rounded-full ${progressColor(rate)} transition-all duration-500`} style={{ width: `${rate}%` }} />
+        <div className="space-y-3">
+          {processProgressList.map((proc) => (
+            <div key={proc.id}>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={`text-[13px] font-medium ${proc.isCurrent ? "text-gray-700" : "text-gray-500"}`}>
+                  {proc.name}
+                </span>
+                <span className={`text-[18px] font-bold ${progressText(proc.progressRate)}`}>{proc.progressRate}%</span>
+              </div>
+              <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                <div className={`h-full rounded-full ${progressColor(proc.progressRate)} transition-all duration-500`} style={{ width: `${proc.progressRate}%` }} />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-8">
-        {raw.workers && raw.workers.length > 0 && (
-          <div className="col-span-2 p-4 rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center gap-1.5 mb-2.5"><Users size={14} className="text-[#0EA5E9]/60" /><span className="text-[12px] text-gray-400 font-medium">作業者</span></div>
-            <div className="flex flex-wrap gap-1.5">{raw.workers.map((w, i) => (<span key={i} className="text-[12px] bg-gray-100 px-2.5 py-1 rounded-lg text-gray-600">{w}</span>))}</div>
-          </div>
-        )}
         {raw.weather && (
           <div className="p-4 rounded-2xl border border-gray-200 bg-white">
             <div className="flex items-center gap-1.5 mb-2"><Cloud size={14} className="text-[#0EA5E9]/60" /><span className="text-[12px] text-gray-400 font-medium">天候</span></div>
@@ -245,31 +303,8 @@ export default async function ReportDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {raw.admin_notes && (
-        <div className="mb-8">
-          <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200">
-            <div className="flex items-center gap-1.5 mb-2.5"><StickyNote size={14} className="text-amber-400" /><span className="text-[12px] font-semibold text-amber-400">管理者メモ</span></div>
-            <p className="text-[14px] text-gray-600 whitespace-pre-wrap leading-relaxed">{raw.admin_notes}</p>
-          </div>
-        </div>
-      )}
-
-      {(userRole === "admin" || userRole === "manager") && (
-        <div className="mb-8 flex flex-col sm:flex-row gap-3">
-          <Link href={`/reports/${raw.id}/edit`} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 min-h-[44px] px-4 text-[14px] font-medium text-amber-400 hover:bg-amber-100 transition-colors"><Edit3 size={16} />編集する</Link>
-          <Link href={`/reports/${raw.id}/print`} className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 min-h-[44px] px-4 text-[14px] font-medium text-[#0EA5E9] hover:bg-cyan-100 transition-colors"><Printer size={16} />PDF出力</Link>
-        </div>
-      )}
-
-      {userRole === "client" && (
-        <div className="mb-8">
-          <Link href={`/reports/${raw.id}/print`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 min-h-[44px] px-5 text-[14px] font-medium text-[#0EA5E9] hover:bg-cyan-100 transition-colors"><Printer size={16} />PDF出力</Link>
-        </div>
-      )}
-
       <div className="text-[11px] text-gray-300 mt-4">
         <p>作成: {new Date(raw.created_at).toLocaleString("ja-JP")}</p>
-        {raw.edited_by_admin && (<p className="mt-1 text-amber-400/40">※ 管理者による編集あり</p>)}
       </div>
     </div>
   );

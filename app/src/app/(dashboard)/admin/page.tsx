@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -9,8 +10,10 @@ import {
   ChevronRight,
   Settings,
   TrendingUp,
+  KeyRound,
 } from "lucide-react";
 import { APPROVAL_STATUS_LABELS } from "@/lib/constants";
+import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
 
 function StatCard({
   label,
@@ -52,6 +55,9 @@ function StatCard({
 }
 
 export default async function AdminPage() {
+  const { role } = await requireUserContext();
+  if (role !== "admin" && role !== "manager") redirect("/");
+
   const supabase = await createClient();
 
   // 未確認報告数
@@ -260,6 +266,38 @@ export default async function AdminPage() {
               </p>
               <p className="text-[11px] text-gray-400">
                 工程ID・順序・並行作業を調整
+              </p>
+            </div>
+          </Link>
+          <Link
+            href="/admin/companies"
+            className="flex items-center gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100 transition-colors active:scale-[0.98] shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100">
+              <Building2 size={18} className="text-[#0EA5E9]" />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-700">
+                会社マスター
+              </p>
+              <p className="text-[11px] text-gray-400">
+                会社名を追加・編集・削除
+              </p>
+            </div>
+          </Link>
+          <Link
+            href="/admin/llm-settings"
+            className="flex items-center gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100 transition-colors active:scale-[0.98] shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100">
+              <KeyRound size={18} className="text-[#0EA5E9]" />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold text-gray-700">
+                LLM API設定
+              </p>
+              <p className="text-[11px] text-gray-400">
+                Claude APIキーを安全に保存
               </p>
             </div>
           </Link>

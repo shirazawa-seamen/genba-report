@@ -48,12 +48,14 @@ export function ReportSearchList({
   reports,
   statusTabs,
   activeFilter,
+  scope,
   currentPage,
   totalPages,
 }: {
   reports: ReportItem[];
   statusTabs: StatusTab[];
   activeFilter: string | null;
+  scope?: string | null;
   currentPage: number;
   totalPages: number;
 }) {
@@ -64,6 +66,9 @@ export function ReportSearchList({
     const params = new URLSearchParams();
     if (status && status !== "all") {
       params.set("status", status);
+    }
+    if (scope && scope !== "all") {
+      params.set("scope", scope);
     }
     if (page && page > 1) {
       params.set("page", String(page));
@@ -173,9 +178,9 @@ export function ReportSearchList({
                   <span className="text-[11px] text-gray-400 shrink-0">{r.formattedDate}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[12px] text-gray-400">{r.processName}</span>
+                  <span className="text-[12px] text-gray-400 truncate max-w-[180px]">{r.processName}</span>
                   <span className="text-[11px] text-gray-200">|</span>
-                  <span className="text-[12px] text-[#0EA5E9]">{r.progressRate}%</span>
+                  <span className="text-[12px] text-[#0EA5E9]">平均 {r.progressRate}%</span>
                   {r.reporterName && (
                     <>
                       <span className="text-[11px] text-gray-200">|</span>

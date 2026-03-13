@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { WORK_PROCESS_LABELS, APPROVAL_STATUS_LABELS } from "@/lib/constants";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Plus, FileText, Filter } from "lucide-react";
 import { ReportSearchList } from "@/components/reports/ReportSearchList";
 import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
+import { getAccessibleSiteContext } from "@/lib/siteAccess";
 
 interface DailyReportWithSite {
   id: string;
@@ -15,12 +17,13 @@ interface DailyReportWithSite {
   created_at: string;
   approval_status: string;
   reporter_id: string | null;
+  site_id: string;
   sites: { name: string } | null;
   processes: { name: string } | null;
 }
 
 interface PageProps {
-  searchParams: Promise<{ status?: string; page?: string }>;
+  searchParams: Promise<{ status?: string; page?: string; scope?: string }>;
 }
 
 const PAGE_SIZE = 20;
@@ -38,44 +41,89 @@ function formatDate(dateStr: string): string {
 }
 
 export default async function ReportsPage({ searchParams }: PageProps) {
-  const { status: filterStatus, page: pageParam } = await searchParams;
+  const { status: filterStatus, page: pageParam, scope: scopeParam } = await searchParams;
   const supabase = await createClient();
-  const { role: userRole } = await requireUserContext();
-  const isClient = userRole === "client";
+  const { user, role: userRole } = await requireUserContext();
+
+  // クライアントは個別の職人報告ではなく、マネージャーのサマリーのみ閲覧
+  if (userRole === "client") redirect("/client");
+
+  const accessContext = await getAccessibleSiteContext(user.id);
+  const isClient = false;
+  const isManager = userRole === "manager";
+  const isWorker = userRole === "worker_internal" || userRole === "worker_external";
   const activeFilter = filterStatus && filterStatus !== "all" ? filterStatus : null;
+  const activeScope = isManager && scopeParam === "mine" ? "mine" : "all";
   const currentPage = Math.max(1, Number.parseInt(pageParam ?? "1", 10) || 1);
   const from = (currentPage - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
+  const scopedSiteIds =
+    activeScope === "mine"
+      ? accessContext.assignedSiteIds
+      : accessContext.accessibleSiteIds;
 
   let query = supabase
     .from("daily_reports")
     .select(
-      "id, report_date, work_process, progress_rate, work_content, created_at, approval_status, reporter_id, sites(name), processes(name)",
+      "id, report_date, work_process, progress_rate, work_content, created_at, approval_status, reporter_id, site_id, sites(name), processes(name)",
       { count: "exact" }
     )
     .order("report_date", { ascending: false })
     .order("created_at", { ascending: false })
     .range(from, to);
 
+  // ワーカーは自分の報告のみ表示
+  if (isWorker) {
+    query = query.eq("reporter_id", user.id);
+  }
+
   if (activeFilter) {
     query = query.eq("approval_status", activeFilter);
   }
+  if (scopedSiteIds) {
+    if (scopedSiteIds.length === 0) {
+      query = query.in("site_id", ["00000000-0000-0000-0000-000000000000"]);
+    } else {
+      query = query.in("site_id", scopedSiteIds);
+    }
+  }
 
-  const [
-    { data: reports, error, count: filteredCount },
-    { count: allCount },
-    { count: submittedCount },
-    { count: approvedCount },
-    { count: confirmedCount },
-    { count: rejectedCount },
-  ] = await Promise.all([
+  // グループ化ベースのカウント用クエリ（全件の最小データを取得）
+  let countDataQuery = supabase
+    .from("daily_reports")
+    .select("site_id, reporter_id, report_date, approval_status")
+    .order("report_date", { ascending: false })
+    .limit(2000);
+  if (isWorker) {
+    countDataQuery = countDataQuery.eq("reporter_id", user.id);
+  }
+  if (scopedSiteIds) {
+    if (scopedSiteIds.length === 0) {
+      countDataQuery = countDataQuery.in("site_id", ["00000000-0000-0000-0000-000000000000"]);
+    } else {
+      countDataQuery = countDataQuery.in("site_id", scopedSiteIds);
+    }
+  }
+
+  const [{ data: reports, error }, { data: countData }] = await Promise.all([
     query,
-    supabase.from("daily_reports").select("*", { count: "exact", head: true }),
-    supabase.from("daily_reports").select("*", { count: "exact", head: true }).eq("approval_status", "submitted"),
-    supabase.from("daily_reports").select("*", { count: "exact", head: true }).eq("approval_status", "approved"),
-    supabase.from("daily_reports").select("*", { count: "exact", head: true }).eq("approval_status", "client_confirmed"),
-    supabase.from("daily_reports").select("*", { count: "exact", head: true }).eq("approval_status", "rejected"),
+    countDataQuery,
   ]);
+
+  // グループ化してカウント（同一 site_id + reporter_id + report_date = 1件）
+  const countGroups = new Map<string, string>();
+  for (const r of countData ?? []) {
+    const key = `${r.site_id}_${r.reporter_id ?? "none"}_${r.report_date}`;
+    if (!countGroups.has(key)) countGroups.set(key, r.approval_status ?? "draft");
+  }
+  const allCount = countGroups.size;
+  const submittedCount = [...countGroups.values()].filter((s) => s === "submitted").length;
+  const approvedCount = [...countGroups.values()].filter((s) => s === "approved").length;
+  const confirmedCount = [...countGroups.values()].filter((s) => s === "client_confirmed").length;
+  const rejectedCount = [...countGroups.values()].filter((s) => s === "rejected").length;
+  const filteredCount = activeFilter
+    ? [...countGroups.values()].filter((s) => s === activeFilter).length
+    : allCount;
   const reportList = (reports as DailyReportWithSite[] | null) ?? [];
 
   const reporterIds = [...new Set(reportList.map((r) => r.reporter_id).filter(Boolean))] as string[];
@@ -98,18 +146,38 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     }
   }
 
-  const reportItems = reportList.map((r) => {
-    const status = r.approval_status ?? "draft";
+  // 同じ報告者・同じ日付・同じ現場の報告をグループ化
+  const groupKey = (r: DailyReportWithSite) =>
+    `${r.site_id}_${r.reporter_id ?? "none"}_${r.report_date}`;
+
+  const grouped = new Map<string, DailyReportWithSite[]>();
+  for (const r of reportList) {
+    const key = groupKey(r);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(r);
+  }
+
+  const reportItems = Array.from(grouped.values()).map((siblings) => {
+    const first = siblings[0];
+    const status = first.approval_status ?? "draft";
+    const processNames = siblings
+      .map((r) => r.processes?.name ?? WORK_PROCESS_LABELS[r.work_process] ?? r.work_process)
+      .filter(Boolean);
+    const avgProgress =
+      siblings.length > 0
+        ? Math.round(siblings.reduce((sum, r) => sum + (r.progress_rate ?? 0), 0) / siblings.length)
+        : 0;
+
     return {
-      id: r.id,
-      siteName: r.sites?.name ?? "不明な現場",
-      processName: r.processes?.name ?? WORK_PROCESS_LABELS[r.work_process] ?? r.work_process,
-      reportDate: r.report_date,
-      formattedDate: formatDate(r.report_date),
+      id: first.id,
+      siteName: first.sites?.name ?? "不明な現場",
+      processName: processNames.join("、"),
+      reportDate: first.report_date,
+      formattedDate: formatDate(first.report_date),
       status,
       statusLabel: APPROVAL_STATUS_LABELS[status] ?? status,
-      progressRate: r.progress_rate,
-      reporterName: r.reporter_id ? (reporterMap.get(r.reporter_id) || null) : null,
+      progressRate: avgProgress,
+      reporterName: first.reporter_id ? (reporterMap.get(first.reporter_id) || null) : null,
     };
   });
 
@@ -138,6 +206,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
           <h1 className="text-[22px] font-bold text-gray-900">報告一覧</h1>
           <p className="text-[13px] text-gray-400 mt-0.5">
             {activeFilter ? `${APPROVAL_STATUS_LABELS[activeFilter] ?? activeFilter}: ` : ""}
+            {isManager && activeScope === "mine" ? "自分の現場 / " : ""}
             {totalCount}件の報告
           </p>
         </div>
@@ -194,6 +263,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
           reports={reportItems}
           statusTabs={statusTabsWithCounts}
           activeFilter={activeFilter}
+          scope={activeScope}
           currentPage={safeCurrentPage}
           totalPages={totalPages}
         />

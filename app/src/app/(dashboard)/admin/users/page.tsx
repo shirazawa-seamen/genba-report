@@ -1,20 +1,36 @@
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { UserManagement } from "@/components/admin/UserManagement";
+import { listCompanies } from "@/lib/companies";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
 
 export default async function AdminUsersPage() {
+  const { role } = await requireUserContext();
+  if (role !== "admin" && role !== "manager") redirect("/");
   // Use admin client to fetch profiles (bypasses RLS) and auth users
-  let usersWithEmail: { id: string; role: string; is_active: boolean | null; email?: string; full_name?: string }[] = [];
+  let usersWithEmail: {
+    id: string;
+    role: string;
+    is_active: boolean | null;
+    email?: string;
+    full_name?: string;
+    company_id?: string | null;
+    company_name?: string | null;
+  }[] = [];
+  let companies: { id: string; name: string }[] = [];
   let fetchError: string | null = null;
 
   try {
     const adminClient = createAdminClient();
+    companies = await listCompanies();
+    const companyMap = new Map(companies.map((company) => [company.id, company.name]));
 
     // Fetch profiles via admin client (bypasses RLS)
     const { data: profiles, error: profilesError } = await adminClient
       .from("profiles")
-      .select("id, role, is_active, full_name")
+      .select("id, role, is_active, full_name, company_id")
       .order("created_at", { ascending: false });
 
     if (profilesError) {
@@ -48,6 +64,8 @@ export default async function AdminUsersPage() {
         is_active: p.is_active ?? true,
         email: authData?.email,
         full_name: p.full_name || authData?.full_name,
+        company_id: p.company_id ?? null,
+        company_name: p.company_id ? companyMap.get(p.company_id) ?? null : null,
       };
     });
   } catch (err) {
@@ -84,7 +102,7 @@ export default async function AdminUsersPage() {
           </div>
         )}
 
-        <UserManagement users={usersWithEmail} />
+        <UserManagement users={usersWithEmail} companies={companies} />
       </div>
     </div>
   );

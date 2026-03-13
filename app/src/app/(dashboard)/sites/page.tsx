@@ -1,6 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
+import { listCompanies } from "@/lib/companies";
 import { SitesPageClient } from "./SitesPageClient";
+import {
+  canCreateSites,
+  filterSiteByScope,
+  getAccessibleSiteContext,
+  getAllowedSiteScopeOptions,
+  type SiteScopeFilter,
+  type SiteStatusFilter,
+} from "@/lib/siteAccess";
 
 function getPeriodLabel(startDate: string | null, endDate: string | null, siteStatus: string): { label: string; color: string; bg: string } {
   if (siteStatus === "completed") return { label: "完了", color: "text-emerald-500", bg: "bg-emerald-50" };
@@ -14,50 +23,56 @@ function getPeriodLabel(startDate: string | null, endDate: string | null, siteSt
   return { label: "施工中", color: "text-[#0EA5E9]", bg: "bg-cyan-50" };
 }
 
-export default async function SitesPage({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
+export default async function SitesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ show?: string; status?: string; scope?: string }>;
+}) {
   const params = await searchParams;
-  const showCompleted = params.show === "completed";
+  const activeStatus = (
+    params.status ?? (params.show === "completed" ? "completed" : "active")
+  ) as SiteStatusFilter;
   const supabase = await createClient();
   const { user, role: userRole } = await requireUserContext();
+  const companies = await listCompanies();
+  const accessContext = await getAccessibleSiteContext(user.id);
+  const scopeOptions = getAllowedSiteScopeOptions(accessContext);
+  const requestedScope = (params.scope as SiteScopeFilter | undefined) ?? scopeOptions[0].value;
+  const activeScope = scopeOptions.some((option) => option.value === requestedScope)
+    ? requestedScope
+    : scopeOptions[0].value;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let sites: any[] | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let error: any = null;
 
-  const statusFilter = showCompleted ? "completed" : "active";
+  let siteQuery = supabase
+    .from("sites")
+    .select(`id, name, site_number, address, start_date, end_date, status, created_at, company_id, daily_reports(count)`)
+    .order("created_at", { ascending: false });
 
-  if (userRole === "worker_external" && user) {
-    const { data: memberRows, error: memberError } = await supabase
-      .from("site_members")
-      .select("site_id")
-      .eq("user_id", user.id);
-    error = memberError;
-    const siteIds = (memberRows ?? []).map((m) => m.site_id);
-    if (siteIds.length > 0) {
-      const result = await supabase
-        .from("sites")
-        .select(`id, name, site_number, address, start_date, end_date, status, created_at, daily_reports(count)`)
-        .in("id", siteIds)
-        .eq("status", statusFilter)
-        .order("created_at", { ascending: false });
-      sites = result.data;
-      error = error || result.error;
-    } else {
+  if (accessContext.accessibleSiteIds) {
+    if (accessContext.accessibleSiteIds.length === 0) {
       sites = [];
+    } else {
+      siteQuery = siteQuery.in("id", accessContext.accessibleSiteIds);
     }
-  } else {
-    const result = await supabase
-      .from("sites")
-      .select(`id, name, site_number, address, start_date, end_date, status, created_at, daily_reports(count)`)
-      .eq("status", statusFilter)
-      .order("created_at", { ascending: false });
+  }
+
+  if (!sites) {
+    const result = await siteQuery;
     sites = result.data;
     error = result.error;
   }
 
+  const visibleSites = (sites ?? []).filter((site) => {
+    const statusMatch = activeStatus === "all" ? true : site.status === activeStatus;
+    return statusMatch && filterSiteByScope(site.id, activeScope, accessContext);
+  });
+
   // 全サイトIDの工程データを一括取得して進捗率を計算
-  const siteIds = (sites ?? []).map((s) => s.id);
+  const siteIds = visibleSites.map((s) => s.id);
   let processMap: Record<string, { total: number; avgProgress: number }> = {};
   if (siteIds.length > 0) {
     const { data: allProcesses } = await supabase
@@ -80,18 +95,21 @@ export default async function SitesPage({ searchParams }: { searchParams: Promis
   }
 
   // 完了件数も取得
-  const { count: completedCount } = await supabase
-    .from("sites")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "completed");
-
-  const { count: activeCount } = await supabase
-    .from("sites")
-    .select("*", { count: "exact", head: true })
-    .eq("status", "active");
+  const scopeMatchedSites = (sites ?? []).filter((site) =>
+    filterSiteByScope(site.id, activeScope, accessContext)
+  );
+  const allCount = scopeMatchedSites.length;
+  const completedCount = scopeMatchedSites.filter((site) => site.status === "completed").length;
+  const activeCount = scopeMatchedSites.filter((site) => site.status !== "completed").length;
+  const scopeCounts = Object.fromEntries(
+    scopeOptions.map((option) => [
+      option.value,
+      (sites ?? []).filter((site) => filterSiteByScope(site.id, option.value, accessContext)).length,
+    ])
+  ) as Partial<Record<SiteScopeFilter, number>>;
 
   // クライアントコンポーネント用にデータ整形
-  const siteItems = (sites ?? []).map((site) => {
+  const siteItems = visibleSites.map((site) => {
     const period = getPeriodLabel(site.start_date, site.end_date, site.status ?? "active");
     const progress = processMap[site.id];
     return {
@@ -119,10 +137,17 @@ export default async function SitesPage({ searchParams }: { searchParams: Promis
       </div>
 
       <SitesPageClient
-        showCompleted={showCompleted}
+        userRole={userRole}
+        activeScope={activeScope}
+        activeStatus={activeStatus}
+        statusCounts={{ all: allCount, active: activeCount, completed: completedCount }}
+        scopeCounts={scopeCounts}
         activeCount={activeCount ?? 0}
         completedCount={completedCount ?? 0}
         siteItems={siteItems}
+        companies={companies}
+        canCreateSite={canCreateSites(userRole)}
+        scopeOptions={scopeOptions.map((option) => ({ value: option.value, label: option.label }))}
         error={Boolean(error)}
       />
     </div>

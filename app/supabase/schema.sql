@@ -139,7 +139,7 @@ CREATE TABLE public.daily_reports (
     approved_at      timestamptz,
     rejection_comment text,
     created_at       timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT daily_reports_process_id_report_date_key UNIQUE (process_id, report_date)
+    CONSTRAINT daily_reports_reporter_process_date_key UNIQUE (reporter_id, process_id, report_date)
 );
 
 COMMENT ON TABLE  public.daily_reports                  IS '日次報告';

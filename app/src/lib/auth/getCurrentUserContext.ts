@@ -14,18 +14,19 @@ export const getCurrentUserContext = cache(async () => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, company_id")
     .eq("id", user.id)
     .single();
 
   const role = profile?.role ?? "worker_internal";
+  const companyId = profile?.company_id ?? null;
   const displayName =
     user.user_metadata?.full_name ??
     user.user_metadata?.name ??
     user.email?.split("@")[0] ??
     "User";
 
-  return { user, role, displayName };
+  return { user, role, companyId, displayName };
 });
 
 export async function requireUserContext() {

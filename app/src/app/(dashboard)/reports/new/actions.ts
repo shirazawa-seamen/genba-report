@@ -261,7 +261,8 @@ export async function createDailyReport(
     .from("daily_reports")
     .select("process_id, processes(name)")
     .in("process_id", selectedProcessIds)
-    .eq("report_date", input.reportDate);
+    .eq("report_date", input.reportDate)
+    .eq("reporter_id", user.id);
 
   if (existingReportsError) {
     return {
@@ -277,7 +278,7 @@ export async function createDailyReport(
     });
     return {
       success: false,
-      error: `この日付で既に報告済みの工程があります: ${existingNames.join("、")}`,
+      error: `この日付で自分が既に報告済みの工程があります: ${existingNames.join("、")}`,
     };
   }
 
@@ -286,54 +287,49 @@ export async function createDailyReport(
     .split(/[、,]/)
     .map((w) => w.trim())
     .filter((w) => w.length > 0);
-  const createdReportIds: string[] = [];
+  const invalidProgressProcess = input.processes.find((process) => {
+    const progressRate = Number.parseInt(process.progressRate, 10);
+    return Number.isNaN(progressRate) || progressRate < 0 || progressRate > 100;
+  });
 
-  for (const process of input.processes) {
-    const progressRate = parseInt(process.progressRate, 10);
-    const { data: report, error: insertError } = await supabase
-      .from("daily_reports")
-      .insert({
-        site_id: siteId,
-        process_id: process.processId,
-        reporter_id: user.id,
-        report_date: input.reportDate,
-        work_process: process.workProcess,
-        work_content: input.workDescription,
-        workers: workersArray,
-        progress_rate: progressRate,
-        weather: input.weather || null,
-        work_hours: input.workHours ? parseFloat(input.workHours) : null,
-        issues: input.issues || null,
-        approval_status: "submitted",
-      })
-      .select("id")
-      .single();
-
-    if (insertError) {
-      if (insertError.code === "23505") {
-        return {
-          success: false,
-          error: `この工程・日付の報告は既に存在します: ${process.name || "未設定工程"}`,
-        };
-      }
-      return { success: false, error: `報告作成エラー: ${insertError.message}` };
-    }
-
-    createdReportIds.push(report.id);
-
-    const newStatus = progressRate >= 100 ? "completed" : "in_progress";
-    const { error: processUpdateError } = await supabase
-      .from("processes")
-      .update({
-        progress_rate: progressRate,
-        status: newStatus,
-      })
-      .eq("id", process.processId);
-
-    if (processUpdateError) {
-      console.error("工程進捗率の更新エラー:", processUpdateError.message);
-    }
+  if (invalidProgressProcess) {
+    return {
+      success: false,
+      error: `進捗率が不正です: ${invalidProgressProcess.name || "未設定工程"}`,
+    };
   }
+
+  const reportRows = input.processes.map((process) => ({
+    site_id: siteId,
+    process_id: process.processId,
+    reporter_id: user.id,
+    report_date: input.reportDate,
+    work_process: process.workProcess,
+    work_content: input.workDescription,
+    workers: workersArray,
+    progress_rate: Number.parseInt(process.progressRate, 10),
+    weather: input.weather || null,
+    work_hours: input.workHours ? parseFloat(input.workHours) : null,
+    issues: input.issues || null,
+    approval_status: "submitted",
+  }));
+
+  const { data: createdReports, error: insertError } = await supabase
+    .from("daily_reports")
+    .insert(reportRows)
+    .select("id, process_id");
+
+  if (insertError) {
+    if (insertError.code === "23505") {
+      return {
+        success: false,
+        error: "選択した工程の中に、この日付で自分が既に報告済みのものがあります",
+      };
+    }
+    return { success: false, error: `報告作成エラー: ${insertError.message}` };
+  }
+
+  const createdReportIds = (createdReports ?? []).map((report) => report.id);
 
   // 報告一覧のキャッシュを無効化
   revalidatePath("/reports");

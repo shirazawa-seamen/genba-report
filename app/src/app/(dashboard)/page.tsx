@@ -40,29 +40,48 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     }
   }
 
-  let pendingCountQuery = supabase.from('daily_reports').select('*', { count: 'exact', head: true }).eq('approval_status', 'submitted')
+  const isWorkerRole = userRole === 'worker_internal' || userRole === 'worker_external'
+
+  // 承認待ちカウント用（グループ化ベース）
+  let pendingDataQuery = supabase
+    .from('daily_reports')
+    .select('site_id, reporter_id, report_date')
+    .eq('approval_status', 'submitted')
+    .limit(500)
   let recentReportsQuery = supabase
     .from('daily_reports')
-    .select('id, report_date, approval_status, site_id, sites(name)')
+    .select('id, report_date, approval_status, site_id, reporter_id, sites(name)')
     .order('report_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(5)
+    .limit(50)
+
+  // ワーカーは自分の報告のみ
+  if (isWorkerRole) {
+    recentReportsQuery = recentReportsQuery.eq('reporter_id', user.id)
+  }
 
   if (pendingSiteIds) {
     if (pendingSiteIds.length === 0) {
-      pendingCountQuery = pendingCountQuery.in('site_id', ['00000000-0000-0000-0000-000000000000'])
+      pendingDataQuery = pendingDataQuery.in('site_id', ['00000000-0000-0000-0000-000000000000'])
       recentReportsQuery = recentReportsQuery.in('site_id', ['00000000-0000-0000-0000-000000000000'])
     } else {
-      pendingCountQuery = pendingCountQuery.in('site_id', pendingSiteIds)
+      pendingDataQuery = pendingDataQuery.in('site_id', pendingSiteIds)
       recentReportsQuery = recentReportsQuery.in('site_id', pendingSiteIds)
     }
   }
 
-  const [{ count: totalSiteCount }, { count: pendingCount }, { data: recentReports }] = await Promise.all([
+  const [{ count: totalSiteCount }, { data: pendingData }, { data: recentReports }] = await Promise.all([
     siteCountQuery,
-    pendingCountQuery,
+    pendingDataQuery,
     recentReportsQuery,
   ])
+
+  // 承認待ちをグループ化してカウント
+  const pendingGroups = new Set<string>()
+  for (const r of pendingData ?? []) {
+    pendingGroups.add(`${r.site_id}_${r.reporter_id ?? 'none'}_${r.report_date}`)
+  }
+  const pendingCount = pendingGroups.size
 
   // マネージャー/管理者向け: 未取りまとめ報告の集計
   let unsummarizedItems: Array<{ siteId: string; siteName: string; reportDate: string; reportCount: number }> = []
@@ -145,17 +164,22 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     }))
   }
 
-  const recentItems = (recentReports ?? []).map((r) => {
+  // グループ化して重複カードを排除（ホームでは site_id + report_date でまとめる）
+  const recentGrouped = new Map<string, { id: string; site: string; date: string; status: string; statusLabel: string }>()
+  for (const r of recentReports ?? []) {
+    const groupKey = `${r.site_id}_${r.report_date}`
+    if (recentGrouped.has(groupKey)) continue
     const siteName = (r.sites as unknown as { name: string } | null)?.name ?? '不明な現場'
     const status = r.approval_status ?? 'submitted'
-    return {
+    recentGrouped.set(groupKey, {
       id: r.id as string,
       site: siteName,
       date: r.report_date as string,
       status,
       statusLabel: APPROVAL_STATUS_LABELS[status] ?? status,
-    }
-  })
+    })
+  }
+  const recentItems = Array.from(recentGrouped.values()).slice(0, 5)
 
   return (
     <div className="flex-1 px-5 py-8 md:px-8 md:py-10 max-w-3xl w-full mx-auto">

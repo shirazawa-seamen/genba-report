@@ -1,16 +1,23 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Send } from "lucide-react";
+import { Send, Users, CheckCircle2 } from "lucide-react";
 import {
   saveClientReportSummaryDraft,
   submitClientReportSummary,
 } from "./actions";
+import { SummaryPhotos, type SummaryPhotoItem } from "./summary-photos";
 
 interface OfficialProgressItem {
   processId: string;
   processName: string;
   progressRate: number;
+}
+
+interface SiteMember {
+  id: string;
+  name: string;
+  role: string;
 }
 
 export function SummaryEditor({
@@ -19,6 +26,8 @@ export function SummaryEditor({
   reportDate,
   initialSummaryText,
   initialOfficialProgress,
+  siteMembers = [],
+  initialPhotos = [],
   status,
 }: {
   summaryId: string;
@@ -26,12 +35,23 @@ export function SummaryEditor({
   reportDate: string;
   initialSummaryText: string;
   initialOfficialProgress: OfficialProgressItem[];
+  siteMembers?: SiteMember[];
+  initialPhotos?: SummaryPhotoItem[];
   status: string;
 }) {
   const [summaryText, setSummaryText] = useState(initialSummaryText);
   const [officialProgress, setOfficialProgress] = useState(initialOfficialProgress);
+  const [selectedWorkers, setSelectedWorkers] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const toggleWorker = (name: string) => {
+    setSelectedWorkers((current) =>
+      current.includes(name)
+        ? current.filter((w) => w !== name)
+        : [...current, name]
+    );
+  };
 
   const updateProgress = (processId: string, progressRate: number) => {
     setOfficialProgress((current) =>
@@ -49,6 +69,7 @@ export function SummaryEditor({
         siteId,
         summaryText,
         officialProgress,
+        workers: selectedWorkers,
       });
       setMessage(result.success ? "下書きを保存しました" : result.error || "保存に失敗しました");
     });
@@ -63,6 +84,7 @@ export function SummaryEditor({
         siteId,
         summaryText,
         officialProgress,
+        workers: selectedWorkers,
       });
       if (!saveResult.success) {
         setMessage(saveResult.error || "保存に失敗しました");
@@ -114,6 +136,41 @@ export function SummaryEditor({
           </div>
         </div>
 
+        {/* 作業者選択 */}
+        {siteMembers.length > 0 && (
+          <div>
+            <p className="mb-2 text-[12px] font-medium text-gray-500 flex items-center gap-1.5">
+              <Users size={12} />
+              作業者
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {siteMembers.map((member) => {
+                const isSelected = selectedWorkers.includes(member.name);
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => toggleWorker(member.name)}
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-all ${
+                      isSelected
+                        ? "border border-cyan-300 bg-cyan-100 text-[#0EA5E9]"
+                        : "border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"
+                    }`}
+                  >
+                    {isSelected && <CheckCircle2 size={10} />}
+                    {member.name}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedWorkers.length > 0 && (
+              <p className="mt-1 text-[10px] text-gray-400">
+                選択中: {selectedWorkers.join("、")}
+              </p>
+            )}
+          </div>
+        )}
+
         <div>
           <p className="mb-2 text-[12px] font-medium text-gray-500">クライアント提出文</p>
           <textarea
@@ -123,6 +180,14 @@ export function SummaryEditor({
             className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-[12px] leading-6 text-gray-700 focus:border-[#0EA5E9]/50 focus:outline-none"
           />
         </div>
+
+        {/* 写真・動画 */}
+        <SummaryPhotos
+          summaryId={summaryId}
+          siteId={siteId}
+          initialPhotos={initialPhotos}
+          editable={!isSubmitted}
+        />
       </div>
 
       {message ? (

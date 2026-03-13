@@ -153,6 +153,51 @@ export async function notifyReportApproved({
 }
 
 // ---------------------------------------------------------------------------
+// サマリー提出時 → クライアントへ通知
+// ---------------------------------------------------------------------------
+export async function notifySummarySubmitted({
+  siteName,
+  reportDate,
+  clientEmails,
+}: {
+  siteName: string;
+  reportDate: string;
+  clientEmails: string[];
+}) {
+  if (clientEmails.length === 0) return;
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
+
+  return sendEmail({
+    to: clientEmails,
+    subject: `[${APP_NAME}] 日報が届いています: ${siteName} (${reportDate})`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1a1a1a; border-bottom: 2px solid #0EA5E9; padding-bottom: 8px;">
+          日報が届いています
+        </h2>
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+          <tr>
+            <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5; font-weight: bold; width: 120px;">現場</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${siteName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #ddd; background: #f5f5f5; font-weight: bold;">報告日</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${reportDate}</td>
+          </tr>
+        </table>
+        <a href="${appUrl}/client" style="display: inline-block; background: #0EA5E9; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 8px;">
+          確認ダッシュボードを開く
+        </a>
+        <p style="color: #999; font-size: 12px; margin-top: 24px;">
+          このメールは${APP_NAME}から自動送信されています。
+        </p>
+      </div>
+    `,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // 差戻し時 → 報告者へ通知
 // ---------------------------------------------------------------------------
 export async function notifyReportRejected({

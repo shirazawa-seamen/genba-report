@@ -46,11 +46,9 @@ export default async function ReportEditPage({ params }: PageProps) {
     notFound();
   }
 
-  // 権限チェック: admin/manager は常に編集可能、
-  // 報告者本人は差戻し時のみ編集可能
+  // 権限チェック: 報告者本人のみ編集可能
   const isReporter = report.reporter_id === user.id;
-  const isRejected = report.approval_status === "rejected";
-  if (!isAdminOrManager && !(isReporter && isRejected)) {
+  if (!isReporter) {
     redirect("/");
   }
 

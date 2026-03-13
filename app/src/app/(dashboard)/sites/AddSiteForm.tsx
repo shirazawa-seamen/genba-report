@@ -7,12 +7,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createSite } from "./actions";
 
-export function AddSiteForm({ onOpenChange }: { onOpenChange?: (isOpen: boolean) => void } = {}) {
+interface CompanyOption {
+  id: string;
+  name: string;
+}
+
+export function AddSiteForm({
+  companies,
+  onOpenChange,
+}: {
+  companies: CompanyOption[];
+  onOpenChange?: (isOpen: boolean) => void;
+} = { companies: [] }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [siteNumber, setSiteNumber] = useState("");
   const [address, setAddress] = useState("");
-const [clientName, setClientName] = useState("");
+  const [companyId, setCompanyId] = useState("");
   const [siteColor, setSiteColor] = useState("#0EA5E9");
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -34,13 +45,13 @@ const [clientName, setClientName] = useState("");
         name: name.trim(),
         siteNumber: siteNumber.trim() || undefined,
         address: address.trim(),
-        clientName: clientName.trim() || undefined,
+        companyId: companyId || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         siteColor,
       });
       if (!result.success) { setError(result.error ?? "登録に失敗しました"); return; }
-      setName(""); setSiteNumber(""); setAddress(""); setClientName(""); setStartDate(""); setEndDate(""); setSiteColor("#0EA5E9"); setOpen(false);
+      setName(""); setSiteNumber(""); setAddress(""); setCompanyId(""); setStartDate(""); setEndDate(""); setSiteColor("#0EA5E9"); setOpen(false);
       router.refresh();
     });
   };
@@ -69,7 +80,24 @@ const [clientName, setClientName] = useState("");
         <Input label="現場名" placeholder="例：○○ビル新築工事" value={name} onChange={(e) => { setName(e.target.value); setError(null); }} required autoFocus />
         <Input label="現場番号" placeholder="例：S-2026-001" value={siteNumber} onChange={(e) => setSiteNumber(e.target.value)} helperText="社内管理用の現場番号" />
         <Input label="住所" placeholder="例：東京都千代田区..." value={address} onChange={(e) => setAddress(e.target.value)} />
-        <Input label="クライアント名" placeholder="例：○○建設株式会社" value={clientName} onChange={(e) => setClientName(e.target.value)} helperText="この現場のクライアント会社名" />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[13px] font-medium text-gray-500">会社名</label>
+          <div className="relative">
+            <select
+              value={companyId}
+              onChange={(event) => setCompanyId(event.target.value)}
+              className="w-full min-h-[44px] appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[16px] text-gray-900 transition-all duration-150 focus:border-[#0EA5E9]/50 focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]/20"
+            >
+              <option value="">会社を選択してください</option>
+              {companies.map((company) => (
+                <option key={company.id} value={company.id}>
+                  {company.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-gray-400">クライアント会社を会社マスターから選択します</p>
+        </div>
         <Input label="現場カラー" type="color" value={siteColor} onChange={(e) => setSiteColor(e.target.value)} />
         <Input label="着工日" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         <Input label="完工予定日" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />

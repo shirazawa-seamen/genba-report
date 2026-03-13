@@ -16,6 +16,7 @@ import {
   addSiteMaterial,
   deleteSiteMaterial,
 } from "@/app/(dashboard)/sites/actions";
+import { getMaterialCatalog } from "@/app/(dashboard)/admin/materials/actions";
 
 interface Material {
   id: string;
@@ -37,6 +38,7 @@ export function MaterialManager({ siteId, canManage = false }: MaterialManagerPr
   const [materials, setMaterials] = useState<Material[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCatalogPicker, setShowCatalogPicker] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchMaterials = useCallback(async () => {
@@ -71,14 +73,24 @@ export function MaterialManager({ siteId, canManage = false }: MaterialManagerPr
           </h2>
         </div>
         {canManage && (
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => setShowAddModal(true)}
-          >
-            <Plus size={16} />
-            材料を追加
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowCatalogPicker(true)}
+            >
+              <Package size={14} />
+              カタログから
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setShowAddModal(true)}
+            >
+              <Plus size={16} />
+              手入力
+            </Button>
+          </div>
         )}
       </div>
 
@@ -160,6 +172,17 @@ export function MaterialManager({ siteId, canManage = false }: MaterialManagerPr
           onClose={async () => {
             setIsLoading(true);
             setShowAddModal(false);
+            await fetchMaterials();
+          }}
+        />
+      )}
+
+      {canManage && showCatalogPicker && (
+        <CatalogPickerModal
+          siteId={siteId}
+          onClose={async () => {
+            setIsLoading(true);
+            setShowCatalogPicker(false);
             await fetchMaterials();
           }}
         />
@@ -297,6 +320,139 @@ function AddMaterialModal({ siteId, onClose }: AddMaterialModalProps) {
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
+}
+
+interface CatalogPickerModalProps {
+  siteId: string;
+  onClose: () => void;
+}
+
+function CatalogPickerModal({ siteId, onClose }: CatalogPickerModalProps) {
+  const [isPending, startTransition] = useTransition();
+  const [catalogItems, setCatalogItems] = useState<
+    Array<{ id: string; material_name: string; product_number: string | null; unit: string | null; supplier: string | null; category: string | null }>
+  >([]);
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const result = await getMaterialCatalog();
+      if (result.success && result.data) {
+        setCatalogItems(result.data as Array<{ id: string; material_name: string; product_number: string | null; unit: string | null; supplier: string | null; category: string | null }>);
+      }
+      setIsLoadingCatalog(false);
+    })();
+  }, []);
+
+  const filteredItems = catalogItems.filter(
+    (item) =>
+      !searchQuery ||
+      item.material_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.product_number ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleSelect = (item: typeof catalogItems[0]) => {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await addSiteMaterial({
+        siteId,
+        materialName: item.material_name,
+        productNumber: item.product_number || undefined,
+        unit: item.unit || undefined,
+        supplier: item.supplier || undefined,
+      });
+      if (result.success) {
+        setMessage(`「${item.material_name}」を追加しました`);
+      } else {
+        setMessage(result.error ?? "追加に失敗しました");
+      }
+    });
+  };
+
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 px-5"
+      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
+    >
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[17px] font-bold text-gray-900">カタログから追加</h3>
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="relative mb-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="材料名・品番で検索..."
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-3 pr-3 py-2.5 text-[13px] focus:border-[#0EA5E9]/50 focus:outline-none"
+            autoFocus
+          />
+        </div>
+
+        {message && (
+          <div className="mb-3 rounded-xl bg-gray-50 border border-gray-200 px-3 py-2 text-[12px] text-gray-600">
+            {message}
+          </div>
+        )}
+
+        {isLoadingCatalog ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={24} className="animate-spin text-[#0EA5E9]" />
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-gray-300">
+            <Package size={32} className="mb-2 text-gray-200" />
+            <p className="text-[13px]">
+              {searchQuery ? "該当する材料はありません" : "カタログに材料が登録されていません"}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
+            {filteredItems.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleSelect(item)}
+                disabled={isPending}
+                className="w-full flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:bg-cyan-50 hover:border-[#0EA5E9]/30 disabled:opacity-50"
+              >
+                <Package size={14} className="text-[#0EA5E9] shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-gray-700 truncate">{item.material_name}</p>
+                  <div className="flex gap-2 text-[11px] text-gray-400">
+                    {item.product_number && <span>{item.product_number}</span>}
+                    {item.unit && <span>{item.unit}</span>}
+                    {item.supplier && <span>{item.supplier}</span>}
+                  </div>
+                </div>
+                <Plus size={14} className="text-[#0EA5E9] shrink-0" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 flex justify-end">
+          <Button variant="outline" size="md" onClick={onClose}>
+            閉じる
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -3,9 +3,5 @@ export default function PrintLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <html lang="ja">
-      <body className="bg-white text-black m-0 p-0">{children}</body>
-    </html>
-  );
+  return <div className="m-0 bg-white p-0 text-black">{children}</div>;
 }

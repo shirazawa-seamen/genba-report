@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, UserPlus, X } from "lucide-react";
+import { Check, UserPlus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { addSiteMember, getInvitableUsers } from "../actions";
+import { addSiteMembers, getInvitableUsers } from "../actions";
 
 type InviteUser = {
   id: string;
@@ -31,10 +31,10 @@ export function InviteSiteMembersButton({ siteId }: { siteId: string }) {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [users, setUsers] = useState<InviteUser[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState<Record<string, string>>({
-    client: "",
-    internal: "",
-    external: "",
+  const [selected, setSelected] = useState<Record<string, string[]>>({
+    client: [],
+    internal: [],
+    external: [],
   });
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -49,8 +49,9 @@ export function InviteSiteMembersButton({ siteId }: { siteId: string }) {
   );
 
   const selectedUsers = groupedUsers
-    .map((group) => group.users.find((user) => user.id === selected[group.key]))
-    .filter((user): user is InviteUser => Boolean(user));
+    .flatMap((group) =>
+      group.users.filter((user) => selected[group.key].includes(user.id))
+    );
 
   const openModal = () => {
     setIsOpen(true);
@@ -72,7 +73,7 @@ export function InviteSiteMembersButton({ siteId }: { siteId: string }) {
     setIsOpen(false);
     setIsPreviewMode(false);
     setMessage(null);
-    setSelected({ client: "", internal: "", external: "" });
+    setSelected({ client: [], internal: [], external: [] });
   };
 
   const handleConfirm = () => {
@@ -87,12 +88,10 @@ export function InviteSiteMembersButton({ siteId }: { siteId: string }) {
   const handleSend = () => {
     if (selectedUsers.length === 0) return;
     startTransition(async () => {
-      for (const user of selectedUsers) {
-        const result = await addSiteMember(siteId, user.id);
-        if (!result.success) {
-          setMessage(result.error || "招待に失敗しました");
-          return;
-        }
+      const result = await addSiteMembers(siteId, selectedUsers.map((user) => user.id));
+      if (!result.success) {
+        setMessage(result.error || "招待に失敗しました");
+        return;
       }
       closeModal();
       window.location.reload();
@@ -163,26 +162,48 @@ export function InviteSiteMembersButton({ siteId }: { siteId: string }) {
                 ) : (
                   <div className="space-y-4">
                     {groupedUsers.map((group) => (
-                      <label key={group.key} className="block space-y-1.5">
-                        <span className="text-[13px] font-medium text-gray-500">{group.label}</span>
-                        <div className="relative">
-                          <select
-                            value={selected[group.key]}
-                            onChange={(event) =>
-                              setSelected((prev) => ({ ...prev, [group.key]: event.target.value }))
-                            }
-                            className="w-full min-h-[44px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 pr-11 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50"
-                          >
-                            <option value="">選択しない</option>
-                            {group.users.map((user) => (
-                              <option key={user.id} value={user.id}>
-                                {user.name} ({ROLE_LABELS[user.role] ?? user.role})
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300" />
+                      <div key={group.key} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[13px] font-medium text-gray-500">{group.label}</span>
+                          <span className="text-[11px] text-gray-300">{selected[group.key].length}人選択</span>
                         </div>
-                      </label>
+                        {group.users.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-gray-200 px-4 py-3 text-[12px] text-gray-400">
+                            追加可能なユーザーがいません
+                          </div>
+                        ) : (
+                          <div className="max-h-44 space-y-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                            {group.users.map((user) => {
+                              const isSelected = selected[group.key].includes(user.id);
+                              return (
+                                <button
+                                  key={user.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setSelected((prev) => ({
+                                      ...prev,
+                                      [group.key]: isSelected
+                                        ? prev[group.key].filter((id) => id !== user.id)
+                                        : [...prev[group.key], user.id],
+                                    }))
+                                  }
+                                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors ${
+                                    isSelected
+                                      ? "border-cyan-200 bg-cyan-50"
+                                      : "border-gray-200 bg-white hover:bg-gray-50"
+                                  }`}
+                                >
+                                  <div>
+                                    <p className="text-[13px] font-medium text-gray-700">{user.name}</p>
+                                    <p className="text-[11px] text-gray-400">{ROLE_LABELS[user.role] ?? user.role}</p>
+                                  </div>
+                                  {isSelected ? <Check size={16} className="text-[#0EA5E9]" /> : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     ))}
                     <div className="flex gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={closeModal} className="flex-1">

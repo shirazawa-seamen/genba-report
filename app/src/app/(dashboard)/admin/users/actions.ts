@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
+const SELF_COMPANY_NAME = "シーメン株式会社";
+
 // Helper to verify the current user is admin or manager
 async function verifyAdminOrManager() {
   const supabase = await createClient();
@@ -28,6 +30,7 @@ export async function inviteUser(formData: FormData) {
   const email = formData.get("email") as string;
   const role = formData.get("role") as string;
   const fullName = formData.get("full_name") as string;
+  let companyId = (formData.get("company_id") as string) || null;
 
   if (!email || !role) {
     return { success: false, error: "メールアドレスとロールは必須です" };
@@ -40,6 +43,15 @@ export async function inviteUser(formData: FormData) {
 
   try {
     const adminClient = createAdminClient();
+
+    if (!companyId && (role === "worker_internal" || role === "worker_external")) {
+      const { data: selfCompany } = await adminClient
+        .from("companies")
+        .select("id")
+        .eq("name", SELF_COMPANY_NAME)
+        .maybeSingle();
+      companyId = selfCompany?.id ?? null;
+    }
 
     // Create user with Supabase Auth Admin API
     const { data: newUser, error: createError } =
@@ -64,6 +76,7 @@ export async function inviteUser(formData: FormData) {
           id: newUser.user.id,
           role,
           full_name: fullName || email.split("@")[0],
+          company_id: companyId,
           is_active: true,
         });
     }
@@ -73,6 +86,28 @@ export async function inviteUser(formData: FormData) {
   } catch (err) {
     console.error("Invite user error:", err);
     return { success: false, error: "ユーザーの招待に失敗しました" };
+  }
+}
+
+export async function updateUserCompany(userId: string, companyId: string | null) {
+  await verifyAdminOrManager();
+
+  try {
+    const adminClient = createAdminClient();
+    const { error } = await adminClient
+      .from("profiles")
+      .update({ company_id: companyId })
+      .eq("id", userId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (err) {
+    console.error("Update company error:", err);
+    return { success: false, error: "会社名の更新に失敗しました" };
   }
 }
 

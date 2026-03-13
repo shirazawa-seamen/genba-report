@@ -12,6 +12,7 @@ import {
   Calendar,
   ClipboardList,
   Send,
+  Package,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -25,6 +26,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Calendar,
   ClipboardList,
   Send,
+  Package,
 };
 
 export interface NavItemDef {

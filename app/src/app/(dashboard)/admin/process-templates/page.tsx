@@ -1,10 +1,14 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { ProcessTemplateManager } from "@/components/admin/ProcessTemplateManager";
 import { listProcessCategories } from "@/lib/processCategories";
 import { listProcessTemplates } from "@/lib/processTemplates";
+import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
 
 export default async function ProcessTemplatesPage() {
+  const { role } = await requireUserContext();
+  if (role !== "admin" && role !== "manager") redirect("/");
   const [templates, categories] = await Promise.all([
     listProcessTemplates(),
     listProcessCategories(),

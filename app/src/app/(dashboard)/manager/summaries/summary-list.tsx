@@ -14,6 +14,10 @@ import {
   RefreshCw,
   MessageSquare,
   Printer,
+  ImageIcon,
+  Camera,
+  Video,
+  Plus,
 } from "lucide-react";
 import {
   generateClientReportSummary,
@@ -21,6 +25,9 @@ import {
   createClientReportSummaryManual,
   saveClientReportSummaryDraft,
   submitClientReportSummary,
+  getSummaryPhotos,
+  uploadSummaryPhoto,
+  deleteSummaryPhoto,
 } from "@/app/(dashboard)/sites/[siteId]/reports/actions";
 
 export interface SummaryItem {
@@ -170,6 +177,11 @@ function SummaryEditModal({
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // 写真
+  const [photos, setPhotos] = useState<Array<{ id: string; url: string; caption: string | null; mediaType: string; isFromReport: boolean }>>([]);
+  const [photosLoaded, setPhotosLoaded] = useState(false);
+  const fileInputRef2 = useRef<HTMLInputElement>(null);
+
   // 再生成プロンプト
   const [showPrompt, setShowPrompt] = useState(false);
   const [userPrompt, setUserPrompt] = useState("");
@@ -183,6 +195,16 @@ function SummaryEditModal({
       promptRef.current.focus();
     }
   }, [showPrompt]);
+
+  // サマリーの写真を読み込み
+  useEffect(() => {
+    if (summaryId && !photosLoaded) {
+      getSummaryPhotos(summaryId).then((data) => {
+        setPhotos(data);
+        setPhotosLoaded(true);
+      }).catch(() => setPhotosLoaded(true));
+    }
+  }, [summaryId, photosLoaded]);
 
   const updateProgress = (processId: string, rate: number) => {
     setOfficialProgress((current) =>
@@ -200,6 +222,7 @@ function SummaryEditModal({
         return;
       }
       setMessage("下書きを生成しました");
+      setPhotosLoaded(false); // 写真を再読込
       router.refresh();
       onClose();
     });
@@ -224,6 +247,66 @@ function SummaryEditModal({
       setUserPrompt("");
       setShowPrompt(false);
       setMessage("再生成しました。内容を確認して保存してください。");
+    });
+  };
+
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    setMessage(null);
+    startTransition(async () => {
+      // summaryId が無い場合は先に下書きを自動作成
+      let currentSummaryId = summaryId;
+      if (!currentSummaryId) {
+        const createResult = await createClientReportSummaryManual({
+          siteId: item.siteId,
+          reportDate: item.reportDate,
+          summaryText,
+          officialProgress,
+        });
+        if (!createResult.success || !createResult.summaryId) {
+          setMessage(createResult.error || "下書きの作成に失敗しました");
+          return;
+        }
+        currentSummaryId = createResult.summaryId;
+        setSummaryId(currentSummaryId);
+        setStatus("draft");
+      }
+
+      if (!currentSummaryId) {
+        setMessage("サマリーの作成に失敗しました");
+        return;
+      }
+
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.set("summaryId", currentSummaryId);
+        formData.set("siteId", item.siteId);
+        formData.set("file", file);
+        const result = await uploadSummaryPhoto(formData);
+        if (!result.success) {
+          setMessage(result.error || "アップロードに失敗しました");
+          return;
+        }
+      }
+      // 写真リストを更新
+      const updated = await getSummaryPhotos(currentSummaryId);
+      setPhotos(updated);
+      router.refresh();
+    });
+    if (fileInputRef2.current) fileInputRef2.current.value = "";
+  };
+
+  const handlePhotoDelete = (photoId: string) => {
+    if (!window.confirm("この写真を削除しますか？")) return;
+    setMessage(null);
+    startTransition(async () => {
+      const result = await deleteSummaryPhoto(photoId, item.siteId);
+      if (!result.success) {
+        setMessage(result.error || "削除に失敗しました");
+        return;
+      }
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
     });
   };
 
@@ -417,6 +500,73 @@ function SummaryEditModal({
               placeholder="報告内容を入力してください..."
             />
           </div>
+
+          {/* 写真・動画 */}
+          {(photos.length > 0 || isEditable) && (
+            <div>
+              <p className="mb-2 text-[12px] font-medium text-gray-500 flex items-center gap-1.5">
+                <ImageIcon size={12} />
+                写真・動画
+                {photos.length > 0 && (
+                  <span className="text-[10px] text-gray-400">({photos.length})</span>
+                )}
+              </p>
+              {photos.length > 0 && (
+                <div className="grid grid-cols-4 gap-1.5 mb-2">
+                  {photos.map((photo) => {
+                    const isVideo = photo.mediaType === "video";
+                    return (
+                      <div key={photo.id} className="relative rounded-lg overflow-hidden border border-gray-200 group">
+                        {isVideo ? (
+                          <video src={photo.url} controls className="w-full aspect-square object-cover" />
+                        ) : (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={photo.url} alt={photo.caption || "写真"} className="w-full aspect-square object-cover" />
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/50 to-transparent">
+                          <span className="text-[8px] text-white flex items-center gap-0.5">
+                            {isVideo ? <Video size={8} /> : <Camera size={8} />}
+                            {photo.isFromReport ? "1次" : "追加"}
+                          </span>
+                        </div>
+                        {isEditable && (
+                          <button
+                            type="button"
+                            onClick={() => handlePhotoDelete(photo.id)}
+                            disabled={isPending}
+                            className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                          >
+                            <X size={8} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {isEditable && (
+                <>
+                  <input
+                    ref={fileInputRef2}
+                    type="file"
+                    accept="image/*,video/*"
+                    multiple
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef2.current?.click()}
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-1.5 text-[11px] text-gray-500 hover:bg-gray-100 hover:border-gray-400 transition-colors disabled:opacity-50"
+                  >
+                    <Plus size={11} />
+                    {isPending ? "アップロード中..." : "写真・動画を追加"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* AI生成セクション */}
           {isEditable && (

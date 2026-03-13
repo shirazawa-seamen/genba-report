@@ -21,6 +21,8 @@ import { listProcessCategories } from "@/lib/processCategories";
 import { listProcessTemplates } from "@/lib/processTemplates";
 import { SiteDetailEditSession } from "./SiteDetailEditSession";
 import { InviteSiteMembersButton } from "./InviteSiteMembersButton";
+import { listCompanies } from "@/lib/companies";
+import { canAccessSite } from "@/lib/siteAccess";
 
 interface PageProps { params: Promise<{ siteId: string }> }
 interface SearchParams {
@@ -48,20 +50,49 @@ export default async function SiteDetailPage({
   const { siteId } = await params;
   const { edit } = await searchParams;
   const supabase = await createClient();
+  const companies = await listCompanies();
+  const companyMap = new Map(companies.map((company) => [company.id, company.name]));
 
-  // client_name, status カラムが未追加の場合に備え、まず含めて取得 → 失敗したらなしで取得
+  // company_id, client_name, status カラムが未追加の場合に備え、まず含めて取得 → 失敗したらなしで取得
   let site: Record<string, unknown> | null = null;
   let error: unknown = null;
   {
     const res = await supabase
       .from("sites")
-      .select("id, name, site_number, address, client_name, start_date, end_date, status, site_color, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
+      .select("id, name, site_number, address, company_id, client_name, start_date, end_date, status, site_color, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
       .eq("id", siteId).single();
-    if (res.error?.message?.includes("client_name") || res.error?.message?.includes("site_color")) {
+    if (res.error?.message?.includes("company_id")) {
+      const fallbackWithColor = await supabase
+        .from("sites")
+        .select("id, name, site_number, address, client_name, start_date, end_date, status, site_color, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
+        .eq("id", siteId)
+        .single();
+      site = fallbackWithColor.data as Record<string, unknown> | null;
+      error = fallbackWithColor.error;
+    } else if (res.error?.message?.includes("client_name")) {
+      const fallbackWithColor = await supabase
+        .from("sites")
+        .select("id, name, site_number, address, company_id, start_date, end_date, status, site_color, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
+        .eq("id", siteId)
+        .single();
+      if (fallbackWithColor.error?.message?.includes("site_color")) {
+        const fallback = await supabase
+          .from("sites")
+          .select("id, name, site_number, address, company_id, start_date, end_date, status, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
+          .eq("id", siteId)
+          .single();
+        site = fallback.data as Record<string, unknown> | null;
+        error = fallback.error;
+      } else {
+        site = fallbackWithColor.data as Record<string, unknown> | null;
+        error = fallbackWithColor.error;
+      }
+    } else if (res.error?.message?.includes("site_color")) {
       const fallback = await supabase
         .from("sites")
-        .select("id, name, site_number, address, start_date, end_date, status, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
-        .eq("id", siteId).single();
+        .select("id, name, site_number, address, company_id, client_name, start_date, end_date, status, has_blueprint, has_specification, has_purchase_order, has_schedule, is_monitor, created_at")
+        .eq("id", siteId)
+        .single();
       site = fallback.data as Record<string, unknown> | null;
       error = fallback.error;
     } else {
@@ -70,18 +101,28 @@ export default async function SiteDetailPage({
     }
   }
 
-  if (error || !site) { console.error("Site fetch error:", error); notFound(); }
+  if (error || !site) { console.error("Site fetch error:", JSON.stringify(error, null, 2)); notFound(); }
 
   // ユーザーロール取得
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) notFound();
+  const hasAccess = await canAccessSite(user.id, siteId);
+  if (!hasAccess) notFound();
   let userRole = "worker_internal";
-  if (user) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    userRole = profile?.role ?? "worker_internal";
-  }
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  userRole = profile?.role ?? "worker_internal";
 
   const { count: reportCount } = await supabase
     .from("daily_reports").select("*", { count: "exact", head: true }).eq("site_id", siteId);
+
+  // クライアント向け: サマリー件数を取得
+  const { count: summaryCount } = userRole === "client"
+    ? await supabase
+        .from("client_report_summaries")
+        .select("*", { count: "exact", head: true })
+        .eq("site_id", siteId)
+        .in("status", ["submitted", "client_confirmed"])
+    : { count: null };
 
   const { data: processes } = await supabase
     .from("processes").select("*").eq("site_id", siteId).order("order_index");
@@ -135,6 +176,8 @@ export default async function SiteDetailPage({
     : null;
 
   const s = site as unknown as Site & { status?: string };
+  const clientCompanyName =
+    (s.company_id ? companyMap.get(s.company_id) : null) ?? s.client_name ?? null;
   const siteStatus = (site.status as string) ?? "active";
   const isCompleted = siteStatus === "completed";
   const period = getPeriodLabel(s.start_date, s.end_date, siteStatus);
@@ -167,19 +210,19 @@ export default async function SiteDetailPage({
         )}
         <div className="flex items-center gap-4 text-[13px] text-gray-400">
           <span className="flex items-center gap-1.5"><CalendarDays size={13} />{formatDate(s.start_date)} ~ {formatDate(s.end_date)}</span>
-          <span className="flex items-center gap-1.5"><FileText size={13} />{reportCount ?? 0}件の報告</span>
+          <span className="flex items-center gap-1.5"><FileText size={13} />{userRole === "client" ? `${summaryCount ?? 0}件の日報` : `${reportCount ?? 0}件の報告`}</span>
         </div>
       </div>
 
       {/* Client Name Card */}
-      {s.client_name && (
+      {clientCompanyName && (
         <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3.5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
             <Building2 size={18} className="text-amber-500" />
           </div>
           <div>
             <p className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">クライアント</p>
-            <p className="text-[15px] font-bold text-gray-800">{s.client_name}</p>
+            <p className="text-[15px] font-bold text-gray-800">{clientCompanyName}</p>
           </div>
         </div>
       )}
@@ -190,6 +233,7 @@ export default async function SiteDetailPage({
             siteId={siteId}
             members={memberList}
             userRole={userRole}
+            editable={canManage}
           />
         </div>
       ) : null}
@@ -248,11 +292,12 @@ export default async function SiteDetailPage({
             name: s.name,
             siteNumber: s.site_number ?? "",
             address: s.address,
-            clientName: s.client_name ?? "",
+            companyId: s.company_id ?? "",
             startDate: s.start_date ?? "",
             endDate: s.end_date ?? "",
             siteColor: (site.site_color as string) ?? "#0EA5E9",
           }}
+          companyOptions={companies}
           initialChecks={{
             has_blueprint: s.has_blueprint,
             has_specification: s.has_specification,
@@ -270,7 +315,6 @@ export default async function SiteDetailPage({
             createdAt: process.created_at,
           }))}
           initialPeriods={periodList}
-          initialMembers={memberList}
           processTemplates={processTemplates}
           processCategories={processCategories}
         />
@@ -305,24 +349,31 @@ export default async function SiteDetailPage({
             />
           </div>
 
-          <div className="mb-6"><MaterialManager siteId={siteId} canManage={false} /></div>
-          <div className="mb-6"><DocumentManager siteId={siteId} canManage={false} /></div>
+          <div className="mb-6"><MaterialManager siteId={siteId} canManage={canManage} /></div>
+          <div className="mb-6"><DocumentManager siteId={siteId} canManage={canManage} /></div>
         </>
       )}
 
       {/* Action links */}
       {!isEditMode && <div className="space-y-2.5 mb-8">
-        <Link href={`/sites/${siteId}/reports`} className="group flex items-center gap-4 p-4 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors active:bg-gray-100">
+        <Link
+          href={userRole === "client" ? `/client?site=${siteId}` : (userRole === "worker_internal" || userRole === "worker_external") ? "/reports" : `/sites/${siteId}/reports`}
+          className="group flex items-center gap-4 p-4 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors active:bg-gray-100"
+        >
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-50 shrink-0">
             <FileText size={18} className="text-[#0EA5E9]" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[14px] text-gray-700 font-semibold">報告一覧</p>
-            <p className="text-[12px] text-gray-400">{reportCount ?? 0}件の報告</p>
+            <p className="text-[14px] text-gray-700 font-semibold">
+              {userRole === "client" ? "日報一覧" : "報告一覧"}
+            </p>
+            <p className="text-[12px] text-gray-400">
+              {userRole === "client" ? `${summaryCount ?? 0}件の日報` : `${reportCount ?? 0}件の報告`}
+            </p>
           </div>
           <ArrowRight size={16} className="text-gray-200 group-hover:text-gray-400 transition-colors" />
         </Link>
-        {!isCompleted && (
+        {!isCompleted && userRole !== "client" && (
           <Link href={`/reports/new?siteId=${siteId}`} className="group flex items-center gap-4 p-4 rounded-2xl bg-cyan-50 border border-cyan-200 hover:bg-cyan-100 transition-colors active:bg-cyan-100">
             <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-100 shrink-0">
               <Plus size={18} className="text-[#0EA5E9]" />

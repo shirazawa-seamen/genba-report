@@ -51,6 +51,7 @@ interface CalendarViewProps {
   monthLabel: string;
   prevMonth: string;
   nextMonth: string;
+  statusFilter: "active" | "completed" | "all";
   startDayOfWeek: number;
   calendarDays: CalendarDay[];
   activeSites: ActiveSite[];
@@ -75,6 +76,7 @@ export function CalendarView({
   monthLabel,
   prevMonth,
   nextMonth,
+  statusFilter,
   startDayOfWeek,
   calendarDays,
   activeSites,
@@ -99,7 +101,12 @@ export function CalendarView({
               現場カレンダー
             </h1>
             <p className="text-[13px] text-gray-400">
-              {activeSites.length}件の現場が稼働中
+              {activeSites.length}件の現場が
+              {statusFilter === "completed"
+                ? "完了済み"
+                : statusFilter === "all"
+                  ? "表示中"
+                  : "稼働中"}
             </p>
           </div>
         </div>
@@ -107,13 +114,45 @@ export function CalendarView({
         {/* Month Navigation + View Toggle */}
         <div className="flex items-center justify-between mb-5">
           <Link
-            href={`/calendar?month=${prevMonth}`}
+            href={`/calendar?month=${prevMonth}&status=${statusFilter}`}
             className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <ChevronLeft size={18} />
           </Link>
           <div className="flex items-center gap-3">
             <h2 className="text-[18px] font-bold text-gray-900">{monthLabel}</h2>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <Link
+                href={`/calendar?month=${monthFirstDate.slice(0, 7)}&status=active`}
+                className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                  statusFilter === "active"
+                    ? "bg-cyan-100 text-[#0EA5E9]"
+                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                稼働中
+              </Link>
+              <Link
+                href={`/calendar?month=${monthFirstDate.slice(0, 7)}&status=completed`}
+                className={`border-l border-gray-200 px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                  statusFilter === "completed"
+                    ? "bg-cyan-100 text-[#0EA5E9]"
+                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                完了済み
+              </Link>
+              <Link
+                href={`/calendar?month=${monthFirstDate.slice(0, 7)}&status=all`}
+                className={`border-l border-gray-200 px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                  statusFilter === "all"
+                    ? "bg-cyan-100 text-[#0EA5E9]"
+                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                すべて
+              </Link>
+            </div>
             {/* View toggle */}
             <div className="flex rounded-lg border border-gray-200 overflow-hidden">
               <button
@@ -141,7 +180,7 @@ export function CalendarView({
             </div>
           </div>
           <Link
-            href={`/calendar?month=${nextMonth}`}
+            href={`/calendar?month=${nextMonth}&status=${statusFilter}`}
             className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
           >
             <ChevronRight size={18} />

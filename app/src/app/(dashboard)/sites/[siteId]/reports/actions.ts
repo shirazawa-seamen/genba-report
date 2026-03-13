@@ -114,8 +114,53 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
     return { success: false, error: `報告の取得に失敗しました: ${error.message}` };
   }
 
+  // 1次報告がなくても空テンプレートで2次報告を作成可能
   if (!reports || reports.length === 0) {
-    return { success: false, error: "この日の報告がありません" };
+    // 既存チェック（upsert の代わりに明示的に確認）
+    const { data: existing } = await supabase
+      .from("client_report_summaries")
+      .select("id")
+      .eq("site_id", siteId)
+      .eq("report_date", reportDate)
+      .maybeSingle();
+
+    if (existing) {
+      // 既存があれば更新
+      const { error: updateError } = await supabase
+        .from("client_report_summaries")
+        .update({
+          summary_text: "",
+          official_progress: [],
+          source_report_ids: [],
+          generated_by: context.user.id,
+          status: "draft",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+      if (updateError) {
+        return { success: false, error: `サマリー更新に失敗しました: ${updateError.message}` };
+      }
+    } else {
+      // 新規作成
+      const { error: insertError } = await supabase
+        .from("client_report_summaries")
+        .insert({
+          site_id: siteId,
+          report_date: reportDate,
+          summary_text: "",
+          official_progress: [],
+          source_report_ids: [],
+          generated_by: context.user.id,
+          status: "draft",
+          updated_at: new Date().toISOString(),
+        });
+      if (insertError) {
+        return { success: false, error: `サマリー作成に失敗しました: ${insertError.message}` };
+      }
+    }
+    revalidatePath(`/sites/${siteId}/reports`);
+    revalidatePath("/manager/summaries");
+    return { success: true };
   }
 
   const reporterIds = [...new Set(reports.map((report) => report.reporter_id).filter(Boolean))] as string[];
@@ -182,19 +227,95 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
   }));
 
   const sourceReportIds = reports.map((report) => report.id);
-  const { error: upsertError } = await supabase.from("client_report_summaries").upsert({
-    site_id: siteId,
-    report_date: reportDate,
-    summary_text: summaryText,
-    official_progress: officialProgress,
-    source_report_ids: sourceReportIds,
-    generated_by: context.user.id,
-    status: "draft",
-    updated_at: new Date().toISOString(),
-  });
 
-  if (upsertError) {
-    return { success: false, error: `サマリー保存に失敗しました: ${upsertError.message}` };
+  // 既存チェック（upsert の代わりに明示的に insert/update）
+  const { data: existingSummary } = await supabase
+    .from("client_report_summaries")
+    .select("id")
+    .eq("site_id", siteId)
+    .eq("report_date", reportDate)
+    .maybeSingle();
+
+  let summaryId: string | null = null;
+
+  if (existingSummary) {
+    const { error: updateError } = await supabase
+      .from("client_report_summaries")
+      .update({
+        summary_text: summaryText,
+        official_progress: officialProgress,
+        source_report_ids: sourceReportIds,
+        generated_by: context.user.id,
+        status: "draft",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existingSummary.id);
+    if (updateError) {
+      return { success: false, error: `サマリー更新に失敗しました: ${updateError.message}` };
+    }
+    summaryId = existingSummary.id;
+  } else {
+    const { data: inserted, error: insertError } = await supabase
+      .from("client_report_summaries")
+      .insert({
+        site_id: siteId,
+        report_date: reportDate,
+        summary_text: summaryText,
+        official_progress: officialProgress,
+        source_report_ids: sourceReportIds,
+        generated_by: context.user.id,
+        status: "draft",
+        updated_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    if (insertError) {
+      return { success: false, error: `サマリー作成に失敗しました: ${insertError.message}` };
+    }
+    summaryId = inserted?.id ?? null;
+  }
+
+  // 1次報告の写真を2次報告に自動コピー
+  if (summaryId && sourceReportIds.length > 0) {
+    try {
+      // 既存のコピー済み写真を確認（重複防止）
+      const { data: existingPhotos } = await supabase
+        .from("summary_photos")
+        .select("source_report_id, storage_path")
+        .eq("summary_id", summaryId)
+        .not("source_report_id", "is", null);
+
+      const existingPaths = new Set(
+        (existingPhotos ?? []).map((p) => p.storage_path)
+      );
+
+      // 1次報告の写真を取得
+      const { data: reportPhotos } = await supabase
+        .from("report_photos")
+        .select("id, report_id, storage_path, photo_type, caption, media_type")
+        .in("report_id", sourceReportIds)
+        .order("created_at");
+
+      if (reportPhotos && reportPhotos.length > 0) {
+        const newPhotos = reportPhotos
+          .filter((p) => !existingPaths.has(p.storage_path))
+          .map((p) => ({
+            summary_id: summaryId!,
+            storage_path: p.storage_path,
+            photo_type: p.photo_type,
+            caption: p.caption,
+            media_type: p.media_type ?? "photo",
+            source_report_id: p.report_id,
+          }));
+
+        if (newPhotos.length > 0) {
+          await supabase.from("summary_photos").insert(newPhotos);
+        }
+      }
+    } catch (photoError) {
+      // 写真コピーに失敗してもサマリー生成自体は成功とする
+      console.error("[SummaryPhotos] Failed to copy report photos:", photoError);
+    }
   }
 
   revalidatePath(`/sites/${siteId}/reports`);
@@ -319,6 +440,7 @@ export async function saveClientReportSummaryDraft(input: {
   siteId: string;
   summaryText: string;
   officialProgress: Array<{ processId: string; processName: string; progressRate: number }>;
+  workers?: string[];
 }) {
   const context = await requireManager();
   if (!context.supabase || !context.user) {
@@ -337,14 +459,19 @@ export async function saveClientReportSummaryDraft(input: {
     return { success: false, error: `公式進捗が不正です: ${invalidProgress.processName}` };
   }
 
+  const updateData: Record<string, unknown> = {
+    summary_text: input.summaryText.trim(),
+    official_progress: input.officialProgress,
+    updated_at: new Date().toISOString(),
+    status: "draft",
+  };
+  if (input.workers !== undefined) {
+    updateData.workers = input.workers;
+  }
+
   const { error } = await context.supabase
     .from("client_report_summaries")
-    .update({
-      summary_text: input.summaryText.trim(),
-      official_progress: input.officialProgress,
-      updated_at: new Date().toISOString(),
-      status: "draft",
-    })
+    .update(updateData)
     .eq("id", input.summaryId);
 
   if (error) {
@@ -494,6 +621,140 @@ export async function submitClientReportSummary(summaryId: string, siteId: strin
   }
 
   return { success: true, warning };
+}
+
+// ---------------------------------------------------------------------------
+// 2次報告に写真・動画をアップロード
+// ---------------------------------------------------------------------------
+export async function uploadSummaryPhoto(formData: FormData) {
+  const context = await requireManager();
+  if (!context.supabase || !context.user) {
+    return { success: false as const, error: context.error ?? "認証エラー" };
+  }
+
+  const summaryId = formData.get("summaryId") as string;
+  const siteId = formData.get("siteId") as string;
+  const file = formData.get("file") as File | null;
+  const caption = (formData.get("caption") as string) || null;
+
+  if (!summaryId || !siteId || !file) {
+    return { success: false as const, error: "必須パラメータが不足しています" };
+  }
+
+  if (!(await canAccessSite(context.user.id, siteId))) {
+    return { success: false as const, error: "この現場にアクセスする権限がありません" };
+  }
+
+  const isVideo = file.type.startsWith("video/");
+  const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return { success: false as const, error: `ファイルサイズが大きすぎます（上限: ${isVideo ? "50MB" : "10MB"}）` };
+  }
+
+  const ext = file.name.split(".").pop() ?? (isVideo ? "mp4" : "jpg");
+  const storagePath = `summaries/${summaryId}/${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await context.supabase.storage
+    .from("report-photos")
+    .upload(storagePath, file, { cacheControl: "3600", upsert: false });
+
+  if (uploadError) {
+    return { success: false as const, error: `アップロードに失敗しました: ${uploadError.message}` };
+  }
+
+  const { error: dbError } = await context.supabase.from("summary_photos").insert({
+    summary_id: summaryId,
+    storage_path: storagePath,
+    caption,
+    media_type: isVideo ? "video" : "photo",
+  });
+
+  if (dbError) {
+    // DBエラー時はストレージからも削除
+    await context.supabase.storage.from("report-photos").remove([storagePath]);
+    return { success: false as const, error: `写真情報の保存に失敗しました: ${dbError.message}` };
+  }
+
+  revalidatePath(`/sites/${siteId}/reports`);
+  revalidatePath("/manager/summaries");
+  return { success: true as const };
+}
+
+// ---------------------------------------------------------------------------
+// 2次報告の写真を削除
+// ---------------------------------------------------------------------------
+export async function deleteSummaryPhoto(photoId: string, siteId: string) {
+  const context = await requireManager();
+  if (!context.supabase || !context.user) {
+    return { success: false, error: context.error };
+  }
+
+  if (!(await canAccessSite(context.user.id, siteId))) {
+    return { success: false, error: "この現場にアクセスする権限がありません" };
+  }
+
+  const { data: photo } = await context.supabase
+    .from("summary_photos")
+    .select("storage_path, source_report_id")
+    .eq("id", photoId)
+    .maybeSingle();
+
+  if (!photo) {
+    return { success: false, error: "写真が見つかりません" };
+  }
+
+  // 1次報告からコピーされた写真はDB参照のみ削除（ストレージの実体は残す）
+  // 2次報告で直接アップロードされた写真はストレージからも削除
+  if (!photo.source_report_id && photo.storage_path.startsWith("summaries/")) {
+    await context.supabase.storage.from("report-photos").remove([photo.storage_path]);
+  }
+
+  const { error } = await context.supabase
+    .from("summary_photos")
+    .delete()
+    .eq("id", photoId);
+
+  if (error) {
+    return { success: false, error: `削除に失敗しました: ${error.message}` };
+  }
+
+  revalidatePath(`/sites/${siteId}/reports`);
+  revalidatePath("/manager/summaries");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// 2次報告の写真一覧を取得（signed URL付き）
+// ---------------------------------------------------------------------------
+export async function getSummaryPhotos(summaryId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: photos } = await supabase
+    .from("summary_photos")
+    .select("id, storage_path, caption, media_type, source_report_id")
+    .eq("summary_id", summaryId)
+    .order("created_at");
+
+  if (!photos || photos.length === 0) return [];
+
+  const result = await Promise.all(
+    photos.map(async (p) => {
+      const { data } = await supabase.storage
+        .from("report-photos")
+        .createSignedUrl(p.storage_path, 3600);
+      return {
+        id: p.id,
+        url: data?.signedUrl ?? "",
+        caption: p.caption,
+        mediaType: p.media_type ?? "photo",
+        isFromReport: !!p.source_report_id,
+      };
+    })
+  );
+
+  return result;
 }
 
 export async function confirmClientReportSummary(summaryId: string) {

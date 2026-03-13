@@ -26,6 +26,7 @@ export interface Profile {
   email: string;
   name: string;
   role: UserRole;
+  company_id?: string | null;
   created_at: string;
 }
 
@@ -48,6 +49,7 @@ export interface Site {
   name: string;
   site_number: string | null;
   address: string;
+  company_id?: string | null;
   client_name: string | null;
   site_color?: string | null;
   start_date: string | null;

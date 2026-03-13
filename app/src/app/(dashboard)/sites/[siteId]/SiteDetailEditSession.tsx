@@ -21,7 +21,6 @@ import {
   SetupCheckList,
   type SetupCheckDraft,
 } from "@/components/sites/SetupCheckList";
-import { type SiteMemberDraftItem } from "@/components/sites/SiteMemberManager";
 import { MaterialManager } from "@/components/sites/MaterialManager";
 import { DocumentManager } from "@/components/sites/DocumentManager";
 import type { ProcessCategoryRecord } from "@/lib/processCategories";
@@ -30,10 +29,10 @@ import type { ProcessTemplateRecord } from "@/lib/processTemplates";
 interface SiteDetailEditSessionProps {
   siteId: string;
   initialSiteDraft: SiteEditDraft;
+  companyOptions: { id: string; name: string }[];
   initialChecks: SetupCheckDraft;
   initialProcesses: SiteProcessDraftItem[];
   initialPeriods: WorkPeriodDraftItem[];
-  initialMembers: SiteMemberDraftItem[];
   processTemplates: ProcessTemplateRecord[];
   processCategories: ProcessCategoryRecord[];
 }
@@ -41,10 +40,10 @@ interface SiteDetailEditSessionProps {
 export function SiteDetailEditSession({
   siteId,
   initialSiteDraft,
+  companyOptions,
   initialChecks,
   initialProcesses,
   initialPeriods,
-  initialMembers,
   processTemplates,
   processCategories,
 }: SiteDetailEditSessionProps) {
@@ -53,7 +52,6 @@ export function SiteDetailEditSession({
   const [checks, setChecks] = useState(initialChecks);
   const [processes, setProcesses] = useState(initialProcesses);
   const [periods, setPeriods] = useState(initialPeriods);
-  const [members] = useState(initialMembers);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isSaving, startSaveTransition] = useTransition();
@@ -67,7 +65,7 @@ export function SiteDetailEditSession({
         name: siteDraft.name,
         siteNumber: siteDraft.siteNumber,
         address: siteDraft.address,
-        clientName: siteDraft.clientName,
+        companyId: siteDraft.companyId || undefined,
         startDate: siteDraft.startDate,
         endDate: siteDraft.endDate,
         siteColor: siteDraft.siteColor,
@@ -86,7 +84,6 @@ export function SiteDetailEditSession({
           startDate: period.startDate,
           endDate: period.endDate,
         })),
-        memberUserIds: members.map((member) => member.userId),
       });
 
       if (!result.success) {
@@ -115,7 +112,12 @@ export function SiteDetailEditSession({
   return (
     <>
       <div className="mb-8">
-        <EditSiteForm draft={siteDraft} onChange={setSiteDraft} error={error} />
+        <EditSiteForm
+          draft={siteDraft}
+          companyOptions={companyOptions}
+          onChange={setSiteDraft}
+          error={error}
+        />
       </div>
 
       <div className="mb-8">

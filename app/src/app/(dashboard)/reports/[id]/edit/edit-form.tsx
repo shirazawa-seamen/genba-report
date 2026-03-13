@@ -60,23 +60,11 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
         />
       </div>
 
-      {/* Workers */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[13px] font-medium text-gray-500">作業者</label>
-        <input
-          name="workers"
-          type="text"
-          defaultValue={initialData.workers}
-          placeholder="田中、山田、佐藤"
-          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
-        />
-      </div>
-
       {/* Progress & Weather */}
       <div className="grid grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="text-[13px] font-medium text-gray-500">
-            進捗率 (%)
+            担当者見込み進捗 (%)
           </label>
           <input
             name="progress_rate"

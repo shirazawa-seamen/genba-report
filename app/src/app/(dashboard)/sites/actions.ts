@@ -4,13 +4,68 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { DocumentType } from "@/lib/types";
 
+async function insertSiteWithFallback(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload: Record<string, any>
+) {
+  const workingPayload = { ...payload };
+  let result = await supabase.from("sites").insert(workingPayload).select("id").single();
+
+  if (result.error?.message?.includes("client_name")) {
+    delete workingPayload.client_name;
+    result = await supabase.from("sites").insert(workingPayload).select("id").single();
+  }
+
+  if (result.error?.message?.includes("company_id")) {
+    delete workingPayload.company_id;
+    result = await supabase.from("sites").insert(workingPayload).select("id").single();
+  }
+
+  if (result.error?.message?.includes("site_color")) {
+    delete workingPayload.site_color;
+    result = await supabase.from("sites").insert(workingPayload).select("id").single();
+  }
+
+  return result;
+}
+
+async function updateSiteWithFallback(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  siteId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload: Record<string, any>
+) {
+  const workingPayload = { ...payload };
+  let result = await supabase.from("sites").update(workingPayload).eq("id", siteId);
+
+  if (result.error?.message?.includes("client_name")) {
+    delete workingPayload.client_name;
+    result = await supabase.from("sites").update(workingPayload).eq("id", siteId);
+  }
+
+  if (result.error?.message?.includes("company_id")) {
+    delete workingPayload.company_id;
+    result = await supabase.from("sites").update(workingPayload).eq("id", siteId);
+  }
+
+  if (result.error?.message?.includes("site_color")) {
+    delete workingPayload.site_color;
+    result = await supabase.from("sites").update(workingPayload).eq("id", siteId);
+  }
+
+  return result;
+}
+
 export async function createSite(input: {
   name: string;
   siteNumber?: string;
   address: string;
   startDate?: string;
   endDate?: string;
-  clientName?: string;
+  companyId?: string;
   siteColor?: string;
 }): Promise<{ success: boolean; siteId?: string; error?: string }> {
   const supabase = await createClient();
@@ -22,6 +77,19 @@ export async function createSite(input: {
     return { success: false, error: "認証エラー" };
   }
 
+  let companyName: string | null = null;
+  if (input.companyId) {
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", input.companyId)
+      .maybeSingle();
+    if (companyError && !companyError.message?.includes("companies")) {
+      return { success: false, error: `会社情報の取得に失敗しました: ${companyError.message}` };
+    }
+    companyName = company?.name ?? null;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const insertData: Record<string, any> = {
     name: input.name.trim(),
@@ -30,33 +98,15 @@ export async function createSite(input: {
     start_date: input.startDate || null,
     end_date: input.endDate || null,
     site_color: input.siteColor || "#0EA5E9",
+    company_id: input.companyId || null,
   };
-  if (input.clientName?.trim()) {
-    insertData.client_name = input.clientName.trim();
+  if (companyName) {
+    insertData.client_name = companyName;
   }
 
-  const { data, error } = await supabase
-    .from("sites")
-    .insert(insertData)
-    .select("id")
-    .single();
+  const { data, error } = await insertSiteWithFallback(supabase, insertData);
 
   if (error) {
-    // client_nameカラムが未追加の場合、カラムなしでリトライ
-    if (error.message?.includes("client_name") || error.message?.includes("site_color")) {
-      delete insertData.client_name;
-      delete insertData.site_color;
-      const { data: retryData, error: retryError } = await supabase
-        .from("sites")
-        .insert(insertData)
-        .select("id")
-        .single();
-      if (retryError) {
-        return { success: false, error: `現場の登録に失敗しました: ${retryError.message}` };
-      }
-      revalidatePath("/sites");
-      return { success: true, siteId: retryData.id };
-    }
     return { success: false, error: `現場の登録に失敗しました: ${error.message}` };
   }
 
@@ -74,7 +124,7 @@ export async function updateSite(input: {
   address: string;
   startDate?: string;
   endDate?: string;
-  clientName?: string;
+  companyId?: string;
   siteColor?: string;
 }): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
@@ -90,6 +140,19 @@ export async function updateSite(input: {
     return { success: false, error: "現場名を入力してください" };
   }
 
+  let companyName: string | null = null;
+  if (input.companyId) {
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", input.companyId)
+      .maybeSingle();
+    if (companyError && !companyError.message?.includes("companies")) {
+      return { success: false, error: `会社情報の取得に失敗しました: ${companyError.message}` };
+    }
+    companyName = company?.name ?? null;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateData: Record<string, any> = {
     name: input.name.trim(),
@@ -98,23 +161,11 @@ export async function updateSite(input: {
     start_date: input.startDate || null,
     end_date: input.endDate || null,
     site_color: input.siteColor || "#0EA5E9",
+    company_id: input.companyId || null,
   };
-  if (input.clientName !== undefined) {
-    updateData.client_name = input.clientName?.trim() || null;
-  }
+  updateData.client_name = companyName;
 
-  let { error } = await supabase
-    .from("sites")
-    .update(updateData)
-    .eq("id", input.siteId);
-
-  // client_nameカラム未追加の場合リトライ
-  if (error?.message?.includes("client_name") || error?.message?.includes("site_color")) {
-    delete updateData.client_name;
-    delete updateData.site_color;
-    const retry = await supabase.from("sites").update(updateData).eq("id", input.siteId);
-    error = retry.error;
-  }
+  const { error } = await updateSiteWithFallback(supabase, input.siteId, updateData);
 
   if (error) {
     return { success: false, error: `現場情報の更新に失敗しました: ${error.message}` };
@@ -130,7 +181,7 @@ export async function saveSiteEditDraft(input: {
   name: string;
   siteNumber?: string;
   address: string;
-  clientName?: string;
+  companyId?: string;
   startDate?: string;
   endDate?: string;
   siteColor?: string;
@@ -149,7 +200,6 @@ export async function saveSiteEditDraft(input: {
     startDate: string;
     endDate: string;
   }[];
-  memberUserIds: string[];
 }): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
   const {
@@ -197,11 +247,25 @@ export async function saveSiteEditDraft(input: {
     }
   }
 
+  let companyName: string | null = null;
+  if (input.companyId) {
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("name")
+      .eq("id", input.companyId)
+      .maybeSingle();
+    if (companyError && !companyError.message?.includes("companies")) {
+      return { success: false, error: `会社情報の取得に失敗しました: ${companyError.message}` };
+    }
+    companyName = company?.name ?? null;
+  }
+
   const baseSiteUpdate: Record<string, string | boolean | null> = {
     name: input.name.trim(),
     site_number: input.siteNumber?.trim() || null,
     address: input.address.trim(),
-    client_name: input.clientName?.trim() || null,
+    company_id: input.companyId || null,
+    client_name: companyName,
     site_color: input.siteColor || "#0EA5E9",
     has_blueprint: input.hasBlueprint,
     has_specification: input.hasSpecification,
@@ -215,24 +279,12 @@ export async function saveSiteEditDraft(input: {
     baseSiteUpdate.end_date = input.endDate || null;
   }
 
-  let siteUpdateError: { message?: string } | null = null;
-  {
-    const updateResult = await supabase
-      .from("sites")
-      .update(baseSiteUpdate)
-      .eq("id", input.siteId);
-    siteUpdateError = updateResult.error;
-  }
-
-  if (siteUpdateError?.message?.includes("client_name") || siteUpdateError?.message?.includes("site_color")) {
-    delete baseSiteUpdate.client_name;
-    delete baseSiteUpdate.site_color;
-    const retryResult = await supabase
-      .from("sites")
-      .update(baseSiteUpdate)
-      .eq("id", input.siteId);
-    siteUpdateError = retryResult.error;
-  }
+  const updateResult = await updateSiteWithFallback(
+    supabase,
+    input.siteId,
+    baseSiteUpdate
+  );
+  const siteUpdateError = updateResult.error;
 
   if (siteUpdateError) {
     return {
@@ -273,20 +325,6 @@ export async function saveSiteEditDraft(input: {
       return {
         success: false,
         error: "報告が紐づく工程は削除できません",
-      };
-    }
-  }
-
-  if (processIdsToDelete.length > 0) {
-    const { error: deleteProcessError } = await supabase
-      .from("processes")
-      .delete()
-      .in("id", processIdsToDelete);
-
-    if (deleteProcessError) {
-      return {
-        success: false,
-        error: `工程の削除に失敗しました: ${deleteProcessError.message}`,
       };
     }
   }
@@ -335,6 +373,20 @@ export async function saveSiteEditDraft(input: {
     }
   }
 
+  if (processIdsToDelete.length > 0) {
+    const { error: deleteProcessError } = await supabase
+      .from("processes")
+      .delete()
+      .in("id", processIdsToDelete);
+
+    if (deleteProcessError) {
+      return {
+        success: false,
+        error: `工程の削除に失敗しました: ${deleteProcessError.message}`,
+      };
+    }
+  }
+
   const { data: existingPeriods, error: periodFetchError } = await supabase
     .from("site_work_periods")
     .select("id")
@@ -351,20 +403,6 @@ export async function saveSiteEditDraft(input: {
   const periodIdsToDelete = (existingPeriods ?? [])
     .filter((period) => !draftPeriodIds.has(period.id))
     .map((period) => period.id);
-
-  if (periodIdsToDelete.length > 0) {
-    const { error: deletePeriodError } = await supabase
-      .from("site_work_periods")
-      .delete()
-      .in("id", periodIdsToDelete);
-
-    if (deletePeriodError) {
-      return {
-        success: false,
-        error: `稼働期間の削除に失敗しました: ${deletePeriodError.message}`,
-      };
-    }
-  }
 
   for (const period of input.workPeriods) {
     const payload = {
@@ -403,6 +441,20 @@ export async function saveSiteEditDraft(input: {
     }
   }
 
+  if (periodIdsToDelete.length > 0) {
+    const { error: deletePeriodError } = await supabase
+      .from("site_work_periods")
+      .delete()
+      .in("id", periodIdsToDelete);
+
+    if (deletePeriodError) {
+      return {
+        success: false,
+        error: `稼働期間の削除に失敗しました: ${deletePeriodError.message}`,
+      };
+    }
+  }
+
   if (input.workPeriods.length > 0) {
     await syncSiteDatesFromPeriods(supabase, input.siteId);
   } else {
@@ -418,59 +470,6 @@ export async function saveSiteEditDraft(input: {
       return {
         success: false,
         error: `現場日付の更新に失敗しました: ${syncSiteDateError.message}`,
-      };
-    }
-  }
-
-  const { data: existingMembers, error: memberFetchError } = await supabase
-    .from("site_members")
-    .select("id, user_id")
-    .eq("site_id", input.siteId);
-
-  if (memberFetchError) {
-    return { success: false, error: `メンバーの取得に失敗しました: ${memberFetchError.message}` };
-  }
-
-  const existingMemberRows = existingMembers ?? [];
-  const draftMemberUserIds = new Set(input.memberUserIds);
-  const memberIdsToDelete = existingMemberRows
-    .filter((member) => !draftMemberUserIds.has(member.user_id))
-    .map((member) => member.id);
-
-  if (memberIdsToDelete.length > 0) {
-    const { error: deleteMemberError } = await supabase
-      .from("site_members")
-      .delete()
-      .in("id", memberIdsToDelete);
-
-    if (deleteMemberError) {
-      return {
-        success: false,
-        error: `メンバーの削除に失敗しました: ${deleteMemberError.message}`,
-      };
-    }
-  }
-
-  const existingMemberUserIds = new Set(existingMemberRows.map((member) => member.user_id));
-  const memberIdsToInsert = input.memberUserIds.filter(
-    (userId) => !existingMemberUserIds.has(userId)
-  );
-
-  if (memberIdsToInsert.length > 0) {
-    const { error: insertMemberError } = await supabase
-      .from("site_members")
-      .insert(
-        memberIdsToInsert.map((userId) => ({
-          site_id: input.siteId,
-          user_id: userId,
-          invited_by: user.id,
-        }))
-      );
-
-    if (insertMemberError) {
-      return {
-        success: false,
-        error: `メンバーの追加に失敗しました: ${insertMemberError.message}`,
       };
     }
   }
@@ -629,6 +628,36 @@ export async function addSiteMember(
   return { success: true };
 }
 
+export async function addSiteMembers(
+  siteId: string,
+  userIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "認証エラー" };
+  if (userIds.length === 0) return { success: false, error: "招待対象がありません" };
+
+  const uniqueUserIds = [...new Set(userIds)];
+  const { error } = await supabase
+    .from("site_members")
+    .insert(
+      uniqueUserIds.map((userId) => ({
+        site_id: siteId,
+        user_id: userId,
+        invited_by: user.id,
+      }))
+    );
+
+  if (error) {
+    if (error.code === "23505") return { success: false, error: "選択した一部ユーザーは既に追加されています" };
+    return { success: false, error: "メンバーの追加に失敗しました" };
+  }
+
+  revalidatePath(`/sites/${siteId}`);
+  revalidatePath("/sites");
+  return { success: true };
+}
+
 // ---------------------------------------------------------------------------
 // 現場メンバー削除
 // ---------------------------------------------------------------------------
@@ -663,6 +692,12 @@ export async function getInvitableUsers(siteId: string): Promise<{
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "認証エラー" };
 
+  const { data: site } = await supabase
+    .from("sites")
+    .select("company_id")
+    .eq("id", siteId)
+    .maybeSingle();
+
   // 既にメンバーのユーザーIDを取得
   const { data: existingMembers } = await supabase
     .from("site_members")
@@ -673,13 +708,20 @@ export async function getInvitableUsers(siteId: string): Promise<{
   // 全ロールのアクティブユーザーを取得（自分自身を除く）
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role")
+    .select("id, full_name, role, company_id")
     .eq("is_active", true);
 
   if (error) return { success: false, error: "ユーザーの取得に失敗しました" };
 
   const users = (profiles ?? [])
     .filter((p) => !existingIds.has(p.id) && p.id !== user.id)
+    .filter((p) => {
+      if (p.role !== "client") return true;
+      // company_id が設定されている場合のみ会社で絞り込み
+      if (site?.company_id) return p.company_id === site.company_id;
+      // company_id 未設定の現場にはすべてのクライアントを招待可能
+      return true;
+    })
     .map((p) => ({ id: p.id, name: p.full_name || "名前未設定", role: p.role }));
 
   return { success: true, users };

@@ -27,12 +27,16 @@ export default async function ReportPrintPage({ params }: PageProps) {
   const { data: report, error } = await supabase
     .from("daily_reports")
     .select(
-      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_comment, admin_notes, sites(name, address), processes(id, category, name, progress_rate, status)"
+      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_comment, admin_notes, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)"
     )
     .eq("id", id)
     .single();
 
   if (error || !report) notFound();
+
+  // ワーカーは自分の報告のみ閲覧可能
+  const isWorker = viewerProfile?.role === "worker_internal" || viewerProfile?.role === "worker_external";
+  if (isWorker && report.reporter_id !== user.id) notFound();
 
   const sites = Array.isArray(report.sites) ? report.sites[0] : report.sites;
   const process = Array.isArray(report.processes) ? report.processes[0] : report.processes;

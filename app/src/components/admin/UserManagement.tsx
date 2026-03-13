@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
-import { inviteUser, updateUserRole, toggleUserActive } from "@/app/(dashboard)/admin/users/actions";
-import { ROLE_LABELS } from "@/lib/constants";
+import { useMemo, useState, useTransition } from "react";
 import {
-  UserPlus,
+  inviteUser,
+  toggleUserActive,
+  updateUserCompany,
+  updateUserRole,
+} from "@/app/(dashboard)/admin/users/actions";
+import {
+  ChevronDown,
   Loader2,
   Mail,
   UserCheck,
+  UserPlus,
   UserX,
-  ChevronDown,
   Users,
 } from "lucide-react";
 
@@ -19,10 +23,18 @@ interface UserProfile {
   is_active: boolean | null;
   email?: string;
   full_name?: string;
+  company_id?: string | null;
+  company_name?: string | null;
+}
+
+interface CompanyOption {
+  id: string;
+  name: string;
 }
 
 interface UserManagementProps {
   users: UserProfile[];
+  companies: CompanyOption[];
 }
 
 const ROLE_OPTIONS = [
@@ -42,21 +54,33 @@ const ROLE_TABS = [
   { value: "client", label: "クライアント" },
 ];
 
-export function UserManagement({ users }: UserManagementProps) {
+const SELF_COMPANY_NAME = "シーメン株式会社";
+
+export function UserManagement({ users, companies }: UserManagementProps) {
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState("all");
+  const [inviteRole, setInviteRole] = useState("worker_internal");
+  const [inviteCompanyId, setInviteCompanyId] = useState("");
+
+  const selfCompanyId = useMemo(
+    () => companies.find((company) => company.name === SELF_COMPANY_NAME)?.id ?? "",
+    [companies]
+  );
 
   const filteredUsers = useMemo(() => {
     if (activeTab === "all") return users;
-    return users.filter((u) => u.role === activeTab);
+    return users.filter((user) => user.role === activeTab);
   }, [users, activeTab]);
 
   const roleCounts = useMemo(() => {
     const counts: Record<string, number> = { all: users.length };
-    for (const u of users) {
-      counts[u.role] = (counts[u.role] ?? 0) + 1;
+    for (const user of users) {
+      counts[user.role] = (counts[user.role] ?? 0) + 1;
     }
     return counts;
   }, [users]);
@@ -68,8 +92,13 @@ export function UserManagement({ users }: UserManagementProps) {
       if (result.success) {
         setMessage({ type: "success", text: "ユーザーを招待しました" });
         setShowInviteForm(false);
+        setInviteRole("worker_internal");
+        setInviteCompanyId(selfCompanyId);
       } else {
-        setMessage({ type: "error", text: result.error || "エラーが発生しました" });
+        setMessage({
+          type: "error",
+          text: result.error || "エラーが発生しました",
+        });
       }
     });
   };
@@ -81,7 +110,25 @@ export function UserManagement({ users }: UserManagementProps) {
       if (result.success) {
         setMessage({ type: "success", text: "ロールを更新しました" });
       } else {
-        setMessage({ type: "error", text: result.error || "エラーが発生しました" });
+        setMessage({
+          type: "error",
+          text: result.error || "エラーが発生しました",
+        });
+      }
+    });
+  };
+
+  const handleCompanyChange = (userId: string, companyId: string) => {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await updateUserCompany(userId, companyId || null);
+      if (result.success) {
+        setMessage({ type: "success", text: "会社名を更新しました" });
+      } else {
+        setMessage({
+          type: "error",
+          text: result.error || "エラーが発生しました",
+        });
       }
     });
   };
@@ -93,55 +140,64 @@ export function UserManagement({ users }: UserManagementProps) {
       if (result.success) {
         setMessage({
           type: "success",
-          text: !currentActive ? "ユーザーを有効にしました" : "ユーザーを無効にしました",
+          text: !currentActive
+            ? "ユーザーを有効にしました"
+            : "ユーザーを無効にしました",
         });
       } else {
-        setMessage({ type: "error", text: result.error || "エラーが発生しました" });
+        setMessage({
+          type: "error",
+          text: result.error || "エラーが発生しました",
+        });
       }
     });
   };
 
   return (
     <div className="space-y-6">
-      {/* Message */}
-      {message && (
+      {message ? (
         <div
           className={`rounded-xl p-4 text-[13px] ${
             message.type === "success"
-              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-              : "bg-red-50 border border-red-200 text-red-400"
+              ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+              : "border border-red-200 bg-red-50 text-red-400"
           }`}
         >
           {message.text}
         </div>
-      )}
+      ) : null}
 
-      {/* Invite Button / Form */}
       {!showInviteForm ? (
         <button
-          onClick={() => setShowInviteForm(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#0EA5E9] min-h-[44px] px-5 text-[14px] font-bold text-white transition-all hover:bg-[#0284C7] active:scale-[0.98]"
+          onClick={() => {
+            setInviteRole("worker_internal");
+            setInviteCompanyId(selfCompanyId);
+            setShowInviteForm(true);
+          }}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#0EA5E9] px-5 text-[14px] font-bold text-white transition-all hover:bg-[#0284C7] active:scale-[0.98]"
         >
           <UserPlus size={16} />
           ユーザーを招待
         </button>
       ) : (
         <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="mb-4 flex items-center gap-2">
             <UserPlus size={16} className="text-[#0EA5E9]" />
-            <h3 className="text-[14px] font-semibold text-[#0EA5E9]">新規ユーザー招待</h3>
+            <h3 className="text-[14px] font-semibold text-[#0EA5E9]">
+              新規ユーザー招待
+            </h3>
           </div>
           <form action={handleInvite} className="space-y-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-[13px] font-medium text-gray-500">
-                メールアドレス <span className="text-[#0EA5E9] text-xs">*</span>
+                メールアドレス <span className="text-xs text-[#0EA5E9]">*</span>
               </label>
               <input
                 name="email"
                 type="email"
                 required
                 placeholder="user@example.com"
-                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
+                className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 placeholder-gray-300 focus:border-[#0EA5E9]/50 focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]/20"
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -150,40 +206,80 @@ export function UserManagement({ users }: UserManagementProps) {
                 name="full_name"
                 type="text"
                 placeholder="山田 太郎"
-                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
+                className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 placeholder-gray-300 focus:border-[#0EA5E9]/50 focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]/20"
               />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[13px] font-medium text-gray-500">
-                ロール <span className="text-[#0EA5E9] text-xs">*</span>
+                ロール <span className="text-xs text-[#0EA5E9]">*</span>
               </label>
               <div className="relative">
                 <select
                   name="role"
+                  value={inviteRole}
+                  onChange={(event) => {
+                    const nextRole = event.target.value;
+                    setInviteRole(nextRole);
+                    if (
+                      (nextRole === "worker_internal" || nextRole === "worker_external") &&
+                      selfCompanyId
+                    ) {
+                      setInviteCompanyId(selfCompanyId);
+                    }
+                  }}
                   required
-                  className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20 appearance-none"
+                  className="w-full min-h-[44px] appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 focus:border-[#0EA5E9]/50 focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]/20"
                 >
-                  {ROLE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
+                  {ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
-                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[13px] font-medium text-gray-500">会社名</label>
+              <div className="relative">
+                <select
+                  name="company_id"
+                  value={inviteCompanyId}
+                  onChange={(event) => setInviteCompanyId(event.target.value)}
+                  className="w-full min-h-[44px] appearance-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[16px] text-gray-900 focus:border-[#0EA5E9]/50 focus:outline-none focus:ring-1 focus:ring-[#0EA5E9]/20"
+                >
+                  <option value="">未設定</option>
+                  {companies.map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                />
               </div>
             </div>
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setShowInviteForm(false)}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 min-h-[44px] px-4 text-[14px] font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setShowInviteForm(false);
+                  setInviteRole("worker_internal");
+                  setInviteCompanyId(selfCompanyId);
+                }}
+                className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 px-4 text-[14px] font-medium text-gray-600 transition-colors hover:bg-gray-100"
               >
                 キャンセル
               </button>
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#0EA5E9] min-h-[44px] px-4 text-[14px] font-bold text-white transition-all hover:bg-[#0284C7] disabled:opacity-50"
+                className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-[#0EA5E9] px-4 text-[14px] font-bold text-white transition-all hover:bg-[#0284C7] disabled:opacity-50"
               >
                 {isPending ? <Loader2 size={16} className="animate-spin" /> : "招待する"}
               </button>
@@ -192,8 +288,7 @@ export function UserManagement({ users }: UserManagementProps) {
         </div>
       )}
 
-      {/* Role Tabs */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 scrollbar-hide">
         {ROLE_TABS.map((tab) => {
           const count = roleCounts[tab.value] ?? 0;
           const isActive = activeTab === tab.value;
@@ -201,16 +296,20 @@ export function UserManagement({ users }: UserManagementProps) {
             <button
               key={tab.value}
               onClick={() => setActiveTab(tab.value)}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-medium transition-all ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-medium transition-all ${
                 isActive
-                  ? "bg-cyan-100 text-[#0EA5E9] border border-cyan-200"
-                  : "bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100 hover:text-gray-500"
+                  ? "border border-cyan-200 bg-cyan-100 text-[#0EA5E9]"
+                  : "border border-gray-200 bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-500"
               }`}
             >
               {tab.label}
-              <span className={`text-[10px] min-w-[18px] h-[18px] flex items-center justify-center rounded-full ${
-                isActive ? "bg-cyan-100 text-[#0EA5E9]" : "bg-gray-100 text-gray-400"
-              }`}>
+              <span
+                className={`flex h-[18px] min-w-[18px] items-center justify-center rounded-full text-[10px] ${
+                  isActive
+                    ? "bg-cyan-100 text-[#0EA5E9]"
+                    : "bg-gray-100 text-gray-400"
+                }`}
+              >
                 {count}
               </span>
             </button>
@@ -218,27 +317,27 @@ export function UserManagement({ users }: UserManagementProps) {
         })}
       </div>
 
-      {/* User List */}
       <div className="space-y-2">
         {filteredUsers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-300 rounded-2xl border border-gray-200 bg-white">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white py-12 text-gray-300">
             <Users size={28} className="mb-2 text-gray-200" />
             <p className="text-[13px]">
-              {activeTab === "all" ? "ユーザーが登録されていません" : `${ROLE_TABS.find(t => t.value === activeTab)?.label ?? ""}のユーザーはいません`}
+              {activeTab === "all"
+                ? "ユーザーが登録されていません"
+                : `${ROLE_TABS.find((tab) => tab.value === activeTab)?.label ?? ""}のユーザーはいません`}
             </p>
           </div>
         ) : (
-          filteredUsers.map((u) => {
-            const isActive = u.is_active !== false;
+          filteredUsers.map((user) => {
+            const isActive = user.is_active !== false;
             return (
               <div
-                key={u.id}
+                key={user.id}
                 className={`rounded-2xl border bg-white p-4 transition-colors ${
                   isActive ? "border-gray-200" : "border-red-200 opacity-60"
                 }`}
               >
                 <div className="flex items-center gap-3.5">
-                  {/* Avatar */}
                   <div
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
                       isActive
@@ -246,51 +345,74 @@ export function UserManagement({ users }: UserManagementProps) {
                         : "bg-gray-100 text-gray-400"
                     }`}
                   >
-                    {(u.full_name || u.email || "?")
+                    {(user.full_name || user.email || "?")
                       .split(/[\s@]/)
                       .filter(Boolean)
                       .slice(0, 2)
-                      .map((s) => s[0].toUpperCase())
+                      .map((segment) => segment[0].toUpperCase())
                       .join("")}
                   </div>
 
-                  {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-medium text-gray-700 truncate">
-                      {u.full_name || u.email || "Unknown"}
+                    <p className="truncate text-[13px] font-medium text-gray-700">
+                      {user.full_name || user.email || "Unknown"}
                     </p>
                     <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                      {u.email && (
-                        <span className="flex items-center gap-1 truncate">
+                      {user.email ? (
+                        <span className="flex truncate items-center gap-1">
                           <Mail size={10} />
-                          {u.email}
+                          {user.email}
                         </span>
-                      )}
+                      ) : null}
                     </div>
+                    <p className="mt-0.5 text-[11px] text-gray-400">
+                      {user.company_name || "会社未設定"}
+                    </p>
                   </div>
 
-                  {/* Role Selector */}
                   <div className="relative shrink-0">
                     <select
-                      value={u.role}
-                      onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                      value={user.role}
+                      onChange={(event) => handleRoleChange(user.id, event.target.value)}
                       disabled={isPending}
-                      className="min-h-[36px] pl-3 pr-7 rounded-lg border border-gray-200 bg-gray-50 text-[12px] text-gray-600 focus:outline-none focus:border-[#0EA5E9]/50 appearance-none disabled:opacity-50"
+                      className="min-h-[36px] appearance-none rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-7 text-[12px] text-gray-600 focus:border-[#0EA5E9]/50 focus:outline-none disabled:opacity-50"
                     >
-                      {ROLE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
                         </option>
                       ))}
                     </select>
-                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <ChevronDown
+                      size={12}
+                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
                   </div>
 
-                  {/* Active toggle */}
+                  <div className="relative shrink-0">
+                    <select
+                      value={user.company_id ?? ""}
+                      onChange={(event) => handleCompanyChange(user.id, event.target.value)}
+                      disabled={isPending}
+                      className="min-h-[36px] min-w-[140px] appearance-none rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-7 text-[12px] text-gray-600 focus:border-[#0EA5E9]/50 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">会社未設定</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={12}
+                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                  </div>
+
                   <button
-                    onClick={() => handleToggleActive(u.id, isActive)}
+                    onClick={() => handleToggleActive(user.id, isActive)}
                     disabled={isPending}
-                    className={`shrink-0 flex items-center justify-center w-9 h-9 rounded-lg transition-colors disabled:opacity-50 ${
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${
                       isActive
                         ? "text-emerald-400 hover:bg-emerald-500/10"
                         : "text-red-400 hover:bg-red-50"

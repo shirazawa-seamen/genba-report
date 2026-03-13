@@ -382,7 +382,7 @@ function Step1({
                             {process.name}
                           </p>
                           <p className="mt-1 text-[11px] text-gray-400">
-                            現在 {process.progress_rate}%
+                            現在の公式進捗 {process.progress_rate}%
                           </p>
                         </div>
                         <span
@@ -403,7 +403,7 @@ function Step1({
                         >
                           <div className="flex flex-col gap-2">
                             <label className="text-[12px] font-medium text-gray-500">
-                              今日の進捗率
+                              担当者見込み進捗
                             </label>
                             <div className="relative">
                               <select
@@ -511,8 +511,9 @@ function Step2({
   const addCustomWorker = () => {
     const name = customWorker.trim();
     if (!name) return;
+    const matchedWorker = workerOptions.find((worker) => worker.name === name);
     const current = new Set(selectedWorkers);
-    current.add(name);
+    current.add(matchedWorker?.name ?? name);
     onChange("workers", Array.from(current).join("、"));
     setCustomWorker("");
     setShowCustomInput(false);
@@ -540,7 +541,7 @@ function Step2({
         </div>
         <div>
           <h2 className="text-[18px] font-bold text-gray-900">作業内容</h2>
-          <p className="text-[13px] text-gray-400">今日の作業内容と作業者を入力してください</p>
+          <p className="text-[13px] text-gray-400">今日の作業内容を入力してください</p>
         </div>
       </div>
 
@@ -556,117 +557,6 @@ function Step2({
         required
       />
 
-      <div className="flex flex-col gap-2">
-        <label className="text-[13px] font-medium text-gray-500">
-          作業者 <span className="text-xs text-[#0EA5E9]">*</span>
-        </label>
-
-        {selectedWorkers.length > 0 ? (
-          <div className="mb-1 flex flex-wrap gap-1.5">
-            {selectedWorkers.map((name) => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1 rounded-lg border border-cyan-200 bg-cyan-50 px-2.5 py-1.5 text-[12px] font-medium text-[#0EA5E9]"
-              >
-                <UserCheck size={12} />
-                {name}
-                <button
-                  type="button"
-                  onClick={() => removeWorker(name)}
-                  className="ml-0.5 transition-colors hover:text-red-400"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        {workerOptions.length > 0 ? (
-          <div className="rounded-xl border border-gray-200 bg-white p-3">
-            <p className="mb-2 text-[11px] font-medium text-gray-400">
-              登録ユーザーから選択
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {workerOptions.map((worker) => {
-                const isSelected = selectedWorkers.includes(worker.name);
-
-                return (
-                  <button
-                    key={worker.id}
-                    type="button"
-                    onClick={() => toggleWorker(worker.name)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all ${
-                      isSelected
-                        ? "border border-cyan-300 bg-cyan-100 text-[#0EA5E9]"
-                        : "border border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-gray-600"
-                    }`}
-                  >
-                    {isSelected ? <CheckCircle2 size={12} /> : <Users size={12} />}
-                    {worker.name}
-                    <span className={`text-[10px] ${isSelected ? "text-[#0EA5E9]/50" : "text-gray-300"}`}>
-                      {roleLabels[worker.role] ?? worker.role}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {showCustomInput ? (
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="名前を入力"
-              value={customWorker}
-              onChange={(event) => setCustomWorker(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addCustomWorker();
-                }
-              }}
-              autoFocus
-              className="min-h-[40px] flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 text-[14px] text-gray-700 placeholder-gray-300 focus:border-[#0EA5E9]/50 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={addCustomWorker}
-              disabled={!customWorker.trim()}
-              className="min-h-[40px] rounded-lg bg-cyan-100 px-3 text-[12px] font-medium text-[#0EA5E9] transition-colors hover:bg-cyan-200 disabled:opacity-30"
-            >
-              追加
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShowCustomInput(false);
-                setCustomWorker("");
-              }}
-              className="min-h-[40px] rounded-lg px-2 text-gray-400 transition-colors hover:text-gray-500"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowCustomInput(true)}
-            className="inline-flex self-start rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-[12px] text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-500"
-          >
-            <Plus size={12} className="mr-1.5" />
-            手入力で追加
-          </button>
-        )}
-
-        {errors.workers ? (
-          <p className="flex items-center gap-1 text-[12px] text-red-400">
-            <AlertTriangle size={12} />
-            {errors.workers}
-          </p>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -942,9 +832,6 @@ function Step4({ data }: { data: FormData }) {
         <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-gray-700">
           {data.workDescription}
         </p>
-        <div className="space-y-2 pt-1">
-          <PreviewRow icon={<Users size={14} />} label="作業者" value={data.workers} />
-        </div>
       </div>
 
       {data.issues ? (
@@ -1133,9 +1020,6 @@ export function DailyReportForm({
     if (targetStep === 2) {
       if (!formData.workDescription.trim()) {
         nextErrors.workDescription = "作業内容を入力してください";
-      }
-      if (!formData.workers.trim()) {
-        nextErrors.workers = "作業者名を入力してください";
       }
     }
 

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { canAccessReport } from "@/lib/siteAccess";
 
 interface UpdateReportResult {
   success: boolean;
@@ -32,6 +33,12 @@ export async function updateReport(
 
   if (profile?.role !== "admin" && profile?.role !== "manager") {
     return { success: false, error: "管理者または現場管理者の権限が必要です" };
+  }
+
+  // この報告のサイトにアクセス権があるか確認
+  const hasAccess = await canAccessReport(user.id, reportId);
+  if (!hasAccess) {
+    return { success: false, error: "この報告にアクセスする権限がありません" };
   }
 
   const workContent = formData.get("work_content") as string;
@@ -69,24 +76,6 @@ export async function updateReport(
 
   if (updateError) {
     return { success: false, error: `更新エラー: ${updateError.message}` };
-  }
-
-  // 工程の進捗率も更新
-  if (progressRate) {
-    const { data: report } = await supabase
-      .from("daily_reports")
-      .select("process_id")
-      .eq("id", reportId)
-      .single();
-
-    if (report?.process_id) {
-      const rate = parseInt(progressRate, 10);
-      const newStatus = rate >= 100 ? "completed" : "in_progress";
-      await supabase
-        .from("processes")
-        .update({ progress_rate: rate, status: newStatus })
-        .eq("id", report.process_id);
-    }
   }
 
   revalidatePath("/reports");

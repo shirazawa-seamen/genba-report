@@ -68,10 +68,16 @@ export default async function ManagerSummariesPage({ searchParams }: PageProps) 
   if (safeSiteIds) processesQuery = processesQuery.in("site_id", safeSiteIds);
   if (siteFilter) processesQuery = processesQuery.eq("site_id", siteFilter);
 
-  let [summaryResult, { data: reports }, { data: processes }] = await Promise.all([
+  // 4) サイト一覧取得（フィルター用 + 空現場表示用）
+  const sitesQuery = safeSiteIds
+    ? supabase.from("sites").select("id, name").in("id", safeSiteIds).eq("status", "active").order("name")
+    : supabase.from("sites").select("id, name").eq("status", "active").order("name");
+
+  let [summaryResult, { data: reports }, { data: processes }, { data: allSites }] = await Promise.all([
     summaryQuery,
     reportsQuery,
     processesQuery,
+    sitesQuery,
   ]);
 
   // revision_comment カラム未追加の場合フォールバック
@@ -127,6 +133,22 @@ export default async function ManagerSummariesPage({ searchParams }: PageProps) 
     allDateKeys.add(`${r.site_id}_${r.report_date}`);
   }
 
+  // 1次報告も2次報告もない現場を「未生成」として今日の日付で追加
+  const today = new Date().toISOString().split("T")[0];
+  const sitesWithEntries = new Set<string>();
+  for (const key of allDateKeys) {
+    sitesWithEntries.add(key.split("_")[0]);
+  }
+  const targetSiteIds = siteFilter ? [siteFilter] : (safeSiteIds ?? (allSites ?? []).map((s) => s.id));
+  for (const sid of targetSiteIds) {
+    if (!sitesWithEntries.has(sid)) {
+      allDateKeys.add(`${sid}_${today}`);
+      // サイト名マップにも追加
+      const siteName = (allSites ?? []).find((s) => s.id === sid)?.name;
+      if (siteName && !siteNameMap.has(sid)) siteNameMap.set(sid, siteName);
+    }
+  }
+
   // SummaryItem に変換
   const allItems: SummaryItem[] = [];
   for (const key of allDateKeys) {
@@ -179,23 +201,15 @@ export default async function ManagerSummariesPage({ searchParams }: PageProps) 
   }
   const groups = Array.from(groupMap.values());
 
-  // ステータスカウント
+  // ステータスカウント（空現場も含めた allDateKeys を使用）
   const countByStatus = { all: 0, ungenerated: 0, draft: 0, submitted: 0, client_confirmed: 0, revision_requested: 0 };
-  // フィルターなしの全アイテムでカウントするために再集計
-  const allKeysForCount = new Set<string>();
-  for (const s of summaries) allKeysForCount.add(`${s.site_id}_${s.report_date}`);
-  for (const r of reports ?? []) allKeysForCount.add(`${r.site_id}_${r.report_date}`);
-  for (const key of allKeysForCount) {
+  for (const key of allDateKeys) {
     const summary = summaryMap.get(key);
     const s = summary?.status ?? "ungenerated";
     countByStatus.all++;
     if (s in countByStatus) countByStatus[s as keyof typeof countByStatus]++;
   }
 
-  // サイト一覧取得（フィルター用）
-  const { data: allSites } = safeSiteIds
-    ? await supabase.from("sites").select("id, name").in("id", safeSiteIds).order("name")
-    : await supabase.from("sites").select("id, name").order("name");
   const sites = allSites ?? [];
 
   const activeStatus = statusFilter ?? "all";

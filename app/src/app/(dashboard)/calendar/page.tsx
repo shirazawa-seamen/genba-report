@@ -1,15 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { CalendarView } from "./calendar-view";
 import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
+import { getAccessibleSiteContext } from "@/lib/siteAccess";
 
 interface PageProps {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; status?: string }>;
 }
 
 export default async function CalendarPage({ searchParams }: PageProps) {
-  const { month } = await searchParams;
+  const { month, status } = await searchParams;
   const supabase = await createClient();
-  const { role: userRole } = await requireUserContext();
+  const { user, role: userRole } = await requireUserContext();
+  const siteContext = await getAccessibleSiteContext(user.id);
+  const statusFilter =
+    status === "completed" ? "completed" : status === "all" ? "all" : "active";
 
   // Determine month to display
   const now = new Date();
@@ -26,30 +30,40 @@ export default async function CalendarPage({ searchParams }: PageProps) {
 
   // Fetch all sites with their date ranges
   let sites:
-    | { id: string; name: string; site_number: string | null; start_date: string | null; end_date: string | null; site_color?: string | null }[]
+    | { id: string; name: string; site_number: string | null; start_date: string | null; end_date: string | null; status?: string | null; site_color?: string | null }[]
     | null = null;
   {
-    const primary = await supabase
+    let primaryQuery = supabase
       .from("sites")
-      .select("id, name, site_number, start_date, end_date, site_color")
+      .select("id, name, site_number, start_date, end_date, status, site_color")
       .or(`start_date.is.null,start_date.lte.${lastDateStr}`)
-      .or(`end_date.is.null,end_date.gte.${firstDateStr}`)
-      .order("name");
+      .or(`end_date.is.null,end_date.gte.${firstDateStr}`);
+    if (statusFilter !== "all") {
+      primaryQuery = primaryQuery.eq("status", statusFilter);
+    }
+    const primary = await primaryQuery.order("name");
     if (primary.error?.message?.includes("site_color")) {
-      const fallback = await supabase
+      let fallbackQuery = supabase
         .from("sites")
-        .select("id, name, site_number, start_date, end_date")
+        .select("id, name, site_number, start_date, end_date, status")
         .or(`start_date.is.null,start_date.lte.${lastDateStr}`)
-        .or(`end_date.is.null,end_date.gte.${firstDateStr}`)
-        .order("name");
+        .or(`end_date.is.null,end_date.gte.${firstDateStr}`);
+      if (statusFilter !== "all") {
+        fallbackQuery = fallbackQuery.eq("status", statusFilter);
+      }
+      const fallback = await fallbackQuery.order("name");
       sites = fallback.data;
     } else {
       sites = primary.data;
     }
   }
 
-  // Filter sites that overlap with this month
+  // Filter sites that overlap with this month AND user has access to
   const activeSites = (sites ?? []).filter((site) => {
+    // アクセス権チェック: worker_external / client は自分の現場のみ
+    if (siteContext.accessibleSiteIds !== null && !siteContext.accessibleSiteIds.includes(site.id)) {
+      return false;
+    }
     // If no start_date, include if no end_date or end_date hasn't passed
     if (!site.start_date && !site.end_date) return true;
     if (!site.start_date) return !site.end_date || site.end_date >= firstDateStr;
@@ -175,6 +189,7 @@ export default async function CalendarPage({ searchParams }: PageProps) {
       monthLabel={monthLabel}
       prevMonth={prevMonth}
       nextMonth={nextMonth}
+      statusFilter={statusFilter}
       startDayOfWeek={startDayOfWeek}
       calendarDays={calendarDays}
       activeSites={activeSites.map((s) => ({
