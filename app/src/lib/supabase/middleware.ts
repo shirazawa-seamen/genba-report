@@ -7,6 +7,12 @@ import { NextResponse, type NextRequest } from 'next/server'
  * Supabase Auth はアクセストークンを自動的にリフレッシュします。
  * この関数を Next.js の middleware から呼び出すことで、
  * セッションの期限切れを防ぎます。
+ *
+ * 注意: ここでは getSession() を使って Cookie からローカルに
+ * セッションを読み取ります（Supabase へのネットワーク通信なし）。
+ * セキュリティ上重要なデータ取得は Server Component 側の
+ * getUser() で検証されるため、ミドルウェアでのルーティング判定は
+ * getSession() で十分です。
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -38,11 +44,12 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // getUser() を呼ぶことでセッションのリフレッシュが行われます。
-  // この呼び出しは削除しないでください。
+  // getSession() は Cookie 内の JWT をローカルで読み取るだけで
+  // Supabase への通信は発生しません。トークンのリフレッシュが
+  // 必要な場合のみ Supabase と通信します。
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  return { supabaseResponse, user }
+  return { supabaseResponse, user: session?.user ?? null }
 }
