@@ -43,12 +43,12 @@ function formatDate(dateStr: string): string {
 export default async function ReportsPage({ searchParams }: PageProps) {
   const { status: filterStatus, page: pageParam, scope: scopeParam } = await searchParams;
   const supabase = await createClient();
-  const { user, role: userRole } = await requireUserContext();
+  const { user, role: userRole, companyId } = await requireUserContext();
 
   // クライアントは個別の職人報告ではなく、マネージャーのサマリーのみ閲覧
   if (userRole === "client") redirect("/client");
 
-  const accessContext = await getAccessibleSiteContext(user.id);
+  const accessContext = await getAccessibleSiteContext(user.id, userRole, companyId);
   const isClient = false;
   const isManager = userRole === "manager";
   const isWorker = userRole === "worker_internal" || userRole === "worker_external";
@@ -88,42 +88,42 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     }
   }
 
-  // グループ化ベースのカウント用クエリ（全件の最小データを取得）
-  let countDataQuery = supabase
-    .from("daily_reports")
-    .select("site_id, reporter_id, report_date, approval_status")
-    .order("report_date", { ascending: false })
-    .limit(2000);
-  if (isWorker) {
-    countDataQuery = countDataQuery.eq("reporter_id", user.id);
-  }
-  if (scopedSiteIds) {
-    if (scopedSiteIds.length === 0) {
-      countDataQuery = countDataQuery.in("site_id", ["00000000-0000-0000-0000-000000000000"]);
-    } else {
-      countDataQuery = countDataQuery.in("site_id", scopedSiteIds);
+  // ステータス別カウントクエリ（head: true で件数のみ取得、データは取得しない）
+  const buildCountQuery = (status?: string) => {
+    let q = supabase
+      .from("daily_reports")
+      .select("*", { count: "exact", head: true });
+    if (status) q = q.eq("approval_status", status);
+    if (isWorker) q = q.eq("reporter_id", user.id);
+    if (scopedSiteIds) {
+      if (scopedSiteIds.length === 0) {
+        q = q.in("site_id", ["00000000-0000-0000-0000-000000000000"]);
+      } else {
+        q = q.in("site_id", scopedSiteIds);
+      }
     }
-  }
+    return q;
+  };
 
-  const [{ data: reports, error }, { data: countData }] = await Promise.all([
+  const [
+    { data: reports, error },
+    { count: allCount },
+    { count: submittedCount },
+    { count: approvedCount },
+    { count: confirmedCount },
+    { count: rejectedCount },
+  ] = await Promise.all([
     query,
-    countDataQuery,
+    buildCountQuery(),
+    buildCountQuery("submitted"),
+    buildCountQuery("approved"),
+    buildCountQuery("client_confirmed"),
+    buildCountQuery("rejected"),
   ]);
 
-  // グループ化してカウント（同一 site_id + reporter_id + report_date = 1件）
-  const countGroups = new Map<string, string>();
-  for (const r of countData ?? []) {
-    const key = `${r.site_id}_${r.reporter_id ?? "none"}_${r.report_date}`;
-    if (!countGroups.has(key)) countGroups.set(key, r.approval_status ?? "draft");
-  }
-  const allCount = countGroups.size;
-  const submittedCount = [...countGroups.values()].filter((s) => s === "submitted").length;
-  const approvedCount = [...countGroups.values()].filter((s) => s === "approved").length;
-  const confirmedCount = [...countGroups.values()].filter((s) => s === "client_confirmed").length;
-  const rejectedCount = [...countGroups.values()].filter((s) => s === "rejected").length;
   const filteredCount = activeFilter
-    ? [...countGroups.values()].filter((s) => s === activeFilter).length
-    : allCount;
+    ? ({ submitted: submittedCount, approved: approvedCount, client_confirmed: confirmedCount, rejected: rejectedCount } as Record<string, number | null>)[activeFilter] ?? 0
+    : allCount ?? 0;
   const reportList = (reports as DailyReportWithSite[] | null) ?? [];
 
   const reporterIds = [...new Set(reportList.map((r) => r.reporter_id).filter(Boolean))] as string[];
@@ -186,15 +186,15 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     count:
       (
         {
-          all: allCount,
-          submitted: submittedCount,
-          approved: approvedCount,
-          client_confirmed: confirmedCount,
-          rejected: rejectedCount,
-        } as Record<(typeof STATUS_TABS)[number]["value"], number | null>
+          all: allCount ?? 0,
+          submitted: submittedCount ?? 0,
+          approved: approvedCount ?? 0,
+          client_confirmed: confirmedCount ?? 0,
+          rejected: rejectedCount ?? 0,
+        } as Record<(typeof STATUS_TABS)[number]["value"], number>
       )[tab.value] ?? 0,
   }));
-  const totalCount = filteredCount ?? 0;
+  const totalCount = (typeof filteredCount === 'number' ? filteredCount : 0);
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safeCurrentPage = Math.min(currentPage, totalPages);
 

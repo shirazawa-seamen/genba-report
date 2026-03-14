@@ -30,12 +30,12 @@ interface PageProps {
 
 export default async function ManagerSummariesPage({ searchParams }: PageProps) {
   const { status: statusFilter, site: siteFilter } = await searchParams;
-  const { user, role: userRole } = await requireUserContext();
+  const { user, role: userRole, companyId } = await requireUserContext();
 
   if (userRole !== "admin" && userRole !== "manager") redirect("/");
 
   const supabase = await createClient();
-  const accessContext = await getAccessibleSiteContext(user.id);
+  const accessContext = await getAccessibleSiteContext(user.id, userRole, companyId);
   const accessibleSiteIds = accessContext.accessibleSiteIds;
 
   const safeSiteIds =
@@ -62,7 +62,7 @@ export default async function ManagerSummariesPage({ searchParams }: PageProps) 
     return q;
   };
 
-  let summaryQuery = buildSummaryQuery(summarySelect);
+  const summaryQuery = buildSummaryQuery(summarySelect);
 
   // 2) 全報告日 (site_id, report_date) 取得 — 未生成のサマリーも表示するため
   let reportsQuery = supabase
@@ -87,18 +87,22 @@ export default async function ManagerSummariesPage({ searchParams }: PageProps) 
     ? supabase.from("sites").select("id, name").in("id", safeSiteIds).eq("status", "active").order("name")
     : supabase.from("sites").select("id, name").eq("status", "active").order("name");
 
-  let [summaryResult, { data: reports }, { data: processes }, { data: allSites }] = await Promise.all([
+  const [initialSummaryResult, reportsResult, processesResult, sitesResult] = await Promise.all([
     summaryQuery,
     reportsQuery,
     processesQuery,
     sitesQuery,
   ]);
+  let summaryResult = initialSummaryResult;
 
   // revision_comment カラム未追加の場合フォールバック
   if (summaryResult.error && !useFallbackSelect) {
     useFallbackSelect = true;
     summaryResult = await buildSummaryQuery(summarySelectFallback);
   }
+  const reports = reportsResult.data;
+  const processes = processesResult.data;
+  const allSites = sitesResult.data;
   const summaries = (summaryResult.data ?? []).map((s) => {
     const row = s as unknown as Record<string, unknown>;
     return {

@@ -28,13 +28,14 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
   if (profile?.role !== "client") redirect("/");
 
   // revision_comment は migration_v22 で追加。未適用時のフォールバック付き
-  let { data: summary, error: summaryError } = await supabase
+  const initialSummaryResult = await supabase
     .from("client_report_summaries")
     .select("id, site_id, report_date, summary_text, status, official_progress, revision_comment, sites(name)")
     .eq("id", summaryId)
     .maybeSingle();
+  let summary = initialSummaryResult.data;
 
-  if (summaryError || !summary) {
+  if (initialSummaryResult.error || !summary) {
     // revision_comment カラム未追加の場合はカラムなしでリトライ
     const { data: fallback } = await supabase
       .from("client_report_summaries")

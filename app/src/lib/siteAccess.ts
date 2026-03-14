@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 
 export type SiteScopeFilter = "all" | "assigned" | "unassigned";
@@ -11,22 +12,37 @@ export interface AccessibleSiteContext {
   accessibleSiteIds: string[] | null;
 }
 
-export async function getAccessibleSiteContext(userId: string) {
+/**
+ * Get the user's accessible site context.
+ * Accepts optional knownRole/knownCompanyId to skip the redundant profiles query
+ * (when already fetched via requireUserContext).
+ * Wrapped with React cache() to deduplicate within a single request.
+ */
+export const getAccessibleSiteContext = cache(async (
+  userId: string,
+  knownRole?: string,
+  knownCompanyId?: string | null,
+): Promise<AccessibleSiteContext> => {
   const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, company_id")
-    .eq("id", userId)
-    .single();
 
-  const role = profile?.role ?? "worker_internal";
-  const companyId = profile?.company_id ?? null;
+  const needsProfile = knownRole === undefined;
 
-  const { data: memberRows } = await supabase
-    .from("site_members")
-    .select("site_id")
-    .eq("user_id", userId);
-  const assignedSiteIds = [...new Set((memberRows ?? []).map((row) => row.site_id))];
+  // Parallelize: fetch profile (if needed) + site_members at the same time
+  const [profileResult, memberResult] = await Promise.all([
+    needsProfile
+      ? supabase.from("profiles").select("role, company_id").eq("id", userId).single()
+      : null,
+    supabase.from("site_members").select("site_id").eq("user_id", userId),
+  ]);
+
+  const role = needsProfile
+    ? (profileResult?.data?.role ?? "worker_internal")
+    : (knownRole ?? "worker_internal");
+  const companyId = needsProfile
+    ? (profileResult?.data?.company_id ?? null)
+    : (knownCompanyId ?? null);
+
+  const assignedSiteIds = [...new Set((memberResult.data ?? []).map((row) => row.site_id))];
 
   let companySiteIds: string[] = [];
   if (role === "client" && companyId) {
@@ -50,8 +66,8 @@ export async function getAccessibleSiteContext(userId: string) {
     assignedSiteIds,
     companySiteIds,
     accessibleSiteIds,
-  } satisfies AccessibleSiteContext;
-}
+  };
+});
 
 export function canCreateSites(role: string) {
   return role === "admin" || role === "manager";

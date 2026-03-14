@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { ClientSummaryCard } from "./summary-card";
 import { getAccessibleSiteContext } from "@/lib/siteAccess";
+import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
 
 interface PageProps {
   searchParams: Promise<{ tab?: string; site?: string }>;
@@ -17,20 +18,10 @@ interface PageProps {
 export default async function ClientPage({ searchParams }: PageProps) {
   const { tab, site: siteFilter } = await searchParams;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, role: userRole, companyId } = await requireUserContext();
 
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, company_id")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "client") redirect("/");
-  const accessContext = await getAccessibleSiteContext(user.id);
+  if (userRole !== "client") redirect("/");
+  const accessContext = await getAccessibleSiteContext(user.id, userRole, companyId);
   const accessibleSiteIds = accessContext.accessibleSiteIds ?? [];
 
   const activeTab = tab === "confirmed" ? "confirmed" : "pending";

@@ -14,130 +14,160 @@ import {
 import { APPROVAL_STATUS_LABELS } from '@/lib/constants'
 import { requireUserContext } from '@/lib/auth/getCurrentUserContext'
 import { getAccessibleSiteContext } from '@/lib/siteAccess'
-import { getWorkerTodayInfo, generateWorkerAdvice } from './worker-advice-action'
+import { getWorkerTodayInfo } from './worker-advice-action'
 
 interface PageProps {
   searchParams: Promise<{ pendingScope?: string }>
 }
 
+const EMPTY_SITE_ID = '00000000-0000-0000-0000-000000000000'
+
 export default async function DashboardPage({ searchParams }: PageProps) {
   const { pendingScope: pendingScopeParam } = await searchParams
   const supabase = await createClient()
-  const { user, role: userRole, displayName } = await requireUserContext()
+  const { user, role: userRole, companyId, displayName } = await requireUserContext()
   const isAdmin = userRole === 'admin'
   const isManager = userRole === 'manager'
   const isClient = userRole === 'client'
-  const accessContext = await getAccessibleSiteContext(user.id)
+  const accessContext = await getAccessibleSiteContext(user.id, userRole, companyId)
   const pendingScope = isManager && pendingScopeParam === 'mine' ? 'mine' : 'all'
   const pendingSiteIds =
     pendingScope === 'mine' ? accessContext.assignedSiteIds : accessContext.accessibleSiteIds
-  let siteCountQuery = supabase.from('sites').select('*', { count: 'exact', head: true }).eq('status', 'active')
+
+  let siteCountQuery = supabase.from('sites').select('id', { count: 'exact', head: true }).eq('status', 'active')
   if (accessContext.accessibleSiteIds) {
     if (accessContext.accessibleSiteIds.length === 0) {
-      siteCountQuery = supabase.from('sites').select('*', { count: 'exact', head: true }).in('id', ['00000000-0000-0000-0000-000000000000'])
+      siteCountQuery = supabase.from('sites').select('id', { count: 'exact', head: true }).in('id', [EMPTY_SITE_ID])
     } else {
       siteCountQuery = siteCountQuery.in('id', accessContext.accessibleSiteIds)
     }
   }
 
   const isWorkerRole = userRole === 'worker_internal' || userRole === 'worker_external'
+  const isManagerOrAdmin = isAdmin || isManager
 
-  // 承認待ちカウント用（グループ化ベース）
-  let pendingDataQuery = supabase
-    .from('daily_reports')
-    .select('site_id, reporter_id, report_date')
-    .eq('approval_status', 'submitted')
-    .limit(500)
-  let recentReportsQuery = supabase
-    .from('daily_reports')
-    .select('id, report_date, approval_status, site_id, reporter_id, sites(name)')
-    .order('report_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(50)
+  let pendingCountQuery = isManagerOrAdmin
+    ? supabase
+        .from('daily_reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('approval_status', 'submitted')
+    : null
+
+  let recentReportsQuery = !isClient
+    ? supabase
+        .from('daily_reports')
+        .select('id, report_date, approval_status, site_id, reporter_id, sites(name)')
+        .order('report_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(30)
+    : null
 
   // ワーカーは自分の報告のみ
-  if (isWorkerRole) {
+  if (isWorkerRole && recentReportsQuery) {
     recentReportsQuery = recentReportsQuery.eq('reporter_id', user.id)
   }
 
   if (pendingSiteIds) {
     if (pendingSiteIds.length === 0) {
-      pendingDataQuery = pendingDataQuery.in('site_id', ['00000000-0000-0000-0000-000000000000'])
-      recentReportsQuery = recentReportsQuery.in('site_id', ['00000000-0000-0000-0000-000000000000'])
+      pendingCountQuery = pendingCountQuery?.in('site_id', [EMPTY_SITE_ID]) ?? null
+      recentReportsQuery = recentReportsQuery?.in('site_id', [EMPTY_SITE_ID]) ?? null
     } else {
-      pendingDataQuery = pendingDataQuery.in('site_id', pendingSiteIds)
-      recentReportsQuery = recentReportsQuery.in('site_id', pendingSiteIds)
+      pendingCountQuery = pendingCountQuery?.in('site_id', pendingSiteIds) ?? null
+      recentReportsQuery = recentReportsQuery?.in('site_id', pendingSiteIds) ?? null
     }
   }
 
-  const [{ count: totalSiteCount }, { data: pendingData }, { data: recentReports }] = await Promise.all([
-    siteCountQuery,
-    pendingDataQuery,
-    recentReportsQuery,
-  ])
-
-  // 承認待ちをグループ化してカウント
-  const pendingGroups = new Set<string>()
-  for (const r of pendingData ?? []) {
-    pendingGroups.add(`${r.site_id}_${r.reporter_id ?? 'none'}_${r.report_date}`)
-  }
-  const pendingCount = pendingGroups.size
-
-  // マネージャー/管理者向け: 未取りまとめ報告の集計
-  let unsummarizedItems: Array<{ siteId: string; siteName: string; reportDate: string; reportCount: number }> = []
-  if (isAdmin || isManager) {
-    // 承認済み報告の (site_id, report_date) を取得
-    const { data: approvedReports } = await supabase
-      .from('daily_reports')
-      .select('site_id, report_date, sites(name)')
-      .eq('approval_status', 'approved')
-      .order('report_date', { ascending: false })
-      .limit(200)
-
-    if (approvedReports && approvedReports.length > 0) {
-      // 提出済み or 確認済みサマリーの (site_id, report_date) を取得
-      const { data: submittedSummaries } = await supabase
+  // マネージャー/管理者向け: 未取りまとめ報告の集計（並列クエリに含める）
+  let approvedReportsQuery = isManagerOrAdmin
+    ? supabase
+        .from('daily_reports')
+        .select('site_id, report_date, sites(name)')
+        .eq('approval_status', 'approved')
+        .order('report_date', { ascending: false })
+        .limit(100)
+    : null
+  let submittedSummariesQuery = isManagerOrAdmin
+    ? supabase
         .from('client_report_summaries')
         .select('site_id, report_date')
         .in('status', ['submitted', 'client_confirmed'])
+    : null
 
-      const submittedSet = new Set(
-        (submittedSummaries ?? []).map((s) => `${s.site_id}_${s.report_date}`)
-      )
-
-      // 承認済みだがサマリー未提出のものを集計
-      const countMap = new Map<string, { siteId: string; siteName: string; reportDate: string; count: number }>()
-      for (const r of approvedReports) {
-        const key = `${r.site_id}_${r.report_date}`
-        if (submittedSet.has(key)) continue
-        const existing = countMap.get(key)
-        if (existing) {
-          existing.count++
-        } else {
-          const siteName = (r.sites as unknown as { name: string } | null)?.name ?? '不明な現場'
-          countMap.set(key, { siteId: r.site_id as string, siteName, reportDate: r.report_date as string, count: 1 })
-        }
-      }
-      unsummarizedItems = Array.from(countMap.values())
-        .sort((a, b) => b.reportDate.localeCompare(a.reportDate))
-        .slice(0, 10)
-        .map((item) => ({ siteId: item.siteId, siteName: item.siteName, reportDate: item.reportDate, reportCount: item.count }))
+  if (pendingSiteIds) {
+    if (pendingSiteIds.length === 0) {
+      approvedReportsQuery = approvedReportsQuery?.in('site_id', [EMPTY_SITE_ID]) ?? null
+      submittedSummariesQuery = submittedSummariesQuery?.in('site_id', [EMPTY_SITE_ID]) ?? null
+    } else {
+      approvedReportsQuery = approvedReportsQuery?.in('site_id', pendingSiteIds) ?? null
+      submittedSummariesQuery = submittedSummariesQuery?.in('site_id', pendingSiteIds) ?? null
     }
   }
 
-  // 職人向け: 今日の現場とアドバイス
+  // 職人向け: 今日の現場
   const isWorker = userRole === 'worker_internal' || userRole === 'worker_external'
-  let workerTodaySites: Array<{ id: string; name: string; address: string | null }> = []
-  let workerAdvice: string | null = null
-  if (isWorker) {
-    const workerInfo = await getWorkerTodayInfo(user.id)
-    workerTodaySites = workerInfo.todaySites.map((s) => ({ id: s.id, name: s.name, address: s.address }))
-    // LLMアドバイスは非同期で取得（失敗してもエラーにしない）
-    try {
-      workerAdvice = await generateWorkerAdvice(user.id)
-    } catch {
-      // ignore
+  const workerInfoPromise = isWorker ? getWorkerTodayInfo(user.id) : null
+
+  // クライアント向け: 最近のサマリー（Promise.allに組み込む）
+  const clientSummariesQuery =
+    isClient && accessContext.accessibleSiteIds && accessContext.accessibleSiteIds.length > 0
+      ? supabase
+          .from('client_report_summaries')
+          .select('id, report_date, status, sites(name)')
+          .in('site_id', accessContext.accessibleSiteIds)
+          .in('status', ['submitted', 'client_confirmed'])
+          .order('report_date', { ascending: false })
+          .limit(5)
+      : null
+
+  // 全クエリを並列実行
+  const [
+    { count: totalSiteCount },
+    pendingCountResult,
+    recentReportsResult,
+    approvedResult,
+    summariesResult,
+    workerInfo,
+    clientSummariesResult,
+  ] = await Promise.all([
+    siteCountQuery,
+    pendingCountQuery ?? Promise.resolve({ count: 0 }),
+    recentReportsQuery ?? Promise.resolve({ data: [] }),
+    approvedReportsQuery ?? Promise.resolve({ data: null }),
+    submittedSummariesQuery ?? Promise.resolve({ data: null }),
+    workerInfoPromise ?? Promise.resolve(null),
+    clientSummariesQuery ?? Promise.resolve({ data: null }),
+  ])
+  const pendingCount = pendingCountResult.count ?? 0
+  const recentReports = recentReportsResult.data ?? []
+
+  // 未取りまとめ報告の集計
+  let unsummarizedItems: Array<{ siteId: string; siteName: string; reportDate: string; reportCount: number }> = []
+  if (isManagerOrAdmin && approvedResult.data && approvedResult.data.length > 0) {
+    const submittedSet = new Set(
+      (summariesResult?.data ?? []).map((s: { site_id: string; report_date: string }) => `${s.site_id}_${s.report_date}`)
+    )
+    const countMap = new Map<string, { siteId: string; siteName: string; reportDate: string; count: number }>()
+    for (const r of approvedResult.data) {
+      const key = `${r.site_id}_${r.report_date}`
+      if (submittedSet.has(key)) continue
+      const existing = countMap.get(key)
+      if (existing) {
+        existing.count++
+      } else {
+        const siteName = (r.sites as unknown as { name: string } | null)?.name ?? '不明な現場'
+        countMap.set(key, { siteId: r.site_id as string, siteName, reportDate: r.report_date as string, count: 1 })
+      }
     }
+    unsummarizedItems = Array.from(countMap.values())
+      .sort((a, b) => b.reportDate.localeCompare(a.reportDate))
+      .slice(0, 10)
+      .map((item) => ({ siteId: item.siteId, siteName: item.siteName, reportDate: item.reportDate, reportCount: item.count }))
+  }
+
+  // 職人情報の取得
+  let workerTodaySites: Array<{ id: string; name: string; address: string | null }> = []
+  if (workerInfo) {
+    workerTodaySites = workerInfo.todaySites.map((s) => ({ id: s.id, name: s.name, address: s.address }))
   }
 
   const greeting = isClient
@@ -146,23 +176,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       ? '現場の進捗を管理しましょう'
       : '今日の作業を報告しましょう'
 
-  // クライアント向け: 最近のサマリーを取得
-  let recentSummaries: Array<{ id: string; siteName: string; date: string; status: string }> = []
-  if (isClient && accessContext.accessibleSiteIds && accessContext.accessibleSiteIds.length > 0) {
-    const { data: summaries } = await supabase
-      .from('client_report_summaries')
-      .select('id, report_date, status, sites(name)')
-      .in('site_id', accessContext.accessibleSiteIds)
-      .in('status', ['submitted', 'client_confirmed'])
-      .order('report_date', { ascending: false })
-      .limit(5)
-    recentSummaries = (summaries ?? []).map((s) => ({
-      id: s.id,
-      siteName: (s.sites as unknown as { name: string } | null)?.name ?? '不明な現場',
-      date: s.report_date,
-      status: s.status,
-    }))
-  }
+  // クライアント向け: 最近のサマリーを取得（Promise.allで並列取得済み）
+  const recentSummaries = (clientSummariesResult?.data ?? []).map((s: { id: string; report_date: string; status: string; sites: unknown }) => ({
+    id: s.id,
+    siteName: (s.sites as { name: string } | null)?.name ?? '不明な現場',
+    date: s.report_date,
+    status: s.status,
+  }))
 
   // グループ化して重複カードを排除（ホームでは site_id + report_date でまとめる）
   const recentGrouped = new Map<string, { id: string; site: string; date: string; status: string; statusLabel: string }>()
@@ -218,12 +238,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               </Link>
             ))}
           </div>
-          {workerAdvice && (
-            <div className="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
-              <Sparkles size={14} className="text-amber-400 shrink-0 mt-0.5" />
-              <p className="text-[12px] text-amber-700 leading-relaxed">{workerAdvice}</p>
-            </div>
-          )}
         </div>
       )}
 

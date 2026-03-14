@@ -26,8 +26,8 @@ interface PageProps {
 export default async function CalendarPage({ searchParams }: PageProps) {
   const { month, status } = await searchParams;
   const supabase = await createClient();
-  const { user, role: userRole } = await requireUserContext();
-  const siteContext = await getAccessibleSiteContext(user.id);
+  const { user, role: userRole, companyId } = await requireUserContext();
+  const siteContext = await getAccessibleSiteContext(user.id, userRole, companyId);
   const statusFilter =
     status === "completed" ? "completed" : status === "all" ? "all" : "active";
 
