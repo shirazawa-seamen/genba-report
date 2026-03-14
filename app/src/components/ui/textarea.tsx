@@ -8,7 +8,7 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
   showCharCount?: boolean;
 }
 
-export function Textarea({
+export const Textarea = React.memo(function Textarea({
   label,
   error,
   helperText,
@@ -67,4 +67,4 @@ export function Textarea({
       </div>
     </div>
   );
-}
+});

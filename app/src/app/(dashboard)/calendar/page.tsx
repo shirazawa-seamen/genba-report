@@ -1,5 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
-import { CalendarView } from "./calendar-view";
+import dynamic from "next/dynamic";
+
+const CalendarView = dynamic(
+  () => import("./calendar-view").then((m) => ({ default: m.CalendarView })),
+  {
+    loading: () => (
+      <div className="p-5 space-y-4">
+        <div className="h-10 w-56 bg-gray-200 rounded-lg animate-pulse" />
+        <div className="grid grid-cols-7 gap-1">
+          {[...Array(35)].map((_, i) => (
+            <div key={i} className="h-20 bg-gray-200 rounded animate-pulse" />
+          ))}
+        </div>
+      </div>
+    ),
+  }
+);
 import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
 import { getAccessibleSiteContext } from "@/lib/siteAccess";
 

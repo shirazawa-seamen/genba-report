@@ -8,7 +8,21 @@ import {
 } from "lucide-react";
 import { getAccessibleSiteContext } from "@/lib/siteAccess";
 import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
-import { SummaryList, type SummaryItem } from "./summary-list";
+import dynamic from "next/dynamic";
+import type { SummaryItem } from "./summary-list";
+
+const SummaryList = dynamic(
+  () => import("./summary-list").then((m) => ({ default: m.SummaryList })),
+  {
+    loading: () => (
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-24 bg-gray-200 rounded-xl animate-pulse" />
+        ))}
+      </div>
+    ),
+  }
+);
 
 interface PageProps {
   searchParams: Promise<{ status?: string; site?: string }>;

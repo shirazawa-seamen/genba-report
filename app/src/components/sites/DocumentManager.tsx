@@ -295,7 +295,6 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
         onClose();
       } catch (err) {
         setError("アップロード中にエラーが発生しました");
-        console.error(err);
       }
     });
   };

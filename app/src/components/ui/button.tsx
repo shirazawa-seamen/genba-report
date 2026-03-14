@@ -29,7 +29,7 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: "min-h-[48px] px-6 text-[15px] rounded-xl gap-2.5",
 };
 
-export function Button({
+export const Button = React.memo(function Button({
   variant = "primary",
   size = "md",
   loading = false,
@@ -70,4 +70,4 @@ export function Button({
       {children}
     </button>
   );
-}
+});

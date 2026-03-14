@@ -13,7 +13,7 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   placeholder?: string;
 }
 
-export function Select({
+export const Select = React.memo(function Select({
   label,
   options,
   error,
@@ -73,4 +73,4 @@ export function Select({
       )}
     </div>
   );
-}
+});

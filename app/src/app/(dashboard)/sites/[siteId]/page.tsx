@@ -12,15 +12,29 @@ import {
 } from "lucide-react";
 import type { Process, Site } from "@/lib/types";
 import { SetupCheckList } from "@/components/sites/SetupCheckList";
-import { DocumentManager } from "@/components/sites/DocumentManager";
-import { MaterialManager } from "@/components/sites/MaterialManager";
+import dynamic from "next/dynamic";
 import { SiteMemberManager } from "@/components/sites/SiteMemberManager";
-import { ProcessManager } from "@/components/sites/ProcessManager";
 import { CompleteSiteButton } from "./CompleteSiteButton";
 import { listProcessCategories } from "@/lib/processCategories";
 import { listProcessTemplates } from "@/lib/processTemplates";
-import { SiteDetailEditSession } from "./SiteDetailEditSession";
 import { InviteSiteMembersButton } from "./InviteSiteMembersButton";
+
+const DocumentManager = dynamic(
+  () => import("@/components/sites/DocumentManager").then((m) => ({ default: m.DocumentManager })),
+  { loading: () => <div className="h-40 bg-gray-200 rounded-xl animate-pulse" /> }
+);
+const MaterialManager = dynamic(
+  () => import("@/components/sites/MaterialManager").then((m) => ({ default: m.MaterialManager })),
+  { loading: () => <div className="h-40 bg-gray-200 rounded-xl animate-pulse" /> }
+);
+const ProcessManager = dynamic(
+  () => import("@/components/sites/ProcessManager").then((m) => ({ default: m.ProcessManager })),
+  { loading: () => <div className="h-40 bg-gray-200 rounded-xl animate-pulse" /> }
+);
+const SiteDetailEditSession = dynamic(
+  () => import("./SiteDetailEditSession").then((m) => ({ default: m.SiteDetailEditSession })),
+  { loading: () => <div className="h-40 bg-gray-200 rounded-xl animate-pulse" /> }
+);
 import { listCompanies } from "@/lib/companies";
 import { canAccessSite } from "@/lib/siteAccess";
 

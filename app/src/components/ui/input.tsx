@@ -7,7 +7,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   success?: boolean;
 }
 
-export function Input({
+export const Input = React.memo(function Input({
   label,
   error,
   helperText,
@@ -58,4 +58,4 @@ export function Input({
       )}
     </div>
   );
-}
+});
