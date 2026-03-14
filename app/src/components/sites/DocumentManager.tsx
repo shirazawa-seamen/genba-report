@@ -14,6 +14,7 @@ import {
   FileCheck,
   CalendarRange,
   Package,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -78,12 +79,19 @@ interface DocumentManagerProps {
   canManage?: boolean;
 }
 
+function isPdfFile(fileName: string): boolean {
+  return fileName.toLowerCase().endsWith(".pdf");
+}
+
 export function DocumentManager({ siteId, canManage = false }: DocumentManagerProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewTitle, setPreviewTitle] = useState<string>("");
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null);
 
   const fetchDocuments = useCallback(async () => {
     const result = await getSiteDocuments(siteId);
@@ -161,6 +169,28 @@ export function DocumentManager({ siteId, canManage = false }: DocumentManagerPr
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {isPdfFile(doc.file_name) && (
+                    <button
+                      onClick={async () => {
+                        setPreviewLoading(doc.id);
+                        const result = await getDownloadUrl(doc.storage_path);
+                        if (result.success && result.url) {
+                          setPreviewTitle(doc.title);
+                          setPreviewUrl(result.url);
+                        }
+                        setPreviewLoading(null);
+                      }}
+                      disabled={previewLoading === doc.id}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-50 text-[#0EA5E9] hover:bg-cyan-100 transition-colors disabled:opacity-50"
+                      title="プレビュー"
+                    >
+                      {previewLoading === doc.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Eye size={14} />
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={async () => {
                       setDownloadingId(doc.id);
@@ -216,6 +246,17 @@ export function DocumentManager({ siteId, canManage = false }: DocumentManagerPr
             setIsLoading(true);
             setShowUploadModal(false);
             await fetchDocuments();
+          }}
+        />
+      )}
+
+      {previewUrl && (
+        <PdfPreviewModal
+          url={previewUrl}
+          title={previewTitle}
+          onClose={() => {
+            setPreviewUrl(null);
+            setPreviewTitle("");
           }}
         />
       )}
@@ -388,6 +429,63 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
             </Button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+
+  if (typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
+}
+
+interface PdfPreviewModalProps {
+  url: string;
+  title: string;
+  onClose: () => void;
+}
+
+function PdfPreviewModal({ url, title, onClose }: PdfPreviewModalProps) {
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col bg-black/60"
+      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur-sm border-b border-gray-200">
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText size={16} className="text-[#0EA5E9] shrink-0" />
+          <span className="text-[14px] font-semibold text-gray-800 truncate">
+            {title}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => window.open(url, "_blank")}
+            className="flex h-9 items-center gap-1.5 rounded-lg bg-gray-100 px-3 text-[12px] font-medium text-gray-600 hover:bg-gray-200 transition-colors"
+          >
+            <Download size={14} />
+            ダウンロード
+          </button>
+          <button
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* PDF Viewer */}
+      <div className="flex-1 min-h-0">
+        <iframe
+          src={`${url}#toolbar=1&navpanes=0`}
+          className="w-full h-full border-0"
+          title={`PDF プレビュー: ${title}`}
+        />
       </div>
     </div>
   );

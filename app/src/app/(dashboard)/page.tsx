@@ -17,22 +17,20 @@ import { getAccessibleSiteContext } from '@/lib/siteAccess'
 import { getWorkerTodayInfo } from './worker-advice-action'
 
 interface PageProps {
-  searchParams: Promise<{ pendingScope?: string }>
+  searchParams: Promise<Record<string, string | undefined>>
 }
 
 const EMPTY_SITE_ID = '00000000-0000-0000-0000-000000000000'
 
 export default async function DashboardPage({ searchParams }: PageProps) {
-  const { pendingScope: pendingScopeParam } = await searchParams
+  await searchParams
   const supabase = await createClient()
   const { user, role: userRole, companyId, displayName } = await requireUserContext()
   const isAdmin = userRole === 'admin'
   const isManager = userRole === 'manager'
   const isClient = userRole === 'client'
   const accessContext = await getAccessibleSiteContext(user.id, userRole, companyId)
-  const pendingScope = isManager && pendingScopeParam === 'mine' ? 'mine' : 'all'
-  const pendingSiteIds =
-    pendingScope === 'mine' ? accessContext.assignedSiteIds : accessContext.accessibleSiteIds
+  const pendingSiteIds = accessContext.accessibleSiteIds
 
   let siteCountQuery = supabase.from('sites').select('id', { count: 'exact', head: true }).eq('status', 'active')
   if (accessContext.accessibleSiteIds) {
@@ -269,37 +267,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 </div>
               </div>
               <Link
-                href={isManager && pendingScope === 'mine' ? '/reports?status=submitted&scope=mine' : '/reports?status=submitted'}
+                href="/reports?status=submitted"
                 className="inline-flex items-center gap-1 text-[12px] font-medium text-amber-700/70 transition-colors hover:text-amber-700"
               >
                 一覧へ
                 <ArrowRight size={14} />
               </Link>
             </div>
-            {isManager && (
-              <div className="flex gap-2">
-                <Link
-                  href="/?pendingScope=all"
-                  className={`inline-flex min-h-[34px] items-center rounded-full px-3 text-[12px] font-medium transition-colors ${
-                    pendingScope === 'all'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-white/70 text-amber-700/60 hover:bg-white'
-                  }`}
-                >
-                  全体
-                </Link>
-                <Link
-                  href="/?pendingScope=mine"
-                  className={`inline-flex min-h-[34px] items-center rounded-full px-3 text-[12px] font-medium transition-colors ${
-                    pendingScope === 'mine'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-white/70 text-amber-700/60 hover:bg-white'
-                  }`}
-                >
-                  自分の現場
-                </Link>
-              </div>
-            )}
           </div>
         )}
 
