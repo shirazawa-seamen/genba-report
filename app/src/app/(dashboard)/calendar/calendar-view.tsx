@@ -278,7 +278,7 @@ export function CalendarView({
                             <Circle size={8} className="shrink-0" />
                           )}
                           <span className="truncate hidden md:inline">
-                            {meta.siteNumber || meta.name}
+                            {meta.name}
                           </span>
                         </div>
                       );
@@ -888,16 +888,13 @@ function GanttChart({
               >
                 {siteColCollapsed ? (
                       <span className="w-full truncate text-[10px] font-bold text-center" style={{ color }}>
-                    {(site.siteNumber || site.name).slice(0, 2)}
+                    {site.name.slice(0, 2)}
                   </span>
                 ) : (
                   <>
                       <span className="w-full truncate text-[11px] md:text-[12px] font-medium" style={{ color }}>
-                      {site.siteNumber || site.name}
+                      {site.name}
                     </span>
-                    {site.siteNumber && (
-                      <span className="text-[9px] md:text-[10px] text-gray-400 truncate w-full">{site.name}</span>
-                    )}
                   </>
                 )}
               </Link>
@@ -995,7 +992,7 @@ function GanttChart({
 
                       {/* Label */}
                       <span className="relative z-10 truncate whitespace-nowrap select-none px-1.5 text-[9px] md:text-[10px] font-medium" style={{ color }}>
-                        {site.siteNumber || site.name}
+                        {site.name}
                         {bar.reportedDays > 0 && (
                           <span className="ml-1 opacity-60">({bar.reportedDays}/{bar.totalDays})</span>
                         )}
