@@ -337,7 +337,8 @@ export function UserManagement({ users, companies }: UserManagementProps) {
                   isActive ? "border-gray-200" : "border-red-200 opacity-60"
                 }`}
               >
-                <div className="flex items-center gap-3.5">
+                {/* Top row: avatar + name + active toggle */}
+                <div className="flex items-center gap-3 mb-3">
                   <div
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
                       isActive
@@ -354,59 +355,15 @@ export function UserManagement({ users, companies }: UserManagementProps) {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium text-gray-700">
+                    <p className="truncate text-[14px] font-medium text-gray-700">
                       {user.full_name || user.email || "Unknown"}
                     </p>
-                    <div className="flex items-center gap-2 text-[11px] text-gray-400">
-                      {user.email ? (
-                        <span className="flex truncate items-center gap-1">
-                          <Mail size={10} />
-                          {user.email}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-gray-400">
-                      {user.company_name || "会社未設定"}
-                    </p>
-                  </div>
-
-                  <div className="relative shrink-0">
-                    <select
-                      value={user.role}
-                      onChange={(event) => handleRoleChange(user.id, event.target.value)}
-                      disabled={isPending}
-                      className="min-h-[36px] appearance-none rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-7 text-[12px] text-gray-600 focus:border-[#0EA5E9]/50 focus:outline-none disabled:opacity-50"
-                    >
-                      {ROLE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={12}
-                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
-                  </div>
-
-                  <div className="relative shrink-0">
-                    <select
-                      value={user.company_id ?? ""}
-                      onChange={(event) => handleCompanyChange(user.id, event.target.value)}
-                      disabled={isPending}
-                      className="min-h-[36px] min-w-[140px] appearance-none rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-7 text-[12px] text-gray-600 focus:border-[#0EA5E9]/50 focus:outline-none disabled:opacity-50"
-                    >
-                      <option value="">会社未設定</option>
-                      {companies.map((company) => (
-                        <option key={company.id} value={company.id}>
-                          {company.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      size={12}
-                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                    />
+                    {user.email ? (
+                      <p className="flex truncate items-center gap-1 text-[11px] text-gray-400">
+                        <Mail size={10} />
+                        {user.email}
+                      </p>
+                    ) : null}
                   </div>
 
                   <button
@@ -421,6 +378,48 @@ export function UserManagement({ users, companies }: UserManagementProps) {
                   >
                     {isActive ? <UserCheck size={16} /> : <UserX size={16} />}
                   </button>
+                </div>
+
+                {/* Bottom row: role + company selects */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <select
+                      value={user.role}
+                      onChange={(event) => handleRoleChange(user.id, event.target.value)}
+                      disabled={isPending}
+                      className="w-full min-h-[36px] appearance-none rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-7 text-[12px] text-gray-600 focus:border-[#0EA5E9]/50 focus:outline-none disabled:opacity-50"
+                    >
+                      {ROLE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={12}
+                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                  </div>
+
+                  <div className="relative flex-1">
+                    <select
+                      value={user.company_id ?? ""}
+                      onChange={(event) => handleCompanyChange(user.id, event.target.value)}
+                      disabled={isPending}
+                      className="w-full min-h-[36px] appearance-none rounded-lg border border-gray-200 bg-gray-50 pl-3 pr-7 text-[12px] text-gray-600 focus:border-[#0EA5E9]/50 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="">会社未設定</option>
+                      {companies.map((company) => (
+                        <option key={company.id} value={company.id}>
+                          {company.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={12}
+                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                    />
+                  </div>
                 </div>
               </div>
             );
