@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  ChevronRight,
+  CornerDownRight,
   Pencil,
   Plus,
   Save,
@@ -13,6 +15,8 @@ import {
 } from "lucide-react";
 import type { ProcessCategoryRecord } from "@/lib/processCategories";
 import type { ProcessTemplateRecord } from "@/lib/processTemplates";
+import { buildTemplateTree } from "@/lib/processTemplates";
+import type { ProcessTemplateTreeNode } from "@/lib/processTemplates";
 import {
   createProcessCategory,
   deleteProcessCategory,
@@ -107,8 +111,8 @@ function getNextProcessCode(
   };
 }
 
-function groupParallelItems(items: ProcessTemplateRecord[]) {
-  const groups: Array<{ key: string; items: ProcessTemplateRecord[] }> = [];
+function groupParallelItems(items: ProcessTemplateTreeNode[]) {
+  const groups: Array<{ key: string; items: ProcessTemplateTreeNode[] }> = [];
 
   for (const item of items) {
     const last = groups[groups.length - 1];
@@ -144,12 +148,15 @@ export function ProcessTemplateManager({
   const [addCategory, setAddCategory] = useState(initialCategories[0]?.value ?? "");
   const [addName, setAddName] = useState("");
   const [addAsParallel, setAddAsParallel] = useState(false);
+  const [addParentTemplateId, setAddParentTemplateId] = useState<string>("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPhaseKey, setEditPhaseKey] = useState<PhaseKey>("A");
   const [editCode, setEditCode] = useState("");
   const [editCategory, setEditCategory] = useState(initialCategories[0]?.value ?? "");
   const [editName, setEditName] = useState("");
   const [editParallelGroup, setEditParallelGroup] = useState("");
+  const [editParentTemplateId, setEditParentTemplateId] = useState<string>("");
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
 
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
@@ -159,11 +166,36 @@ export function ProcessTemplateManager({
   const categoryLabelMap = Object.fromEntries(
     categories.map((category) => [category.value, category.label])
   );
-  const phaseSections = PHASE_OPTIONS.map((phase) => ({
-    ...phase,
-    items: templates.filter((template) => template.phaseKey === phase.value),
-  }));
+
+  // ルートテンプレート（親がないもの）をセレクト用に抽出
+  const rootTemplates = useMemo(
+    () => templates.filter((t) => t.parentTemplateId === null),
+    [templates]
+  );
+
+  // ツリー構造をフェーズ別に構築
+  const phaseSections = useMemo(() => {
+    const tree = buildTemplateTree(templates);
+    return PHASE_OPTIONS.map((phase) => ({
+      ...phase,
+      items: tree.filter((node) => node.phaseKey === phase.value),
+      allItems: templates.filter((t) => t.phaseKey === phase.value),
+    }));
+  }, [templates]);
+
   const addCodePreview = getNextProcessCode(templates, addPhaseKey, addAsParallel);
+
+  const toggleExpanded = (parentId: string) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
+  };
 
   const handleCreateCategory = () => {
     startTransition(async () => {
@@ -218,6 +250,7 @@ export function ProcessTemplateManager({
         category: addCategory,
         name: addName,
         parallelGroup: addCodePreview.parallelGroup,
+        parentTemplateId: addParentTemplateId || null,
       });
       if (!result.success || !result.templates) {
         showMessage("error", result.error || "追加に失敗しました");
@@ -226,8 +259,22 @@ export function ProcessTemplateManager({
       setTemplates(result.templates);
       setAddName("");
       setAddAsParallel(false);
+      setAddParentTemplateId("");
       showMessage("success", "標準工程を追加しました");
     });
+  };
+
+  const handleCreateChild = (parentId: string) => {
+    // 親のフェーズとカテゴリを引き継いで追加フォームをセットアップ
+    const parent = templates.find((t) => t.id === parentId);
+    if (!parent) return;
+    setAddPhaseKey(parent.phaseKey);
+    setAddCategory(parent.category);
+    setAddParentTemplateId(parentId);
+    setAddName("");
+    setAddAsParallel(false);
+    // 追加フォームまでスクロール
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleStartEdit = (template: ProcessTemplateRecord) => {
@@ -237,6 +284,7 @@ export function ProcessTemplateManager({
     setEditCategory(template.category);
     setEditName(template.name);
     setEditParallelGroup(template.parallelGroup?.toString() ?? "");
+    setEditParentTemplateId(template.parentTemplateId ?? "");
   };
 
   const handleSaveEdit = () => {
@@ -249,6 +297,7 @@ export function ProcessTemplateManager({
         category: editCategory,
         name: editName,
         parallelGroup: editParallelGroup ? Number(editParallelGroup) : null,
+        parentTemplateId: editParentTemplateId || null,
       });
       if (!result.success || !result.templates) {
         showMessage("error", result.error || "更新に失敗しました");
@@ -283,6 +332,209 @@ export function ProcessTemplateManager({
     });
   };
 
+  /** 単一テンプレートカードの表示（親・子共通） */
+  function renderTemplateCard(
+    template: ProcessTemplateTreeNode,
+    sectionLabel: string,
+    isChild: boolean
+  ) {
+    const index = templates.findIndex((item) => item.id === template.id);
+    const isEditing = editingId === template.id;
+    const hasChildren = template.children.length > 0;
+    const isExpanded = expandedParents.has(template.id);
+
+    return (
+      <div key={template.id}>
+        <div
+          className={`rounded-xl border p-4 ${
+            isChild
+              ? "border-gray-100 bg-gray-50/50 ml-6"
+              : "border-gray-200 bg-gray-50"
+          }`}
+        >
+          {isEditing ? (
+            <div className="grid gap-2">
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="relative">
+                  <select
+                    value={editPhaseKey}
+                    onChange={(event) => setEditPhaseKey(event.target.value as PhaseKey)}
+                    className="min-h-[40px] w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 pr-10 text-[13px] font-medium text-gray-700 focus:outline-none"
+                  >
+                    {PHASE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-300" />
+                </div>
+                <input
+                  value={editCode}
+                  onChange={(event) => setEditCode(event.target.value)}
+                  className="min-h-[40px] rounded-lg border border-gray-200 bg-white px-3 text-[13px] text-gray-700 focus:outline-none"
+                />
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="relative">
+                  <select
+                    value={editCategory}
+                    onChange={(event) => setEditCategory(event.target.value)}
+                    className="min-h-[40px] w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 pr-10 text-[13px] font-medium text-gray-700 focus:outline-none"
+                  >
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.value}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-300" />
+                </div>
+                <input
+                  value={editParallelGroup}
+                  onChange={(event) => setEditParallelGroup(event.target.value)}
+                  placeholder="並行グループ番号"
+                  className="min-h-[40px] rounded-lg border border-gray-200 bg-white px-3 text-[13px] text-gray-700 focus:outline-none"
+                />
+              </div>
+              <div className="relative">
+                <select
+                  value={editParentTemplateId}
+                  onChange={(event) => setEditParentTemplateId(event.target.value)}
+                  className="min-h-[40px] w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 pr-10 text-[13px] font-medium text-gray-700 focus:outline-none"
+                >
+                  <option value="">なし（ルート工程）</option>
+                  {rootTemplates
+                    .filter((t) => t.id !== editingId)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.processCode} {t.name}
+                      </option>
+                    ))}
+                </select>
+                <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-300" />
+              </div>
+              <input
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                className="min-h-[40px] rounded-lg border border-gray-200 bg-white px-3 text-[13px] text-gray-700 focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={!editCode.trim() || !editCategory || !editName.trim() || isPending}
+                  className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-lg bg-[#0EA5E9] px-3 text-[12px] font-semibold text-white disabled:opacity-50"
+                >
+                  <Save size={12} />
+                  保存
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingId(null)}
+                  className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 text-[12px] text-gray-500"
+                >
+                  <X size={12} />
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  {isChild && (
+                    <CornerDownRight size={12} className="text-gray-300 flex-shrink-0" />
+                  )}
+                  {!isChild && hasChildren && (
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(template.id)}
+                      className="rounded p-0.5 text-gray-400 hover:text-[#0EA5E9]"
+                    >
+                      {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    </button>
+                  )}
+                  <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-[#0EA5E9]">
+                    {template.processCode}
+                  </span>
+                  <span className="text-[11px] text-gray-400">
+                    {categoryLabelMap[template.category] ?? template.category}
+                  </span>
+                  {!isChild && hasChildren && (
+                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-500">
+                      子工程 {template.children.length}件
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-[14px] font-semibold text-gray-800">{template.name}</p>
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
+                  <span>{sectionLabel}</span>
+                  <span>順番 {template.sortOrder}</span>
+                  {template.parallelGroup !== null && <span>並行 {template.parallelGroup}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {!isChild && (
+                  <button
+                    type="button"
+                    onClick={() => handleCreateChild(template.id)}
+                    disabled={isPending}
+                    className="rounded-lg p-2 text-gray-300 hover:bg-violet-50 hover:text-violet-500"
+                    title="子工程を追加"
+                  >
+                    <Plus size={14} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleMove(template.id, "up")}
+                  disabled={index === 0 || isPending}
+                  className="rounded-lg p-2 text-gray-300 hover:bg-white hover:text-[#0EA5E9] disabled:opacity-30"
+                >
+                  <ArrowUp size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMove(template.id, "down")}
+                  disabled={index === templates.length - 1 || isPending}
+                  className="rounded-lg p-2 text-gray-300 hover:bg-white hover:text-[#0EA5E9] disabled:opacity-30"
+                >
+                  <ArrowDown size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStartEdit(template)}
+                  disabled={isPending}
+                  className="rounded-lg p-2 text-gray-300 hover:bg-white hover:text-[#0EA5E9]"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(template.id)}
+                  disabled={isPending}
+                  className="rounded-lg p-2 text-gray-300 hover:bg-red-50 hover:text-red-400"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 子工程の展開表示 */}
+        {!isChild && hasChildren && isExpanded && (
+          <div className="mt-2 space-y-2">
+            {template.children.map((child) =>
+              renderTemplateCard(child, sectionLabel, true)
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -315,6 +567,11 @@ export function ProcessTemplateManager({
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-[14px] font-semibold text-gray-800">標準工程を追加</p>
+            {addParentTemplateId && (
+              <p className="mt-1 text-[12px] text-violet-500">
+                子工程として追加（親: {templates.find((t) => t.id === addParentTemplateId)?.name ?? "不明"}）
+              </p>
+            )}
           </div>
           <span className="text-[15px] font-semibold text-[#0EA5E9]">
             {addCodePreview.processCode}
@@ -362,6 +619,24 @@ export function ProcessTemplateManager({
               工程種別を編集する&gt;
             </button>
           </label>
+          <label className="space-y-1.5">
+            <span className="text-[12px] font-medium text-gray-500">親工程</span>
+            <div className="relative">
+              <select
+                value={addParentTemplateId}
+                onChange={(event) => setAddParentTemplateId(event.target.value)}
+                className="min-h-[44px] w-full appearance-none rounded-2xl border border-gray-200 bg-white px-4 pr-11 text-[14px] font-medium text-gray-700 shadow-sm focus:outline-none focus:border-[#0EA5E9]/50"
+              >
+                <option value="">なし（ルート工程）</option>
+                {rootTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.processCode} {t.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={18} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300" />
+            </div>
+          </label>
           <div className="hidden md:block" />
           <label className="space-y-1.5 md:col-span-2">
             <span className="text-[12px] font-medium text-gray-500">工程名</span>
@@ -382,15 +657,27 @@ export function ProcessTemplateManager({
             <span>直前工程と並行で追加する</span>
           </label>
         </div>
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={!addCategory || !addName.trim() || isPending}
-          className="mt-4 inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-[#0EA5E9] px-5 text-[13px] font-semibold text-white disabled:opacity-50"
-        >
-          <Plus size={14} />
-          追加
-        </button>
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={!addCategory || !addName.trim() || isPending}
+            className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl bg-[#0EA5E9] px-5 text-[13px] font-semibold text-white disabled:opacity-50"
+          >
+            <Plus size={14} />
+            追加
+          </button>
+          {addParentTemplateId && (
+            <button
+              type="button"
+              onClick={() => setAddParentTemplateId("")}
+              className="inline-flex min-h-[44px] items-center justify-center gap-1 rounded-xl border border-gray-300 px-4 text-[12px] text-gray-500"
+            >
+              <X size={12} />
+              親工程の選択を解除
+            </button>
+          )}
+        </div>
       </section>
 
       <div className="space-y-5">
@@ -403,7 +690,7 @@ export function ProcessTemplateManager({
                   <h2 className="text-[15px] font-semibold text-gray-800">{section.label}</h2>
                 </div>
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] text-gray-500">
-                  {section.items.length}件
+                  {section.allItems.length}件
                 </span>
               </div>
 
@@ -413,138 +700,9 @@ export function ProcessTemplateManager({
                     key={group.key}
                     className={`grid gap-3 ${group.items.length > 1 ? "md:grid-cols-2" : "grid-cols-1"}`}
                   >
-                    {group.items.map((template) => {
-                      const index = templates.findIndex((item) => item.id === template.id);
-                      const isEditing = editingId === template.id;
-                      return (
-                        <div key={template.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                          {isEditing ? (
-                            <div className="grid gap-2">
-                              <div className="grid gap-2 md:grid-cols-2">
-                                <div className="relative">
-                                  <select
-                                    value={editPhaseKey}
-                                    onChange={(event) => setEditPhaseKey(event.target.value as PhaseKey)}
-                                    className="min-h-[40px] w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 pr-10 text-[13px] font-medium text-gray-700 focus:outline-none"
-                                  >
-                                    {PHASE_OPTIONS.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-300" />
-                                </div>
-                                <input
-                                  value={editCode}
-                                  onChange={(event) => setEditCode(event.target.value)}
-                                  className="min-h-[40px] rounded-lg border border-gray-200 bg-white px-3 text-[13px] text-gray-700 focus:outline-none"
-                                />
-                              </div>
-                              <div className="grid gap-2 md:grid-cols-2">
-                                <div className="relative">
-                                  <select
-                                    value={editCategory}
-                                    onChange={(event) => setEditCategory(event.target.value)}
-                                    className="min-h-[40px] w-full appearance-none rounded-xl border border-gray-200 bg-white px-3 pr-10 text-[13px] font-medium text-gray-700 focus:outline-none"
-                                  >
-                                    {categories.map((category) => (
-                                      <option key={category.id} value={category.value}>
-                                        {category.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-300" />
-                                </div>
-                                <input
-                                  value={editParallelGroup}
-                                  onChange={(event) => setEditParallelGroup(event.target.value)}
-                                  placeholder="並行グループ番号"
-                                  className="min-h-[40px] rounded-lg border border-gray-200 bg-white px-3 text-[13px] text-gray-700 focus:outline-none"
-                                />
-                              </div>
-                              <input
-                                value={editName}
-                                onChange={(event) => setEditName(event.target.value)}
-                                className="min-h-[40px] rounded-lg border border-gray-200 bg-white px-3 text-[13px] text-gray-700 focus:outline-none"
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={handleSaveEdit}
-                                  disabled={!editCode.trim() || !editCategory || !editName.trim() || isPending}
-                                  className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-lg bg-[#0EA5E9] px-3 text-[12px] font-semibold text-white disabled:opacity-50"
-                                >
-                                  <Save size={12} />
-                                  保存
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingId(null)}
-                                  className="inline-flex min-h-[40px] items-center justify-center gap-1 rounded-lg border border-gray-300 px-3 text-[12px] text-gray-500"
-                                >
-                                  <X size={12} />
-                                  取消
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-[#0EA5E9]">
-                                    {template.processCode}
-                                  </span>
-                                  <span className="text-[11px] text-gray-400">
-                                    {categoryLabelMap[template.category] ?? template.category}
-                                  </span>
-                                </div>
-                                <p className="mt-2 text-[14px] font-semibold text-gray-800">{template.name}</p>
-                                <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-400">
-                                  <span>{section.label}</span>
-                                  <span>順番 {template.sortOrder}</span>
-                                  {template.parallelGroup !== null && <span>並行 {template.parallelGroup}</span>}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleMove(template.id, "up")}
-                                  disabled={index === 0 || isPending}
-                                  className="rounded-lg p-2 text-gray-300 hover:bg-white hover:text-[#0EA5E9] disabled:opacity-30"
-                                >
-                                  <ArrowUp size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMove(template.id, "down")}
-                                  disabled={index === templates.length - 1 || isPending}
-                                  className="rounded-lg p-2 text-gray-300 hover:bg-white hover:text-[#0EA5E9] disabled:opacity-30"
-                                >
-                                  <ArrowDown size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEdit(template)}
-                                  disabled={isPending}
-                                  className="rounded-lg p-2 text-gray-300 hover:bg-white hover:text-[#0EA5E9]"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(template.id)}
-                                  disabled={isPending}
-                                  className="rounded-lg p-2 text-gray-300 hover:bg-red-50 hover:text-red-400"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {group.items.map((template) =>
+                      renderTemplateCard(template, section.label, false)
+                    )}
                   </div>
                 ))}
                 {section.items.length === 0 && (

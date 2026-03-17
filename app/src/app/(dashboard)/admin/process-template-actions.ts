@@ -49,6 +49,7 @@ export async function createProcessTemplate(input: {
   category: string;
   name: string;
   parallelGroup: number | null;
+  parentTemplateId?: string | null;
 }) {
   const context = await requireTemplateManager();
   if (!context.supabase) return { success: false, error: context.error };
@@ -66,16 +67,21 @@ export async function createProcessTemplate(input: {
     .limit(1)
     .maybeSingle();
 
+  const insertData: Record<string, unknown> = {
+    phase_key: input.phaseKey,
+    process_code: trimmedCode,
+    category: input.category,
+    name: trimmedName,
+    parallel_group: input.parallelGroup,
+    sort_order: (maxRow?.sort_order ?? 0) + 1,
+  };
+  if (input.parentTemplateId) {
+    insertData.parent_template_id = input.parentTemplateId;
+  }
+
   const { error } = await supabase
     .from("process_templates")
-    .insert({
-      phase_key: input.phaseKey,
-      process_code: trimmedCode,
-      category: input.category,
-      name: trimmedName,
-      parallel_group: input.parallelGroup,
-      sort_order: (maxRow?.sort_order ?? 0) + 1,
-    });
+    .insert(insertData);
 
   if (error) {
     return {
@@ -95,6 +101,7 @@ export async function updateProcessTemplate(input: {
   category: string;
   name: string;
   parallelGroup: number | null;
+  parentTemplateId?: string | null;
 }) {
   const context = await requireTemplateManager();
   if (!context.supabase) return { success: false, error: context.error };
@@ -105,15 +112,20 @@ export async function updateProcessTemplate(input: {
   if (!trimmedCode) return { success: false, error: "工程IDを入力してください" };
   if (!trimmedName) return { success: false, error: "工程名を入力してください" };
 
+  const updateData: Record<string, unknown> = {
+    phase_key: input.phaseKey,
+    process_code: trimmedCode,
+    category: input.category,
+    name: trimmedName,
+    parallel_group: input.parallelGroup,
+  };
+  if (input.parentTemplateId !== undefined) {
+    updateData.parent_template_id = input.parentTemplateId ?? null;
+  }
+
   const { error } = await supabase
     .from("process_templates")
-    .update({
-      phase_key: input.phaseKey,
-      process_code: trimmedCode,
-      category: input.category,
-      name: trimmedName,
-      parallel_group: input.parallelGroup,
-    })
+    .update(updateData)
     .eq("id", input.templateId);
 
   if (error) {
@@ -190,6 +202,60 @@ export async function moveProcessTemplate(input: {
         error: formatTemplateActionError(error.message, "標準工程の並び替えに失敗しました"),
       };
     }
+  }
+
+  await revalidateTemplatePages();
+  return { success: true, templates: await listProcessTemplates() };
+}
+
+export async function bulkCreateChildTemplates(input: {
+  parentTemplateId: string;
+  children: Array<{
+    phaseKey: "A" | "B" | "C" | "D";
+    processCode: string;
+    category: string;
+    name: string;
+    parallelGroup: number | null;
+  }>;
+}) {
+  const context = await requireTemplateManager();
+  if (!context.supabase) return { success: false, error: context.error };
+  const supabase = context.supabase;
+
+  if (input.children.length === 0) {
+    return { success: false, error: "子工程が指定されていません" };
+  }
+
+  const { data: maxRow } = await supabase
+    .from("process_templates")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let nextSortOrder = (maxRow?.sort_order ?? 0) + 1;
+
+  const rows = input.children.map((child) => {
+    const row = {
+      phase_key: child.phaseKey,
+      process_code: child.processCode.trim(),
+      category: child.category,
+      name: child.name.trim(),
+      parallel_group: child.parallelGroup,
+      sort_order: nextSortOrder,
+      parent_template_id: input.parentTemplateId,
+    };
+    nextSortOrder += 1;
+    return row;
+  });
+
+  const { error } = await supabase.from("process_templates").insert(rows);
+
+  if (error) {
+    return {
+      success: false,
+      error: formatTemplateActionError(error.message, "子工程の一括追加に失敗しました"),
+    };
   }
 
   await revalidateTemplatePages();

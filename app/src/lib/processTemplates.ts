@@ -9,13 +9,18 @@ export interface ProcessTemplateRecord {
   name: string;
   parallelGroup: number | null;
   sortOrder: number;
+  parentTemplateId: string | null;
+}
+
+export interface ProcessTemplateTreeNode extends ProcessTemplateRecord {
+  children: ProcessTemplateTreeNode[];
 }
 
 export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("process_templates")
-    .select("id, phase_key, process_code, category, name, parallel_group, sort_order")
+    .select("id, phase_key, process_code, category, name, parallel_group, sort_order, parent_template_id")
     .order("sort_order");
 
   if (error) {
@@ -33,6 +38,7 @@ export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
         name: item.name,
         parallelGroup: item.parallelGroup,
         sortOrder: item.sortOrder,
+        parentTemplateId: item.parentTemplateId,
       }));
     }
     throw error;
@@ -46,5 +52,34 @@ export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
     name: item.name,
     parallelGroup: item.parallel_group,
     sortOrder: item.sort_order,
+    parentTemplateId: item.parent_template_id ?? null,
   }));
+}
+
+/**
+ * フラットなテンプレートリストをツリー構造に変換する。
+ * parentTemplateId が null のものがルートノードとなる。
+ */
+export function buildTemplateTree(
+  templates: ProcessTemplateRecord[]
+): ProcessTemplateTreeNode[] {
+  const nodeMap = new Map<string, ProcessTemplateTreeNode>();
+  const roots: ProcessTemplateTreeNode[] = [];
+
+  // まず全ノードを作成
+  for (const t of templates) {
+    nodeMap.set(t.id, { ...t, children: [] });
+  }
+
+  // 親子関係を構築
+  for (const t of templates) {
+    const node = nodeMap.get(t.id)!;
+    if (t.parentTemplateId && nodeMap.has(t.parentTemplateId)) {
+      nodeMap.get(t.parentTemplateId)!.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  return roots;
 }
