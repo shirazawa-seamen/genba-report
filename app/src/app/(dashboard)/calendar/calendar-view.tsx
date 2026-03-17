@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Calendar,
   Building2,
   CheckCircle2,
@@ -111,47 +112,39 @@ export function CalendarView({
           </div>
         </div>
 
-        {/* Month Navigation + View Toggle */}
-        <div className="flex items-center justify-between mb-5">
-          <Link
-            href={`/calendar?month=${prevMonth}&status=${statusFilter}`}
-            className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <ChevronLeft size={18} />
-          </Link>
-          <div className="flex items-center gap-3">
+        {/* Month Navigation Row */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/calendar?month=${prevMonth}&status=${statusFilter}`}
+              className="flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <ChevronLeft size={16} />
+            </Link>
             <h2 className="text-[18px] font-bold text-gray-900">{monthLabel}</h2>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-              <Link
-                href={`/calendar?month=${monthFirstDate.slice(0, 7)}&status=active`}
-                className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                  statusFilter === "active"
-                    ? "bg-cyan-100 text-[#0EA5E9]"
-                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                }`}
+            <Link
+              href={`/calendar?month=${nextMonth}&status=${statusFilter}`}
+              className="flex items-center justify-center w-9 h-9 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <ChevronRight size={16} />
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Status filter dropdown */}
+            <div className="relative">
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  const url = `/calendar?month=${monthFirstDate.slice(0, 7)}&status=${e.target.value}`;
+                  window.location.href = url;
+                }}
+                className="appearance-none min-h-[36px] rounded-xl border border-gray-200 bg-white pl-3 pr-8 text-[12px] font-medium text-gray-600 focus:outline-none focus:border-[#0EA5E9]/50"
               >
-                稼働中
-              </Link>
-              <Link
-                href={`/calendar?month=${monthFirstDate.slice(0, 7)}&status=completed`}
-                className={`border-l border-gray-200 px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                  statusFilter === "completed"
-                    ? "bg-cyan-100 text-[#0EA5E9]"
-                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                完了済み
-              </Link>
-              <Link
-                href={`/calendar?month=${monthFirstDate.slice(0, 7)}&status=all`}
-                className={`border-l border-gray-200 px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                  statusFilter === "all"
-                    ? "bg-cyan-100 text-[#0EA5E9]"
-                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                }`}
-              >
-                すべて
-              </Link>
+                <option value="active">稼働中</option>
+                <option value="completed">完了済み</option>
+                <option value="all">すべて</option>
+              </select>
+              <ChevronDown size={14} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300" />
             </div>
             {/* View toggle */}
             <div className="flex rounded-lg border border-gray-200 overflow-hidden">
@@ -164,7 +157,6 @@ export function CalendarView({
                 }`}
               >
                 <Calendar size={12} />
-                <span className="hidden sm:inline">カレンダー</span>
               </button>
               <button
                 onClick={() => setViewMode("gantt")}
@@ -175,16 +167,9 @@ export function CalendarView({
                 }`}
               >
                 <BarChart3 size={12} />
-                <span className="hidden sm:inline">ガント</span>
               </button>
             </div>
           </div>
-          <Link
-            href={`/calendar?month=${nextMonth}&status=${statusFilter}`}
-            className="flex items-center justify-center w-10 h-10 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <ChevronRight size={18} />
-          </Link>
         </div>
 
         {/* ===== Gantt Chart View ===== */}
