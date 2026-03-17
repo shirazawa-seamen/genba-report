@@ -21,11 +21,26 @@ async function verifyAdminOrManager() {
     .single();
 
   if (profile?.role !== "admin" && profile?.role !== "manager") throw new Error("Forbidden");
-  return user;
+  return { ...user, currentRole: profile.role as string };
+}
+
+// マネージャーが admin ユーザーを操作しようとしていないかチェック
+async function guardAdminTarget(currentRole: string, targetUserId: string) {
+  if (currentRole === "admin") return; // admin は全員操作可能
+  // マネージャーが操作対象のロールを確認
+  const adminClient = createAdminClient();
+  const { data: targetProfile } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", targetUserId)
+    .single();
+  if (targetProfile?.role === "admin") {
+    throw new Error("マネージャーは管理者の権限を変更できません");
+  }
 }
 
 export async function inviteUser(formData: FormData) {
-  await verifyAdminOrManager();
+  const { currentRole } = await verifyAdminOrManager();
 
   const email = formData.get("email") as string;
   const role = formData.get("role") as string;
@@ -39,6 +54,11 @@ export async function inviteUser(formData: FormData) {
   const validRoles = ["admin", "manager", "worker_internal", "worker_external", "client"];
   if (!validRoles.includes(role)) {
     return { success: false, error: "無効なロールです" };
+  }
+
+  // マネージャーは admin ロールでの招待を禁止
+  if (currentRole === "manager" && role === "admin") {
+    return { success: false, error: "マネージャーは管理者ロールでユーザーを招待できません" };
   }
 
   try {
@@ -90,9 +110,10 @@ export async function inviteUser(formData: FormData) {
 }
 
 export async function updateUserCompany(userId: string, companyId: string | null) {
-  await verifyAdminOrManager();
+  const { currentRole } = await verifyAdminOrManager();
 
   try {
+    await guardAdminTarget(currentRole, userId);
     const adminClient = createAdminClient();
     const { error } = await adminClient
       .from("profiles")
@@ -112,14 +133,20 @@ export async function updateUserCompany(userId: string, companyId: string | null
 }
 
 export async function updateUserRole(userId: string, newRole: string) {
-  await verifyAdminOrManager();
+  const { currentRole } = await verifyAdminOrManager();
 
   const validRoles = ["admin", "manager", "worker_internal", "worker_external", "client"];
   if (!validRoles.includes(newRole)) {
     return { success: false, error: "無効なロールです" };
   }
 
+  // マネージャーは admin ロールへの変更も禁止
+  if (currentRole === "manager" && newRole === "admin") {
+    return { success: false, error: "マネージャーは管理者ロールを付与できません" };
+  }
+
   try {
+    await guardAdminTarget(currentRole, userId);
     const adminClient = createAdminClient();
     const { error } = await adminClient
       .from("profiles")
@@ -139,9 +166,10 @@ export async function updateUserRole(userId: string, newRole: string) {
 }
 
 export async function toggleUserActive(userId: string, isActive: boolean) {
-  await verifyAdminOrManager();
+  const { currentRole } = await verifyAdminOrManager();
 
   try {
+    await guardAdminTarget(currentRole, userId);
     const adminClient = createAdminClient();
     const { error } = await adminClient
       .from("profiles")

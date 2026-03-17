@@ -7,7 +7,7 @@ import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
 
 export default async function LlmSettingsPage() {
   const { role } = await requireUserContext();
-  if (role !== "admin" && role !== "manager") redirect("/");
+  if (role !== "admin") redirect("/admin");
 
   const claudeMeta = await getSecureSettingMeta("claude_api_key");
 

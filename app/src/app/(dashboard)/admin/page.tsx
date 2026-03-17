@@ -285,22 +285,24 @@ export default async function AdminPage() {
               </p>
             </div>
           </Link>
-          <Link
-            href="/admin/llm-settings"
-            className="flex items-center gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100 transition-colors active:scale-[0.98] shadow-sm"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100">
-              <KeyRound size={18} className="text-[#0EA5E9]" />
-            </div>
-            <div>
-              <p className="text-[14px] font-semibold text-gray-700">
-                LLM API設定
-              </p>
-              <p className="text-[11px] text-gray-400">
-                Claude APIキーを安全に保存
-              </p>
-            </div>
-          </Link>
+          {role === "admin" && (
+            <Link
+              href="/admin/llm-settings"
+              className="flex items-center gap-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-4 hover:bg-cyan-100 transition-colors active:scale-[0.98] shadow-sm"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-100">
+                <KeyRound size={18} className="text-[#0EA5E9]" />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-gray-700">
+                  LLM API設定
+                </p>
+                <p className="text-[11px] text-gray-400">
+                  Claude APIキーを安全に保存
+                </p>
+              </div>
+            </Link>
+          )}
         </div>
 
         {/* Active Sites */}

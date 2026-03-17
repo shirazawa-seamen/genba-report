@@ -36,7 +36,7 @@ async function requireAdminManager() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["admin", "manager"].includes(profile.role)) {
+  if (!profile || profile.role !== "admin") {
     return { user: null, error: "権限がありません" };
   }
 
