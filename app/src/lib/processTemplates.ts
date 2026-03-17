@@ -18,10 +18,22 @@ export interface ProcessTemplateTreeNode extends ProcessTemplateRecord {
 
 export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  // parent_template_id カラム込みで取得を試行
+  let { data, error } = await supabase
     .from("process_templates")
     .select("id, phase_key, process_code, category, name, parallel_group, sort_order, parent_template_id")
     .order("sort_order");
+
+  // parent_template_id カラムが未追加の場合、カラムなしで再試行
+  if (error?.message?.includes("parent_template_id")) {
+    const fallback = await supabase
+      .from("process_templates")
+      .select("id, phase_key, process_code, category, name, parallel_group, sort_order")
+      .order("sort_order");
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) {
     if (
@@ -44,15 +56,15 @@ export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
     throw error;
   }
 
-  return (data ?? []).map((item) => ({
-    id: item.id,
-    phaseKey: item.phase_key,
-    processCode: item.process_code,
-    category: item.category,
-    name: item.name,
-    parallelGroup: item.parallel_group,
-    sortOrder: item.sort_order,
-    parentTemplateId: item.parent_template_id ?? null,
+  return (data ?? []).map((item: Record<string, unknown>) => ({
+    id: item.id as string,
+    phaseKey: item.phase_key as "A" | "B" | "C" | "D",
+    processCode: item.process_code as string,
+    category: item.category as string,
+    name: item.name as string,
+    parallelGroup: (item.parallel_group as number | null) ?? null,
+    sortOrder: item.sort_order as number,
+    parentTemplateId: (item.parent_template_id as string | null) ?? null,
   }));
 }
 

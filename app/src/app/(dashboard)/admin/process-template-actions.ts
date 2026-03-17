@@ -5,8 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { listProcessTemplates } from "@/lib/processTemplates";
 
 function formatTemplateActionError(message: string, fallback: string) {
+  if (message.includes("parent_template_id")) {
+    return "親子関係カラムが未追加です。Supabase に migration_v25_process_template_hierarchy.sql を適用してください";
+  }
   if (
-    message.includes("process_templates") ||
     message.includes("schema cache") ||
     message.includes("phase_key") ||
     message.includes("process_code") ||
@@ -79,9 +81,16 @@ export async function createProcessTemplate(input: {
     insertData.parent_template_id = input.parentTemplateId;
   }
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("process_templates")
     .insert(insertData);
+
+  // parent_template_id カラムが未追加の場合、カラムなしで再試行
+  if (error?.message?.includes("parent_template_id")) {
+    delete insertData.parent_template_id;
+    const retry = await supabase.from("process_templates").insert(insertData);
+    error = retry.error;
+  }
 
   if (error) {
     return {
