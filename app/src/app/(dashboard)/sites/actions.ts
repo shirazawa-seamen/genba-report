@@ -110,6 +110,13 @@ export async function createSite(input: {
     return { success: false, error: `現場の登録に失敗しました: ${error.message}` };
   }
 
+  // 作成者を自動的に現場メンバーに追加
+  await supabase.from("site_members").insert({
+    site_id: data.id,
+    user_id: user.id,
+    invited_by: user.id,
+  });
+
   revalidatePath("/sites");
   return { success: true, siteId: data.id };
 }
