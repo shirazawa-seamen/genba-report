@@ -125,7 +125,7 @@ export function SummaryList({ groups }: { groups: SiteGroup[] }) {
                     </div>
 
                     {item.summaryText ? (
-                      <p className="text-[12px] text-gray-500 leading-5 line-clamp-2 whitespace-pre-wrap">
+                      <p className="text-[12px] text-gray-500 leading-5 whitespace-pre-wrap">
                         {item.summaryText}
                       </p>
                     ) : (
