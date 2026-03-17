@@ -39,6 +39,7 @@ interface ActiveSite {
   startDate: string | null;
   endDate: string | null;
   siteColor?: string | null;
+  companyName?: string | null;
 }
 
 interface WorkPeriod {
@@ -346,26 +347,13 @@ export function CalendarView({
                       href={`/sites/${site.id}`}
                       className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 min-h-[48px] py-2.5 hover:border-gray-300 transition-colors"
                     >
-                      <div
-                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                          site.hasReport
-                            ? "bg-emerald-50"
-                            : "bg-cyan-50"
-                        }`}
-                      >
-                        {site.hasReport ? (
-                          <CheckCircle2 size={14} className="text-emerald-400" />
-                        ) : (
-                          <Building2 size={14} className="text-[#0EA5E9]" />
-                        )}
-                      </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-medium text-gray-700 truncate">
                           {meta.name}
                         </p>
-                        {meta.siteNumber && (
-                          <p className="text-[11px] text-[#0EA5E9]/50 font-mono">
-                            {meta.siteNumber}
+                        {meta.companyName && (
+                          <p className="text-[11px] text-gray-400 truncate">
+                            {meta.companyName}
                           </p>
                         )}
                       </div>
@@ -404,18 +392,17 @@ export function CalendarView({
                 <Link
                   key={site.id}
                   href={`/sites/${site.id}`}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] transition-colors"
+                  className="inline-flex flex-col rounded-lg border px-3 py-1.5 text-[12px] transition-colors"
                   style={{
                     backgroundColor: `${(site.siteColor || "#0EA5E9")}14`,
                     borderColor: `${site.siteColor || "#0EA5E9"}55`,
                     color: site.siteColor || "#0EA5E9",
                   }}
                 >
-                  <Building2 size={12} />
-                  {site.name}
-                  {site.siteNumber && (
-                    <span className="text-[10px] text-[#0EA5E9]/50 font-mono">
-                      ({site.siteNumber})
+                  <span>{site.name}</span>
+                  {site.companyName && (
+                    <span className="text-[10px] text-gray-400">
+                      {site.companyName}
                     </span>
                   )}
                 </Link>

@@ -408,12 +408,12 @@ function SummaryEditModal({
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.ungenerated;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg max-h-[90dvh] flex flex-col bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden">
+      <div className="relative w-full max-w-lg max-h-[90dvh] flex flex-col bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden mb-0 sm:mb-0" style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
           <div>
@@ -657,7 +657,7 @@ function SummaryEditModal({
 
         {/* フッターアクション */}
         {isEditable && (
-          <div className="flex items-center gap-2 px-5 py-4 border-t border-gray-100 shrink-0 bg-gray-50/50">
+          <div className="flex items-center gap-2 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-4 border-t border-gray-100 shrink-0 bg-gray-50/50">
             <button
               type="button"
               onClick={handleSaveDraft}

@@ -46,12 +46,12 @@ export default async function CalendarPage({ searchParams }: PageProps) {
 
   // Fetch all sites with their date ranges
   let sites:
-    | { id: string; name: string; site_number: string | null; start_date: string | null; end_date: string | null; status?: string | null; site_color?: string | null }[]
+    | { id: string; name: string; site_number: string | null; start_date: string | null; end_date: string | null; status?: string | null; site_color?: string | null; companies?: unknown }[]
     | null = null;
   {
     let primaryQuery = supabase
       .from("sites")
-      .select("id, name, site_number, start_date, end_date, status, site_color")
+      .select("id, name, site_number, start_date, end_date, status, site_color, company_id, companies(name)")
       .or(`start_date.is.null,start_date.lte.${lastDateStr}`)
       .or(`end_date.is.null,end_date.gte.${firstDateStr}`);
     if (statusFilter !== "all") {
@@ -215,6 +215,7 @@ export default async function CalendarPage({ searchParams }: PageProps) {
         startDate: s.start_date,
         endDate: s.end_date,
         siteColor: (s.site_color as string | null) ?? "#0EA5E9",
+        companyName: (s.companies as { name: string } | null | undefined)?.name ?? null,
       }))}
       monthFirstDate={firstDateStr}
       monthLastDate={lastDateStr}
