@@ -8,6 +8,7 @@ import {
   Trash2,
   X,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +27,8 @@ interface Material {
   unit: string | null;
   supplier: string | null;
   note: string | null;
+  spec_url: string | null;
+  manufacturer: string | null;
   created_at: string;
 }
 
@@ -132,6 +135,12 @@ export function MaterialManager({ siteId, canManage = false }: MaterialManagerPr
                         {mat.quantity}{mat.unit || ""}
                       </span>
                     )}
+                    {mat.manufacturer && (
+                      <>
+                        <span className="text-gray-200">|</span>
+                        <span>{mat.manufacturer}</span>
+                      </>
+                    )}
                     {mat.supplier && (
                       <>
                         <span className="text-gray-200">|</span>
@@ -142,6 +151,20 @@ export function MaterialManager({ siteId, canManage = false }: MaterialManagerPr
                       <>
                         <span className="text-gray-200">|</span>
                         <span className="truncate">{mat.note}</span>
+                      </>
+                    )}
+                    {mat.spec_url && (
+                      <>
+                        <span className="text-gray-200">|</span>
+                        <a
+                          href={mat.spec_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-[#0EA5E9] hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          仕様書 <ExternalLink size={10} />
+                        </a>
                       </>
                     )}
                   </div>
@@ -203,7 +226,9 @@ function AddMaterialModal({ siteId, onClose }: AddMaterialModalProps) {
   const [quantity, setQuantity] = useState("");
   const [unit, setUnit] = useState("");
   const [supplier, setSupplier] = useState("");
+  const [manufacturer, setManufacturer] = useState("");
   const [note, setNote] = useState("");
+  const [specUrl, setSpecUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -221,7 +246,9 @@ function AddMaterialModal({ siteId, onClose }: AddMaterialModalProps) {
         quantity: quantity ? parseFloat(quantity) : undefined,
         unit: unit.trim() || undefined,
         supplier: supplier.trim() || undefined,
+        manufacturer: manufacturer.trim() || undefined,
         note: note.trim() || undefined,
+        specUrl: specUrl.trim() || undefined,
       });
       if (!result.success) {
         setError(result.error ?? "追加に失敗しました");
@@ -279,10 +306,23 @@ function AddMaterialModal({ siteId, onClose }: AddMaterialModalProps) {
             />
           </div>
           <Input
+            label="メーカー名（任意）"
+            value={manufacturer}
+            onChange={(e) => setManufacturer(e.target.value)}
+            placeholder="例：LIXIL"
+          />
+          <Input
             label="仕入先（任意）"
             value={supplier}
             onChange={(e) => setSupplier(e.target.value)}
             placeholder="例：○○建材"
+          />
+          <Input
+            label="仕様書URL（任意）"
+            type="url"
+            value={specUrl}
+            onChange={(e) => setSpecUrl(e.target.value)}
+            placeholder="https://..."
           />
           <Input
             label="備考（任意）"

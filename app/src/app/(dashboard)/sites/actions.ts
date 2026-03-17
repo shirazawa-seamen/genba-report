@@ -950,6 +950,8 @@ export async function getSiteMaterials(siteId: string): Promise<{
     unit: string | null;
     supplier: string | null;
     note: string | null;
+    spec_url: string | null;
+    manufacturer: string | null;
     created_at: string;
   }[];
   error?: string;
@@ -965,7 +967,7 @@ export async function getSiteMaterials(siteId: string): Promise<{
 
   const { data, error } = await supabase
     .from("site_materials")
-    .select("id, material_name, product_number, quantity, unit, supplier, note, created_at")
+    .select("id, material_name, product_number, quantity, unit, supplier, note, spec_url, manufacturer, created_at")
     .eq("site_id", siteId)
     .order("created_at", { ascending: true });
 
@@ -987,6 +989,8 @@ export async function addSiteMaterial(input: {
   unit?: string;
   supplier?: string;
   note?: string;
+  specUrl?: string;
+  manufacturer?: string;
 }): Promise<{ success: boolean; materialId?: string; error?: string }> {
   const supabase = await createClient();
   const {
@@ -1011,6 +1015,8 @@ export async function addSiteMaterial(input: {
       unit: input.unit?.trim() || null,
       supplier: input.supplier?.trim() || null,
       note: input.note?.trim() || null,
+      spec_url: input.specUrl?.trim() || null,
+      manufacturer: input.manufacturer?.trim() || null,
     })
     .select("id")
     .single();
