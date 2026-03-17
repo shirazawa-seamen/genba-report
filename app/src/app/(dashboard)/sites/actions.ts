@@ -1663,3 +1663,134 @@ export async function updateSiteDates(input: {
   revalidatePath(`/sites/${input.siteId}`);
   return { success: true };
 }
+
+// ---------------------------------------------------------------------------
+// 工程チェックリスト
+// ---------------------------------------------------------------------------
+export interface ProcessChecklistItem {
+  id: string;
+  processId: string;
+  name: string;
+  isCompleted: boolean;
+  sortOrder: number;
+  completedAt: string | null;
+  completedBy: string | null;
+}
+
+export async function getProcessChecklist(processId: string): Promise<{
+  success: boolean;
+  items?: ProcessChecklistItem[];
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "認証エラー" };
+
+  const { data, error } = await supabase
+    .from("process_checklist_items")
+    .select("id, process_id, name, is_completed, sort_order, completed_at, completed_by")
+    .eq("process_id", processId)
+    .order("sort_order");
+
+  if (error) {
+    if (error.message?.includes("process_checklist_items")) {
+      return { success: true, items: [] };
+    }
+    return { success: false, error: `チェックリストの取得に失敗しました: ${error.message}` };
+  }
+
+  return {
+    success: true,
+    items: (data ?? []).map((row) => ({
+      id: row.id as string,
+      processId: row.process_id as string,
+      name: row.name as string,
+      isCompleted: row.is_completed as boolean,
+      sortOrder: row.sort_order as number,
+      completedAt: (row.completed_at as string | null) ?? null,
+      completedBy: (row.completed_by as string | null) ?? null,
+    })),
+  };
+}
+
+export async function toggleChecklistItem(
+  itemId: string,
+  isCompleted: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "認証エラー" };
+
+  const updateData: Record<string, unknown> = {
+    is_completed: isCompleted,
+    completed_at: isCompleted ? new Date().toISOString() : null,
+    completed_by: isCompleted ? user.id : null,
+  };
+
+  const { error } = await supabase
+    .from("process_checklist_items")
+    .update(updateData)
+    .eq("id", itemId);
+
+  if (error) {
+    return { success: false, error: `チェック状態の更新に失敗しました: ${error.message}` };
+  }
+
+  return { success: true };
+}
+
+export async function addChecklistItem(
+  processId: string,
+  name: string
+): Promise<{ success: boolean; items?: ProcessChecklistItem[]; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "認証エラー" };
+
+  const trimmed = name.trim();
+  if (!trimmed) return { success: false, error: "項目名を入力してください" };
+
+  const { data: maxRow } = await supabase
+    .from("process_checklist_items")
+    .select("sort_order")
+    .eq("process_id", processId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const nextOrder = ((maxRow?.sort_order as number | null) ?? 0) + 1;
+
+  const { error } = await supabase
+    .from("process_checklist_items")
+    .insert({
+      process_id: processId,
+      name: trimmed,
+      sort_order: nextOrder,
+    });
+
+  if (error) {
+    return { success: false, error: `チェックリスト項目の追加に失敗しました: ${error.message}` };
+  }
+
+  return getProcessChecklist(processId);
+}
+
+export async function deleteChecklistItem(
+  itemId: string,
+  processId: string
+): Promise<{ success: boolean; items?: ProcessChecklistItem[]; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "認証エラー" };
+
+  const { error } = await supabase
+    .from("process_checklist_items")
+    .delete()
+    .eq("id", itemId);
+
+  if (error) {
+    return { success: false, error: `チェックリスト項目の削除に失敗しました: ${error.message}` };
+  }
+
+  return getProcessChecklist(processId);
+}

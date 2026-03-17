@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  CheckSquare,
   ChevronDown,
+  ChevronUp,
   ClipboardList,
   GripVertical,
   Pencil,
@@ -18,6 +20,13 @@ import {
 } from "@/lib/constants";
 import type { ProcessCategoryRecord } from "@/lib/processCategories";
 import type { ProcessTemplateRecord } from "@/lib/processTemplateTypes";
+import type { ProcessChecklistItem } from "@/app/(dashboard)/sites/actions";
+import {
+  getProcessChecklist,
+  toggleChecklistItem,
+  addChecklistItem,
+  deleteChecklistItem,
+} from "@/app/(dashboard)/sites/actions";
 
 export interface SiteProcessDraftItem {
   id: string;
@@ -74,6 +83,11 @@ export function ProcessManager({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const dragCleanupRef = useRef<(() => void) | null>(null);
+  const [checklistExpanded, setChecklistExpanded] = useState<Set<string>>(new Set());
+  const [checklistCache, setChecklistCache] = useState<Record<string, ProcessChecklistItem[]>>({});
+  const [checklistLoading, setChecklistLoading] = useState<Set<string>>(new Set());
+  const [newItemName, setNewItemName] = useState<Record<string, string>>({});
+  const [isPendingChecklist, startChecklistTransition] = useTransition();
 
   const categoryLabelMap = useMemo(
     () =>
@@ -358,6 +372,80 @@ export function ProcessManager({
     updateDragPosition(startY);
   };
 
+  const toggleChecklistPanel = async (processId: string) => {
+    const next = new Set(checklistExpanded);
+    if (next.has(processId)) {
+      next.delete(processId);
+      setChecklistExpanded(next);
+      return;
+    }
+    next.add(processId);
+    setChecklistExpanded(next);
+
+    if (!checklistCache[processId]) {
+      setChecklistLoading((prev) => new Set(prev).add(processId));
+      const result = await getProcessChecklist(processId);
+      if (result.success && result.items) {
+        setChecklistCache((prev) => ({ ...prev, [processId]: result.items! }));
+      }
+      setChecklistLoading((prev) => {
+        const s = new Set(prev);
+        s.delete(processId);
+        return s;
+      });
+    }
+  };
+
+  const handleToggleCheckItem = (item: ProcessChecklistItem, processId: string) => {
+    const newCompleted = !item.isCompleted;
+    // Optimistic update
+    setChecklistCache((prev) => ({
+      ...prev,
+      [processId]: (prev[processId] ?? []).map((ci) =>
+        ci.id === item.id ? { ...ci, isCompleted: newCompleted } : ci
+      ),
+    }));
+    startChecklistTransition(async () => {
+      const result = await toggleChecklistItem(item.id, newCompleted);
+      if (!result.success) {
+        // Revert on failure
+        setChecklistCache((prev) => ({
+          ...prev,
+          [processId]: (prev[processId] ?? []).map((ci) =>
+            ci.id === item.id ? { ...ci, isCompleted: !newCompleted } : ci
+          ),
+        }));
+      } else {
+        // Refresh to get server-calculated progress
+        const refreshed = await getProcessChecklist(processId);
+        if (refreshed.success && refreshed.items) {
+          setChecklistCache((prev) => ({ ...prev, [processId]: refreshed.items! }));
+        }
+      }
+    });
+  };
+
+  const handleAddCheckItem = (processId: string) => {
+    const name = (newItemName[processId] ?? "").trim();
+    if (!name) return;
+    startChecklistTransition(async () => {
+      const result = await addChecklistItem(processId, name);
+      if (result.success && result.items) {
+        setChecklistCache((prev) => ({ ...prev, [processId]: result.items! }));
+        setNewItemName((prev) => ({ ...prev, [processId]: "" }));
+      }
+    });
+  };
+
+  const handleDeleteCheckItem = (itemId: string, processId: string) => {
+    startChecklistTransition(async () => {
+      const result = await deleteChecklistItem(itemId, processId);
+      if (result.success && result.items) {
+        setChecklistCache((prev) => ({ ...prev, [processId]: result.items! }));
+      }
+    });
+  };
+
   const renderProcessCard = (process: SiteProcessDraftItem) => {
     const colors = getProgressColorClasses(process.progressRate);
     const isEditing = editingId === process.id;
@@ -471,6 +559,102 @@ export function ProcessManager({
                 {process.progressRate}%
               </span>
             </div>
+            {/* チェックリスト トグルボタン -- 既存IDのみ(draft-でない) */}
+            {!process.id.startsWith("draft-") && (
+              <button
+                type="button"
+                onClick={() => toggleChecklistPanel(process.id)}
+                className={`mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                  checklistExpanded.has(process.id)
+                    ? "text-emerald-600 bg-emerald-100 hover:bg-emerald-200"
+                    : "text-emerald-500 bg-emerald-50 hover:bg-emerald-100"
+                }`}
+              >
+                {checklistExpanded.has(process.id) ? <ChevronUp size={12} /> : <CheckSquare size={12} />}
+                チェックリスト
+                {(checklistCache[process.id]?.length ?? 0) > 0 && (
+                  <span className="text-[10px]">
+                    ({(checklistCache[process.id] ?? []).filter((ci) => ci.isCompleted).length}/{checklistCache[process.id].length})
+                  </span>
+                )}
+              </button>
+            )}
+            {/* チェックリスト展開パネル */}
+            {checklistExpanded.has(process.id) && (
+              <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                {checklistLoading.has(process.id) ? (
+                  <p className="text-[12px] text-gray-400">読み込み中...</p>
+                ) : (
+                  <>
+                    {(checklistCache[process.id] ?? []).length === 0 && (
+                      <p className="mb-2 text-[12px] text-gray-400">チェック項目はまだありません。</p>
+                    )}
+                    <div className="space-y-1 mb-2">
+                      {(checklistCache[process.id] ?? []).map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 border border-emerald-100"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.isCompleted}
+                            onChange={() => handleToggleCheckItem(item, process.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400"
+                          />
+                          <span
+                            className={`flex-1 text-[13px] ${
+                              item.isCompleted ? "text-gray-400 line-through" : "text-gray-700"
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCheckItem(item.id, process.id)}
+                              disabled={isPendingChecklist}
+                              className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400 disabled:opacity-50"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {canManage && (
+                      <div className="flex gap-2">
+                        <input
+                          value={newItemName[process.id] ?? ""}
+                          onChange={(e) =>
+                            setNewItemName((prev) => ({
+                              ...prev,
+                              [process.id]: e.target.value,
+                            }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddCheckItem(process.id);
+                            }
+                          }}
+                          placeholder="項目名を入力"
+                          className="min-h-[32px] flex-1 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] text-gray-700 placeholder-gray-300 focus:outline-none focus:border-emerald-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddCheckItem(process.id)}
+                          disabled={!(newItemName[process.id] ?? "").trim() || isPendingChecklist}
+                          className="inline-flex min-h-[32px] items-center gap-1 rounded-lg bg-emerald-500 px-2.5 text-[11px] font-semibold text-white disabled:opacity-50 hover:bg-emerald-600"
+                        >
+                          <Plus size={11} />
+                          追加
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             {isDeleting ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
                 <AlertTriangle size={14} className="shrink-0 text-red-400" />
