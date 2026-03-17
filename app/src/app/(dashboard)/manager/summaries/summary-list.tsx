@@ -408,12 +408,12 @@ function SummaryEditModal({
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.ungenerated;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg max-h-[90dvh] flex flex-col bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden mb-0 sm:mb-0" style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div className="relative w-full max-w-lg max-h-[85dvh] flex flex-col bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
           <div>
