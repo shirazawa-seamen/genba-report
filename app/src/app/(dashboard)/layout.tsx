@@ -160,13 +160,12 @@ export default async function DashboardLayout({
             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#0EA5E9] text-[11px] font-bold">
               {initials}
             </div>
-            {isManagerOrAdmin && (
-              <MobileHamburgerMenu
-                adminItems={adminSubItems.map(({ label, href, iconName }) => ({ label, href, iconName }))}
-                displayName={displayName}
-                roleLabel={roleLabel}
-              />
-            )}
+            <MobileHamburgerMenu
+              navItems={navItems.map(({ label, href, iconName }) => ({ label, href, iconName }))}
+              adminItems={adminSubItems.map(({ label, href, iconName }) => ({ label, href, iconName }))}
+              displayName={displayName}
+              roleLabel={roleLabel}
+            />
           </div>
         </div>
 
