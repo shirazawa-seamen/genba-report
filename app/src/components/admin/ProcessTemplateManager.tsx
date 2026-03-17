@@ -473,19 +473,19 @@ export function ProcessTemplateManager({
                   <span>順番 {template.sortOrder}</span>
                   {template.parallelGroup !== null && <span>並行 {template.parallelGroup}</span>}
                 </div>
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0 flex-wrap justify-end">
                 {!isChild && (
                   <button
                     type="button"
                     onClick={() => handleCreateChild(template.id)}
                     disabled={isPending}
-                    className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-violet-500 bg-violet-50 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                    className="mt-2 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-violet-500 bg-violet-50 hover:bg-violet-100 transition-colors disabled:opacity-50"
                   >
                     <Plus size={12} />
-                    子工程
+                    子工程を追加
                   </button>
                 )}
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => handleMove(template.id, "up")}
