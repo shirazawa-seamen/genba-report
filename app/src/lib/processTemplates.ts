@@ -1,20 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_PROCESS_TEMPLATES } from "@/lib/constants";
 
-export interface ProcessTemplateRecord {
-  id: string;
-  phaseKey: "A" | "B" | "C" | "D";
-  processCode: string;
-  category: string;
-  name: string;
-  parallelGroup: number | null;
-  sortOrder: number;
-  parentTemplateId: string | null;
-}
+// 型と共通ユーティリティを再エクスポート（後方互換性維持）
+export type { ProcessTemplateRecord, ProcessTemplateTreeNode } from "./processTemplateTypes";
+export { buildTemplateTree } from "./processTemplateTypes";
 
-export interface ProcessTemplateTreeNode extends ProcessTemplateRecord {
-  children: ProcessTemplateTreeNode[];
-}
+import type { ProcessTemplateRecord } from "./processTemplateTypes";
 
 export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
   const supabase = await createClient();
@@ -72,32 +63,4 @@ export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
     sortOrder: item.sort_order as number,
     parentTemplateId: (item.parent_template_id as string | null) ?? null,
   }));
-}
-
-/**
- * フラットなテンプレートリストをツリー構造に変換する。
- * parentTemplateId が null のものがルートノードとなる。
- */
-export function buildTemplateTree(
-  templates: ProcessTemplateRecord[]
-): ProcessTemplateTreeNode[] {
-  const nodeMap = new Map<string, ProcessTemplateTreeNode>();
-  const roots: ProcessTemplateTreeNode[] = [];
-
-  // まず全ノードを作成
-  for (const t of templates) {
-    nodeMap.set(t.id, { ...t, children: [] });
-  }
-
-  // 親子関係を構築
-  for (const t of templates) {
-    const node = nodeMap.get(t.id)!;
-    if (t.parentTemplateId && nodeMap.has(t.parentTemplateId)) {
-      nodeMap.get(t.parentTemplateId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  }
-
-  return roots;
 }

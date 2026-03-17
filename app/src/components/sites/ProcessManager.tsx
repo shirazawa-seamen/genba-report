@@ -17,7 +17,7 @@ import {
   getProgressColorClasses,
 } from "@/lib/constants";
 import type { ProcessCategoryRecord } from "@/lib/processCategories";
-import type { ProcessTemplateRecord } from "@/lib/processTemplates";
+import type { ProcessTemplateRecord } from "@/lib/processTemplateTypes";
 
 export interface SiteProcessDraftItem {
   id: string;

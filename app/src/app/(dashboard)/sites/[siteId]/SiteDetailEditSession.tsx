@@ -24,7 +24,7 @@ import {
 import { MaterialManager } from "@/components/sites/MaterialManager";
 import { DocumentManager } from "@/components/sites/DocumentManager";
 import type { ProcessCategoryRecord } from "@/lib/processCategories";
-import type { ProcessTemplateRecord } from "@/lib/processTemplates";
+import type { ProcessTemplateRecord } from "@/lib/processTemplateTypes";
 
 interface SiteDetailEditSessionProps {
   siteId: string;

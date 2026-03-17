@@ -14,9 +14,8 @@ import {
   X,
 } from "lucide-react";
 import type { ProcessCategoryRecord } from "@/lib/processCategories";
-import type { ProcessTemplateRecord } from "@/lib/processTemplates";
-import { buildTemplateTree } from "@/lib/processTemplates";
-import type { ProcessTemplateTreeNode } from "@/lib/processTemplates";
+import type { ProcessTemplateRecord, ProcessTemplateTreeNode } from "@/lib/processTemplateTypes";
+import { buildTemplateTree } from "@/lib/processTemplateTypes";
 import {
   createProcessCategory,
   deleteProcessCategory,
