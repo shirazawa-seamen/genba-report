@@ -20,10 +20,16 @@ export async function listProcessTemplates(): Promise<ProcessTemplateRecord[]> {
   const supabase = await createClient();
 
   // parent_template_id カラム込みで取得を試行
-  let { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let data: any[] | null = null;
+  let error: { message: string } | null = null;
+
+  const primary = await supabase
     .from("process_templates")
     .select("id, phase_key, process_code, category, name, parallel_group, sort_order, parent_template_id")
     .order("sort_order");
+  data = primary.data;
+  error = primary.error;
 
   // parent_template_id カラムが未追加の場合、カラムなしで再試行
   if (error?.message?.includes("parent_template_id")) {
