@@ -601,32 +601,54 @@ function GanttChart({
       // Only save if changed
       if (finalPreview.startDay === drag.initialStartDay && finalPreview.endDay === drag.initialEndDay) return;
 
-      // Optimistic update
-      setLocalPeriodOverrides((m) => {
-        const next = new Map(m);
-        next.set(drag.periodId, { startDate: newStartDate, endDate: newEndDate });
-        return next;
-      });
+      const isVirtualPeriod = drag.periodId.startsWith("virtual-");
 
-      startTransition(async () => {
-        const result = await updateSiteWorkPeriod({
-          periodId: drag.periodId,
-          siteId: drag.siteId,
-          startDate: newStartDate,
-          endDate: newEndDate,
-        });
-        if (result.success) {
-          setSaveMessage({ type: "success", text: "稼働期間を更新しました" });
-        } else {
-          setSaveMessage({ type: "error", text: result.error || "更新に失敗しました" });
-          setLocalPeriodOverrides((m) => {
-            const next = new Map(m);
-            next.delete(drag.periodId);
-            return next;
+      if (isVirtualPeriod) {
+        // Virtual bar: create a new real period
+        startTransition(async () => {
+          const result = await addSiteWorkPeriod({
+            siteId: drag.siteId,
+            startDate: newStartDate,
+            endDate: newEndDate,
           });
-        }
-        setTimeout(() => setSaveMessage(null), 2000);
-      });
+          if (result.success) {
+            setSaveMessage({ type: "success", text: "稼働期間を作成しました" });
+            // Reload to get the new period ID
+            window.location.reload();
+          } else {
+            setSaveMessage({ type: "error", text: result.error || "作成に失敗しました" });
+          }
+          setTimeout(() => setSaveMessage(null), 2000);
+        });
+      } else {
+        // Real bar: update existing period
+        // Optimistic update
+        setLocalPeriodOverrides((m) => {
+          const next = new Map(m);
+          next.set(drag.periodId, { startDate: newStartDate, endDate: newEndDate });
+          return next;
+        });
+
+        startTransition(async () => {
+          const result = await updateSiteWorkPeriod({
+            periodId: drag.periodId,
+            siteId: drag.siteId,
+            startDate: newStartDate,
+            endDate: newEndDate,
+          });
+          if (result.success) {
+            setSaveMessage({ type: "success", text: "稼働期間を更新しました" });
+          } else {
+            setSaveMessage({ type: "error", text: result.error || "更新に失敗しました" });
+            setLocalPeriodOverrides((m) => {
+              const next = new Map(m);
+              next.delete(drag.periodId);
+              return next;
+            });
+          }
+          setTimeout(() => setSaveMessage(null), 2000);
+        });
+      }
     };
 
     document.addEventListener("mousemove", handleMove);
@@ -919,16 +941,16 @@ function GanttChart({
                         borderColor: `${color}66`,
                       }}
                       title={
-                        canEdit && !bar.isVirtual
+                        canEdit
                           ? `${site.name}: ドラッグで移動、端をドラッグでリサイズ`
                           : `${site.name}: ${bar.totalDays}日間 / 報告${bar.reportedDays}件`
                       }
                       onMouseDown={(e) => {
-                        if (bar.isVirtual) return;
+                        if (!canEdit) return;
                         handleDragStart(e, site.id, bar.period.id, "move", bar.startDay, bar.endDay);
                       }}
                       onTouchStart={(e) => {
-                        if (bar.isVirtual) return;
+                        if (!canEdit) return;
                         handleDragStart(e, site.id, bar.period.id, "move", bar.startDay, bar.endDay);
                       }}
                     >
@@ -944,7 +966,7 @@ function GanttChart({
                       )}
 
                       {/* Left resize handle */}
-                      {canEdit && !bar.isVirtual && (
+                      {canEdit && (
                         <div
                           className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize z-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                           onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, site.id, bar.period.id, "resize-start", bar.startDay, bar.endDay); }}
@@ -975,7 +997,7 @@ function GanttChart({
                       )}
 
                       {/* Right resize handle */}
-                      {canEdit && !bar.isVirtual && (
+                      {canEdit && (
                         <div
                           className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                           onMouseDown={(e) => { e.stopPropagation(); handleDragStart(e, site.id, bar.period.id, "resize-end", bar.startDay, bar.endDay); }}
