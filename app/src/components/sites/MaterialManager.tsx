@@ -68,33 +68,34 @@ export function MaterialManager({ siteId, canManage = false }: MaterialManagerPr
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Package size={16} className="text-[#0EA5E9]" />
-          <h2 className="text-[13px] font-semibold text-gray-600 tracking-wide">
-            使用材料（{materials.length}件）
-          </h2>
-        </div>
-        {canManage && (
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowCatalogPicker(true)}
-            >
-              <Package size={14} />
-              カタログから
-            </Button>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={() => setShowAddModal(true)}
-            >
-              <Plus size={16} />
-              手入力
-            </Button>
+      <div className="mb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package size={16} className="text-[#0EA5E9]" />
+            <h2 className="text-[13px] font-semibold text-gray-600 tracking-wide">
+              使用材料（{materials.length}件）
+            </h2>
           </div>
-        )}
+          {canManage && (
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowCatalogPicker(true)}
+              >
+                カタログ
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => setShowAddModal(true)}
+              >
+                <Plus size={14} />
+                追加
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
