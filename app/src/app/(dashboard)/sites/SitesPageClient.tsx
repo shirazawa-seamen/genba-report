@@ -12,12 +12,16 @@ interface SiteItem {
   name: string;
   siteNumber: string | null;
   address: string;
+  companyName: string | null;
   reportCount: number;
   periodLabel: string;
   periodColor: string;
   periodBg: string;
   progressRate: number | null;
   processCount: number;
+  managers: string[];
+  workers: string[];
+  partners: string[];
 }
 
 interface CompanyOption {

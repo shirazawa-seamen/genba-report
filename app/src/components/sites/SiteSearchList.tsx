@@ -3,9 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Building2,
   MapPin,
-  FileText,
   ArrowRight,
   Search,
 } from "lucide-react";
@@ -15,12 +13,16 @@ interface SiteItem {
   name: string;
   siteNumber: string | null;
   address: string;
+  companyName: string | null;
   reportCount: number;
   periodLabel: string;
   periodColor: string;
   periodBg: string;
   progressRate: number | null;
   processCount: number;
+  managers: string[];
+  workers: string[];
+  partners: string[];
 }
 
 function getProgressColor(rate: number): { bar: string; text: string } {
@@ -38,7 +40,8 @@ export function SiteSearchList({ sites }: { sites: SiteItem[] }) {
         return (
           s.name.toLowerCase().includes(q) ||
           (s.siteNumber && s.siteNumber.toLowerCase().includes(q)) ||
-          s.address.toLowerCase().includes(q)
+          s.address.toLowerCase().includes(q) ||
+          (s.companyName && s.companyName.toLowerCase().includes(q))
         );
       })
     : sites;
@@ -69,55 +72,55 @@ export function SiteSearchList({ sites }: { sites: SiteItem[] }) {
         <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100 shadow-sm">
           {filtered.map((site) => {
             const pc = site.progressRate !== null ? getProgressColor(site.progressRate) : null;
+            // メンバー名をまとめる
+            const memberParts: string[] = [];
+            if (site.managers.length > 0) memberParts.push(site.managers.join("・"));
+            if (site.workers.length > 0) memberParts.push(site.workers.join("・"));
+            if (site.partners.length > 0) memberParts.push(site.partners.join("・"));
+            const memberText = memberParts.join("　");
+
             return (
               <Link
                 key={site.id}
                 href={`/sites/${site.id}`}
                 className="group flex items-center gap-3.5 px-4 py-4 hover:bg-gray-50 transition-colors active:bg-gray-100"
               >
-                {/* Icon with progress ring */}
-                <div className="relative flex items-center justify-center w-10 h-10 shrink-0">
-                  {site.progressRate !== null ? (
-                    <>
-                      <svg className="absolute inset-0 w-10 h-10 -rotate-90" viewBox="0 0 40 40">
-                        <circle cx="20" cy="20" r="17" fill="none" stroke="#f3f4f6" strokeWidth="3" />
-                        <circle
-                          cx="20" cy="20" r="17" fill="none"
-                          stroke={site.progressRate >= 80 ? "#10b981" : site.progressRate >= 50 ? "#f59e0b" : "#f87171"}
-                          strokeWidth="3" strokeLinecap="round"
-                          strokeDasharray={`${(site.progressRate / 100) * 106.8} 106.8`}
-                        />
-                      </svg>
-                      <span className={`text-[10px] font-bold ${pc!.text}`}>{site.progressRate}%</span>
-                    </>
-                  ) : (
-                    <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-50">
-                      <Building2 size={18} className="text-[#0EA5E9]" />
-                    </div>
-                  )}
-                </div>
+                {/* Progress */}
+                {site.progressRate !== null && (
+                  <div className="relative flex items-center justify-center w-10 h-10 shrink-0">
+                    <svg className="absolute inset-0 w-10 h-10 -rotate-90" viewBox="0 0 40 40">
+                      <circle cx="20" cy="20" r="17" fill="none" stroke="#f3f4f6" strokeWidth="3" />
+                      <circle
+                        cx="20" cy="20" r="17" fill="none"
+                        stroke={site.progressRate >= 80 ? "#10b981" : site.progressRate >= 50 ? "#f59e0b" : "#f87171"}
+                        strokeWidth="3" strokeLinecap="round"
+                        strokeDasharray={`${(site.progressRate / 100) * 106.8} 106.8`}
+                      />
+                    </svg>
+                    <span className={`text-[10px] font-bold ${pc!.text}`}>{site.progressRate}%</span>
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <p className="text-[14px] text-gray-800 truncate font-medium">{site.name}</p>
-                    {site.siteNumber && (
-                      <span className="text-[10px] font-mono text-[#0EA5E9]/50 shrink-0">{site.siteNumber}</span>
-                    )}
                     <span className={`text-[11px] font-medium shrink-0 px-2 py-0.5 rounded-full ${site.periodBg} ${site.periodColor}`}>
                       {site.periodLabel}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 text-[12px] text-gray-400">
-                    {site.address && (
-                      <span className="flex items-center gap-1 truncate">
-                        <MapPin size={11} className="shrink-0" />
-                        {site.address}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1 shrink-0">
-                      <FileText size={11} />
-                      {site.reportCount}件
-                    </span>
-                  </div>
+                  {site.companyName && (
+                    <p className="text-[12px] text-gray-500 truncate mb-0.5">{site.companyName}</p>
+                  )}
+                  {site.address && (
+                    <p className="flex items-center gap-1 text-[11px] text-gray-400 truncate mb-0.5">
+                      <MapPin size={10} className="shrink-0" />
+                      {site.address}
+                    </p>
+                  )}
+                  {memberText && (
+                    <p className="text-[11px] text-gray-400 truncate">
+                      {memberText}
+                    </p>
+                  )}
                 </div>
                 <ArrowRight size={16} className="text-gray-200 group-hover:text-gray-400 transition-colors shrink-0" />
               </Link>

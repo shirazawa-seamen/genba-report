@@ -19,6 +19,8 @@ interface SiteRow {
   end_date: string | null;
   status: string | null;
   daily_reports: Array<{ count: number }> | null;
+  company_id: string | null;
+  companies: { name: string } | null;
 }
 
 interface ProcessRow {
@@ -97,7 +99,7 @@ export default async function SitesPage({
 
   let visibleSitesQuery = supabase
     .from("sites")
-    .select("id, name, site_number, address, start_date, end_date, status, daily_reports(count)")
+    .select("id, name, site_number, address, start_date, end_date, status, company_id, companies(name), daily_reports(count)")
     .order("created_at", { ascending: false });
   const visibleSiteIds = getScopedSiteIds(activeScope, accessContext);
 
@@ -159,21 +161,46 @@ export default async function SitesPage({
     }
   }
 
+  // メンバー情報取得
+  let membersBysite: Record<string, { name: string; role: string }[]> = {};
+  if (visibleSites.length > 0) {
+    const { data: members } = await supabase
+      .from("site_members")
+      .select("site_id, user_id, profiles(full_name, role)")
+      .in("site_id", visibleSites.map((s) => s.id));
+    if (members) {
+      for (const m of members) {
+        const profile = m.profiles as unknown as { full_name: string | null; role: string } | null;
+        if (!profile) continue;
+        if (!membersBysite[m.site_id]) membersBysite[m.site_id] = [];
+        membersBysite[m.site_id].push({
+          name: profile.full_name || "名前未設定",
+          role: profile.role,
+        });
+      }
+    }
+  }
+
   const siteItems = visibleSites.map((site) => {
     const period = getPeriodLabel(site.start_date, site.end_date, site.status ?? "active");
     const progress = processMap[site.id];
+    const siteMembers = membersBysite[site.id] ?? [];
 
     return {
       id: site.id,
       name: site.name,
       siteNumber: site.site_number ?? null,
       address: site.address ?? "",
+      companyName: (site.companies as { name: string } | null)?.name ?? null,
       reportCount: site.daily_reports?.[0]?.count ?? 0,
       periodLabel: period.label,
       periodColor: period.color,
       periodBg: period.bg,
       progressRate: progress?.avgProgress ?? null,
       processCount: progress?.total ?? 0,
+      managers: siteMembers.filter((m) => m.role === "manager").map((m) => m.name),
+      workers: siteMembers.filter((m) => m.role === "worker_internal").map((m) => m.name),
+      partners: siteMembers.filter((m) => m.role === "worker_external").map((m) => m.name),
     };
   });
 
