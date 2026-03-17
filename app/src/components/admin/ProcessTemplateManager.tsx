@@ -475,9 +475,8 @@ export function ProcessTemplateManager({
                 {!isChild && (
                   <button
                     type="button"
-                    onClick={() => handleCreateChild(template.id)}
-                    disabled={isPending}
-                    className="mt-2 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-violet-500 bg-violet-50 hover:bg-violet-100 transition-colors disabled:opacity-50"
+                    onClick={(e) => { e.stopPropagation(); handleCreateChild(template.id); }}
+                    className="mt-2 inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-violet-500 bg-violet-50 hover:bg-violet-100 active:bg-violet-200 transition-colors"
                   >
                     <Plus size={12} />
                     子工程を追加
