@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Eye,
   Sparkles,
+  Send,
 } from 'lucide-react'
 import { APPROVAL_STATUS_LABELS } from '@/lib/constants'
 import { requireUserContext } from '@/lib/auth/getCurrentUserContext'
@@ -117,6 +118,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           .limit(5)
       : null
 
+  // マネージャー/管理者向け: 最近の2次報告
+  const managerSummariesQuery = isManagerOrAdmin
+    ? supabase
+        .from('client_report_summaries')
+        .select('id, report_date, status, sites(name)')
+        .in('status', ['draft', 'submitted', 'client_confirmed', 'revision_requested'])
+        .order('report_date', { ascending: false })
+        .limit(5)
+    : null
+
   // 全クエリを並列実行
   const [
     { count: totalSiteCount },
@@ -126,6 +137,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     summariesResult,
     workerInfo,
     clientSummariesResult,
+    managerSummariesResult,
   ] = await Promise.all([
     siteCountQuery,
     pendingCountQuery ?? Promise.resolve({ count: 0 }),
@@ -134,6 +146,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     submittedSummariesQuery ?? Promise.resolve({ data: null }),
     workerInfoPromise ?? Promise.resolve(null),
     clientSummariesQuery ?? Promise.resolve({ data: null }),
+    managerSummariesQuery ?? Promise.resolve({ data: null }),
   ])
   const pendingCount = pendingCountResult.count ?? 0
   const recentReports = recentReportsResult.data ?? []
@@ -181,6 +194,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     date: s.report_date,
     status: s.status,
   }))
+
+  // マネージャー向け: 最近の2次報告
+  const managerRecentSummaries = isManagerOrAdmin
+    ? (managerSummariesResult?.data ?? []).map((s: { id: string; report_date: string; status: string; sites: unknown }) => ({
+        id: s.id,
+        siteName: (s.sites as { name: string } | null)?.name ?? '不明な現場',
+        date: s.report_date,
+        status: s.status,
+      }))
+    : []
 
   // グループ化して重複カードを排除（ホームでは site_id + report_date でまとめる）
   const recentGrouped = new Map<string, { id: string; site: string; date: string; status: string; statusLabel: string }>()
@@ -334,7 +357,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
               <FileText size={18} className="text-[#0EA5E9]" />
             </div>
             <div>
-              <p className="text-[14px] font-semibold text-gray-800">{isClient ? "日報一覧" : "報告一覧"}</p>
+              <p className="text-[14px] font-semibold text-gray-800">{isClient ? "日報一覧" : isManagerOrAdmin ? "1次報告一覧" : "報告一覧"}</p>
               <p className="text-[12px] text-gray-500">すべて確認</p>
             </div>
           </Link>
@@ -342,18 +365,92 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       </div>
 
       {/* ── Recent Reports / Summaries ── */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[13px] font-semibold text-gray-400 uppercase tracking-wider">
-            {isClient ? '最近の日報' : '最近の報告'}
-          </h2>
-          <Link href={isClient ? "/client" : "/reports"} className="text-[12px] text-[#0EA5E9]/70 hover:text-[#0EA5E9] transition-colors flex items-center gap-1">
-            すべて見る <ArrowRight size={11} />
-          </Link>
-        </div>
 
-        {isClient ? (
-          recentSummaries.length === 0 ? (
+      {/* マネージャー/管理者: 2次報告 → 1次報告の順 */}
+      {isManagerOrAdmin && (
+        <div className="space-y-6">
+          {/* 2次報告 */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[13px] font-semibold text-gray-400 uppercase tracking-wider">最近の2次報告</h2>
+              <Link href="/manager/summaries" className="text-[12px] text-[#0EA5E9]/70 hover:text-[#0EA5E9] transition-colors flex items-center gap-1">
+                すべて見る <ArrowRight size={11} />
+              </Link>
+            </div>
+            {managerRecentSummaries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-300 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <Send size={24} className="mb-2 text-gray-200" />
+                <p className="text-[13px]">2次報告がまだありません</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-200 shadow-sm">
+                {managerRecentSummaries.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/manager/summaries`}
+                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors active:bg-gray-100"
+                  >
+                    <StatusDot status={item.status} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] text-gray-800 truncate font-medium">{item.siteName}</p>
+                      <p className="text-[12px] text-gray-400">{item.date}</p>
+                    </div>
+                    <span className="text-[11px] text-gray-400 shrink-0">
+                      {item.status === 'client_confirmed' ? '確認済み' : item.status === 'submitted' ? '提出済み' : item.status === 'revision_requested' ? '修正依頼' : '下書き'}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 1次報告 */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[13px] font-semibold text-gray-400 uppercase tracking-wider">最近の1次報告</h2>
+              <Link href="/reports" className="text-[12px] text-[#0EA5E9]/70 hover:text-[#0EA5E9] transition-colors flex items-center gap-1">
+                すべて見る <ArrowRight size={11} />
+              </Link>
+            </div>
+            {recentItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-300 rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <FileText size={24} className="mb-2 text-gray-200" />
+                <p className="text-[13px]">1次報告がまだありません</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-200 shadow-sm">
+                {recentItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/reports/${item.id}`}
+                    className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors active:bg-gray-100"
+                  >
+                    <StatusDot status={item.status} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[14px] text-gray-800 truncate font-medium">{item.site}</p>
+                      <p className="text-[12px] text-gray-400">{item.date}</p>
+                    </div>
+                    <span className="text-[11px] text-gray-400 shrink-0">
+                      {item.statusLabel}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* クライアント */}
+      {isClient && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[13px] font-semibold text-gray-400 uppercase tracking-wider">最近の日報</h2>
+            <Link href="/client" className="text-[12px] text-[#0EA5E9]/70 hover:text-[#0EA5E9] transition-colors flex items-center gap-1">
+              すべて見る <ArrowRight size={11} />
+            </Link>
+          </div>
+          {recentSummaries.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-gray-300 rounded-2xl border border-gray-200 bg-white shadow-sm">
               <FileText size={28} className="mb-3 text-gray-200" />
               <p className="text-[14px]">日報がまだありません</p>
@@ -377,9 +474,20 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 </Link>
               ))}
             </div>
-          )
-        ) : (
-          recentItems.length === 0 ? (
+          )}
+        </div>
+      )}
+
+      {/* ワーカー/パートナー */}
+      {isWorkerRole && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[13px] font-semibold text-gray-400 uppercase tracking-wider">最近の報告</h2>
+            <Link href="/reports" className="text-[12px] text-[#0EA5E9]/70 hover:text-[#0EA5E9] transition-colors flex items-center gap-1">
+              すべて見る <ArrowRight size={11} />
+            </Link>
+          </div>
+          {recentItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-gray-300 rounded-2xl border border-gray-200 bg-white shadow-sm">
               <FileText size={28} className="mb-3 text-gray-200" />
               <p className="text-[14px]">報告がまだありません</p>
@@ -403,9 +511,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                 </Link>
               ))}
             </div>
-          )
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
