@@ -13,6 +13,7 @@ import {
   Building2,
   ClipboardList,
   LayoutDashboard,
+  Package,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,6 +23,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Building2,
   ClipboardList,
   LayoutDashboard,
+  Package,
 };
 
 interface AdminItem {

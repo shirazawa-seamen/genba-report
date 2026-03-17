@@ -64,6 +64,7 @@ export default async function DashboardLayout({
   // 管理サブメニュー（サイドバー + ハンバーガー用）
   const adminSubItems = isManagerOrAdmin ? [
     { label: '管理ダッシュボード', href: '/admin', icon: Settings, iconName: 'Settings' },
+    { label: '材料カタログ', href: '/admin/materials', icon: Package, iconName: 'Package' },
     { label: 'ユーザー管理', href: '/admin/users', icon: Users, iconName: 'Users' },
     { label: '標準工程マスター', href: '/admin/process-templates', icon: ClipboardList, iconName: 'ClipboardList' },
     { label: '会社マスター', href: '/admin/companies', icon: Building2, iconName: 'Building2' },
