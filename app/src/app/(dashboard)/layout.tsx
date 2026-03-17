@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import {
-  LayoutDashboard,
+  Home,
   FileText,
   PlusCircle,
   LogOut,
@@ -37,7 +37,7 @@ export default async function DashboardLayout({
 
   // メインナビゲーション（サイドバー + フッター共通）
   const allNavItems = [
-    { label: 'ホーム', shortLabel: 'ホーム', href: '/', icon: LayoutDashboard, iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
+    { label: 'ホーム', shortLabel: 'ホーム', href: '/', icon: Home, iconName: 'Home', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場一覧', shortLabel: '現場', href: '/sites', icon: Building2, iconName: 'Building2', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場カレンダー', shortLabel: '予定', href: '/calendar', icon: Calendar, iconName: 'Calendar', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '1次報告', shortLabel: '1次', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
@@ -55,6 +55,11 @@ export default async function DashboardLayout({
       }
       return item
     })
+
+  // フッターナビ: マネージャー/管理者は材料カタログを除外（サイドバーにあるため）
+  const bottomNavItems = navItems.filter(item =>
+    !(isManagerOrAdmin && item.href === '/admin/materials')
+  )
 
   // 管理サブメニュー（サイドバー + ハンバーガー用）
   const adminSubItems = isManagerOrAdmin ? [
@@ -170,7 +175,7 @@ export default async function DashboardLayout({
         </main>
 
         {/* Mobile bottom nav — Liquid Glass floating pill */}
-        <MobileBottomNav items={navItems.map(({ shortLabel, href, iconName }) => ({ shortLabel, href, iconName }))} />
+        <MobileBottomNav items={bottomNavItems.map(({ shortLabel, href, iconName }) => ({ shortLabel, href, iconName }))} />
       </div>
     </div>
   )

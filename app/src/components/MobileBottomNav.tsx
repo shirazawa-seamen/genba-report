@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Home,
   LayoutDashboard,
   FileText,
   PlusCircle,
@@ -17,6 +18,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 const ICON_MAP: Record<string, LucideIcon> = {
+  Home,
   LayoutDashboard,
   FileText,
   PlusCircle,

@@ -203,7 +203,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-[22px] font-bold text-gray-900">報告一覧</h1>
+          <h1 className="text-[22px] font-bold text-gray-900">1次報告一覧</h1>
           <p className="text-[13px] text-gray-400 mt-0.5">
             {activeFilter ? `${APPROVAL_STATUS_LABELS[activeFilter] ?? activeFilter}: ` : ""}
             {isManager && activeScope === "mine" ? "自分の現場 / " : ""}
