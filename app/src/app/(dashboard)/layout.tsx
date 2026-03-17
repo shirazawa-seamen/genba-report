@@ -10,9 +10,12 @@ import {
   Calendar,
   Send,
   Package,
+  Users,
+  ClipboardList,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/constants'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
+import { MobileHamburgerMenu } from '@/components/MobileHamburgerMenu'
 import { requireUserContext } from '@/lib/auth/getCurrentUserContext'
 
 export default async function DashboardLayout({
@@ -30,8 +33,9 @@ export default async function DashboardLayout({
     .map((s: string) => s[0].toUpperCase())
     .join('')
 
-  // サイドバー: フルラベル / モバイル: 短縮ラベル
-  // iconName is the string key used by MobileBottomNav (client component)
+  const isManagerOrAdmin = userRole === 'admin' || userRole === 'manager'
+
+  // メインナビゲーション（サイドバー + フッター共通）
   const allNavItems = [
     { label: 'ホーム', shortLabel: 'ホーム', href: '/', icon: LayoutDashboard, iconName: 'LayoutDashboard', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場一覧', shortLabel: '現場', href: '/sites', icon: Building2, iconName: 'Building2', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
@@ -41,19 +45,24 @@ export default async function DashboardLayout({
     { label: '確認', shortLabel: '確認', href: '/client', icon: CheckSquare, iconName: 'CheckSquare', roles: ['client'] },
     { label: '新規報告', shortLabel: '新規', href: '/reports/new', icon: PlusCircle, iconName: 'PlusCircle', roles: ['worker_internal', 'worker_external'] },
     { label: '材料カタログ', shortLabel: '材料', href: '/admin/materials', icon: Package, iconName: 'Package', roles: ['admin', 'manager'] },
-    { label: '管理', shortLabel: '管理', href: '/admin', icon: Settings, iconName: 'Settings', roles: ['admin', 'manager'] },
   ]
 
-  const isManagerOrAdmin = userRole === 'admin' || userRole === 'manager'
   const navItems = allNavItems
     .filter(item => item.roles.includes(userRole))
     .map(item => {
-      // ワーカーには「報告一覧」、管理者/マネージャーには「1次報告」と表示
       if (item.href === '/reports' && !isManagerOrAdmin) {
         return { ...item, label: '報告一覧', shortLabel: '報告' }
       }
       return item
     })
+
+  // 管理サブメニュー（サイドバー + ハンバーガー用）
+  const adminSubItems = isManagerOrAdmin ? [
+    { label: '管理ダッシュボード', href: '/admin', icon: Settings, iconName: 'Settings' },
+    { label: 'ユーザー管理', href: '/admin/users', icon: Users, iconName: 'Users' },
+    { label: '標準工程マスター', href: '/admin/process-templates', icon: ClipboardList, iconName: 'ClipboardList' },
+    { label: '会社マスター', href: '/admin/companies', icon: Building2, iconName: 'Building2' },
+  ] : []
 
   return (
     <div className="flex h-dvh bg-[#F5F6F8] text-gray-900 font-sans overflow-hidden">
@@ -75,7 +84,7 @@ export default async function DashboardLayout({
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map(({ label, href, icon: Icon }) => (
             <Link
               key={href}
@@ -86,6 +95,25 @@ export default async function DashboardLayout({
               {label}
             </Link>
           ))}
+
+          {/* 管理セクション */}
+          {isManagerOrAdmin && (
+            <>
+              <div className="pt-3 pb-1 px-3">
+                <p className="text-[10px] font-semibold text-gray-300 uppercase tracking-wider">管理</p>
+              </div>
+              {adminSubItems.map(({ label, href, icon: Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] text-gray-500 hover:text-[#0EA5E9] hover:bg-sky-50 transition-all"
+                >
+                  <Icon size={18} className="shrink-0" />
+                  {label}
+                </Link>
+              ))}
+            </>
+          )}
         </nav>
 
         {/* User */}
@@ -113,7 +141,7 @@ export default async function DashboardLayout({
 
       {/* ── Mobile + Main ── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header — Liquid Glass */}
+        {/* Mobile header */}
         <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-gray-200 shrink-0 bg-white">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center">
@@ -121,16 +149,18 @@ export default async function DashboardLayout({
             </div>
             <span className="text-[15px] font-bold text-gray-900">現場報告</span>
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <span className="text-[11px] text-gray-500 hidden min-[400px]:block font-medium">{roleLabel}</span>
             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-sky-100 text-[#0EA5E9] text-[11px] font-bold">
               {initials}
             </div>
-            <form action="/auth/signout" method="POST">
-              <button type="submit" className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 transition-colors">
-                <LogOut size={16} />
-              </button>
-            </form>
+            {isManagerOrAdmin && (
+              <MobileHamburgerMenu
+                adminItems={adminSubItems.map(({ label, href, iconName }) => ({ label, href, iconName }))}
+                displayName={displayName}
+                roleLabel={roleLabel}
+              />
+            )}
           </div>
         </div>
 
