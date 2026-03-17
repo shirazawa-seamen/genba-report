@@ -1,56 +1,75 @@
 "use client";
 
+import { useTransition } from "react";
 import {
   FileSpreadsheet,
   FileText,
   FileCheck,
   CalendarRange,
-  Monitor,
   Check,
+  Loader2,
 } from "lucide-react";
+import { updateSetupCheck } from "@/app/(dashboard)/sites/actions";
 
 const SETUP_ITEMS = [
   { key: "has_blueprint", label: "図面", icon: FileSpreadsheet },
   { key: "has_specification", label: "仕様書", icon: FileText },
   { key: "has_purchase_order", label: "発注書", icon: FileCheck },
   { key: "has_schedule", label: "工程表", icon: CalendarRange },
-  { key: "is_monitor", label: "モニター施工", icon: Monitor },
 ] as const;
+
+export type SetupCheckField = (typeof SETUP_ITEMS)[number]["key"];
 
 export interface SetupCheckDraft {
   has_blueprint: boolean;
   has_specification: boolean;
   has_purchase_order: boolean;
   has_schedule: boolean;
-  is_monitor: boolean;
 }
 
 interface SetupCheckListProps {
+  siteId?: string;
   checks: SetupCheckDraft;
-  editable?: boolean;
+  /** 編集モード用: ローカルステートを更新するコールバック */
   onChange?: (next: SetupCheckDraft) => void;
+  /** DB直接保存モード: siteId と合わせて使用 */
+  canToggle?: boolean;
 }
 
 export function SetupCheckList({
+  siteId,
   checks,
-  editable = false,
   onChange,
+  canToggle = false,
 }: SetupCheckListProps) {
+  const [isPending, startTransition] = useTransition();
   const checkedCount = Object.values(checks).filter(Boolean).length;
 
-  const handleToggle = (key: keyof SetupCheckDraft) => {
-    if (!editable || !onChange) return;
-    onChange({
-      ...checks,
-      [key]: !checks[key],
+  const handleToggle = (key: SetupCheckField) => {
+    // 編集モード（onChange が渡されている場合）: ローカルステートを更新
+    if (onChange) {
+      onChange({ ...checks, [key]: !checks[key] });
+      return;
+    }
+
+    // DB直接保存モード
+    if (!canToggle || !siteId) return;
+    startTransition(async () => {
+      await updateSetupCheck(siteId, key, !checks[key]);
     });
   };
+
+  const isInteractive = !!onChange || canToggle;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Check size={16} className="text-[#0EA5E9]" />
+          {isPending ? (
+            <Loader2 size={16} className="text-[#0EA5E9] animate-spin" />
+          ) : (
+            <Check size={16} className="text-[#0EA5E9]" />
+          )}
           <h2 className="text-[13px] font-semibold tracking-wide text-gray-600">
             セットアップチェック
           </h2>
@@ -69,13 +88,16 @@ export function SetupCheckList({
               key={key}
               type="button"
               onClick={() => handleToggle(key)}
-              disabled={!editable}
+              disabled={!isInteractive || isPending}
               className={[
                 "flex min-h-[52px] w-full items-center gap-3.5 rounded-xl border px-4 transition-all duration-200",
                 isChecked
                   ? "border-emerald-200 bg-emerald-50"
                   : "border-gray-200 bg-white",
-                editable ? "cursor-pointer hover:border-gray-300" : "cursor-default",
+                isInteractive && !isPending
+                  ? "cursor-pointer hover:border-gray-300"
+                  : "cursor-default",
+                isPending ? "opacity-60" : "",
               ].join(" ")}
             >
               <div

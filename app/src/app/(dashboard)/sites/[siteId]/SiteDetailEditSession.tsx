@@ -73,7 +73,7 @@ export function SiteDetailEditSession({
         hasSpecification: checks.has_specification,
         hasPurchaseOrder: checks.has_purchase_order,
         hasSchedule: checks.has_schedule,
-        isMonitor: checks.is_monitor,
+        isMonitor: false,
         processes: processes.map((process) => ({
           id: process.id.startsWith("draft-process-") ? undefined : process.id,
           category: process.category,
@@ -135,7 +135,7 @@ export function SiteDetailEditSession({
       </div>
 
       <div className="mb-6">
-        <SetupCheckList checks={checks} onChange={setChecks} editable />
+        <SetupCheckList checks={checks} onChange={setChecks} />
       </div>
 
       <div className="mb-6">

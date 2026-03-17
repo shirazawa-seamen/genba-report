@@ -197,7 +197,6 @@ export const SETUP_CHECK_ITEMS = [
   { key: "has_specification", label: "仕様書", icon: "FileText" },
   { key: "has_purchase_order", label: "発注書", icon: "FileCheck" },
   { key: "has_schedule", label: "工程表", icon: "CalendarRange" },
-  { key: "is_monitor", label: "モニター施工", icon: "Monitor" },
 ] as const;
 
 // ---------------------------------------------------------------------------

@@ -317,7 +317,6 @@ export default async function SiteDetailPage({
             has_specification: s.has_specification,
             has_purchase_order: s.has_purchase_order,
             has_schedule: s.has_schedule,
-            is_monitor: s.is_monitor,
           }}
           initialProcesses={processList.map((process) => ({
             id: process.id,
@@ -353,13 +352,14 @@ export default async function SiteDetailPage({
 
           <div className="mb-6">
             <SetupCheckList
+              siteId={siteId}
               checks={{
                 has_blueprint: s.has_blueprint,
                 has_specification: s.has_specification,
                 has_purchase_order: s.has_purchase_order,
                 has_schedule: s.has_schedule,
-                is_monitor: s.is_monitor,
               }}
+              canToggle={canManage}
             />
           </div>
 

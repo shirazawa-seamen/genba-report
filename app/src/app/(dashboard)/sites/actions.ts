@@ -533,7 +533,7 @@ export async function deleteSite(
 // ---------------------------------------------------------------------------
 export async function updateSetupCheck(
   siteId: string,
-  field: "has_blueprint" | "has_specification" | "has_purchase_order" | "has_schedule" | "is_monitor",
+  field: "has_blueprint" | "has_specification" | "has_purchase_order" | "has_schedule",
   value: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
