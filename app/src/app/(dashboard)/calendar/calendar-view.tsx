@@ -9,7 +9,6 @@ import {
   Calendar,
   Building2,
   CheckCircle2,
-  Circle,
   X,
   BarChart3,
   GripHorizontal,
@@ -243,7 +242,7 @@ export function CalendarView({
                   </div>
 
                   {/* Site indicators */}
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col gap-0.5 overflow-hidden">
                     {day.sites.slice(0, 3).map((site) => {
                       const meta = activeSiteMap[site.id];
                       if (!meta) return null;
@@ -251,25 +250,18 @@ export function CalendarView({
                       return (
                           <div
                             key={site.id}
-                            className="flex items-center gap-1 truncate rounded px-1 py-0.5 text-[9px] md:text-[10px]"
+                            className="truncate rounded px-1 py-0.5 text-[8px] md:text-[10px] leading-tight"
                             style={{
                               backgroundColor: `${(meta.siteColor || "#0EA5E9")}1A`,
                               color: meta.siteColor || "#0EA5E9",
                             }}
                           >
-                          {site.hasReport ? (
-                            <CheckCircle2 size={8} className="shrink-0" />
-                          ) : (
-                            <Circle size={8} className="shrink-0" />
-                          )}
-                          <span className="truncate hidden md:inline">
-                            {meta.name}
-                          </span>
+                          {meta.name}
                         </div>
                       );
                     })}
                     {day.sites.length > 3 && (
-                      <span className="text-[9px] text-gray-300 px-1">
+                      <span className="text-[8px] text-gray-300 px-1">
                         +{day.sites.length - 3}
                       </span>
                     )}
@@ -818,7 +810,7 @@ function GanttChart({
       {/* Header / day numbers */}
       <div className="flex border-b border-gray-200">
         {/* Site name column */}
-        <div className={`${siteColCollapsed ? "w-[40px]" : "w-[120px]"} md:w-[160px] shrink-0 border-r border-gray-200 px-1.5 md:px-3 py-2.5 flex items-center justify-center md:justify-start transition-all`}>
+        <div className={`${siteColCollapsed ? "w-[40px]" : "w-[120px]"} md:w-[160px] shrink-0 border-r border-gray-200 px-1.5 md:px-3 py-2.5 flex items-center justify-center md:justify-start transition-all sticky left-0 z-10 bg-white`}>
           {siteColCollapsed ? (
             <Building2 size={14} className="text-gray-400" />
           ) : (
@@ -868,7 +860,7 @@ function GanttChart({
               {/* Site name */}
               <Link
                 href={`/sites/${site.id}`}
-                className={`${siteColCollapsed ? "w-[40px]" : "w-[120px]"} md:w-[160px] shrink-0 border-r border-gray-200 px-1.5 md:px-3 py-3 flex flex-col justify-center items-center md:items-start gap-0.5 hover:bg-gray-50 transition-all`}
+                className={`${siteColCollapsed ? "w-[40px]" : "w-[120px]"} md:w-[160px] shrink-0 border-r border-gray-200 px-1.5 md:px-3 py-3 flex flex-col justify-center items-center md:items-start gap-0.5 hover:bg-gray-50 transition-all sticky left-0 z-10 bg-white`}
                 title={site.name}
               >
                 {siteColCollapsed ? (
