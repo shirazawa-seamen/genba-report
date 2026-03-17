@@ -91,8 +91,10 @@ export async function fetchSites() {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role === "worker_external") {
-    // 外注職人: 招待された稼働中の現場のみ
+  const isWorker = profile?.role === "worker_internal" || profile?.role === "worker_external";
+
+  if (isWorker) {
+    // ワーカー（社内・外注）: 招待された稼働中の現場のみ
     const { data, error } = await supabase
       .from("site_members")
       .select("sites!inner(id, name, status)")
@@ -104,7 +106,7 @@ export async function fetchSites() {
       .filter(Boolean);
   }
 
-  // その他: 稼働中の現場のみ
+  // 管理者・マネージャー: 稼働中の現場すべて
   const { data, error } = await supabase
     .from("sites")
     .select("id, name")

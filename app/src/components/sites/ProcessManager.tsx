@@ -608,7 +608,7 @@ export function ProcessManager({
       </div>
 
       {showAddModal ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/40 p-4 md:items-center">
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-gray-900/40 p-4 pb-[calc(env(safe-area-inset-bottom,0px)+80px)] md:items-center md:pb-4">
           <div className="w-full max-w-md rounded-[28px] bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
