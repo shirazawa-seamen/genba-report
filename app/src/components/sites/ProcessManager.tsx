@@ -237,6 +237,11 @@ export function ProcessManager({
     );
     if (!template || !onChange) return;
 
+    // 子テンプレートも取得
+    const childTemplates = initialTemplates.filter(
+      (item) => item.parentTemplateId === template.id
+    );
+
     const insertAtIndex = processes.findIndex((process) => {
       const matchedTemplate = initialTemplates.find(
         (item) => item.category === process.category && item.name === process.name
@@ -244,28 +249,46 @@ export function ProcessManager({
       return matchedTemplate ? matchedTemplate.sortOrder > template.sortOrder : false;
     });
 
-    const nextProcess: SiteProcessDraftItem = {
-      id: `draft-process-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      category: template.category,
-      name: template.name,
-      orderIndex: processes.length + 1,
-      progressRate: 0,
-      status: "in_progress",
-      createdAt: new Date().toISOString(),
-    };
+    const now = new Date().toISOString();
+    const newProcesses: SiteProcessDraftItem[] = [
+      {
+        id: `draft-process-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        category: template.category,
+        name: template.name,
+        orderIndex: processes.length + 1,
+        progressRate: 0,
+        status: "in_progress",
+        createdAt: now,
+      },
+      ...childTemplates
+        .filter((child) => !existingKeys.has(`${child.category}::${child.name.trim()}`))
+        .map((child) => ({
+          id: `draft-process-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${child.id}`,
+          category: child.category,
+          name: child.name,
+          orderIndex: processes.length + 2,
+          progressRate: 0,
+          status: "in_progress",
+          createdAt: now,
+        })),
+    ];
 
     const next = [...processes];
     if (insertAtIndex === -1) {
-      next.push(nextProcess);
+      next.push(...newProcesses);
     } else {
-      next.splice(insertAtIndex, 0, nextProcess);
+      next.splice(insertAtIndex, 0, ...newProcesses);
     }
 
     updateProcesses(next);
     closeAddModal();
+
+    const addedCount = newProcesses.length;
     setMessage({
       type: "success",
-      text: `「${template.processCode} ${template.name}」を追加しました`,
+      text: addedCount > 1
+        ? `「${template.processCode} ${template.name}」と子工程${addedCount - 1}件を追加しました`
+        : `「${template.processCode} ${template.name}」を追加しました`,
     });
   };
 
@@ -770,11 +793,17 @@ export function ProcessManager({
                   className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50 disabled:bg-gray-50 disabled:text-gray-300"
                 >
                   <option value="">工程を選択</option>
-                  {availableTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.processCode} {template.name}
-                    </option>
-                  ))}
+                  {availableTemplates.map((template) => {
+                    const childCount = initialTemplates.filter(
+                      (t) => t.parentTemplateId === template.id
+                    ).length;
+                    return (
+                      <option key={template.id} value={template.id}>
+                        {template.processCode} {template.name}
+                        {childCount > 0 ? ` (+子工程${childCount}件)` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
                 <ChevronDown
                   size={16}
