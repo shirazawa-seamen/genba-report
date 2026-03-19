@@ -532,35 +532,6 @@ export function ProcessTemplateManager({
                   <span>順番 {template.sortOrder}</span>
                   {template.parallelGroup !== null && <span>並行 {template.parallelGroup}</span>}
                 </div>
-                {!isChild && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleCreateChild(template.id); }}
-                      className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-violet-500 bg-violet-50 hover:bg-violet-100 active:bg-violet-200 transition-colors"
-                    >
-                      <Plus size={12} />
-                      子工程を追加
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); toggleChecklist(template.id); }}
-                      className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                        checklistExpanded.has(template.id)
-                          ? "text-emerald-600 bg-emerald-100 hover:bg-emerald-200"
-                          : "text-emerald-500 bg-emerald-50 hover:bg-emerald-100"
-                      }`}
-                    >
-                      <CheckSquare size={12} />
-                      チェックリスト
-                      {(checklistCache[template.id]?.length ?? 0) > 0 && (
-                        <span className="rounded-full bg-emerald-200 px-1.5 text-[10px] font-semibold">
-                          {checklistCache[template.id].length}
-                        </span>
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
@@ -599,72 +570,6 @@ export function ProcessTemplateManager({
             </div>
           )}
         </div>
-
-        {/* チェックリスト管理セクション */}
-        {checklistExpanded.has(template.id) && (
-          <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <CheckSquare size={14} className="text-emerald-500" />
-              <span className="text-[12px] font-semibold text-emerald-700">チェックリスト項目</span>
-            </div>
-
-            {checklistLoading.has(template.id) ? (
-              <p className="text-[12px] text-gray-400">読み込み中...</p>
-            ) : (
-              <>
-                {(checklistCache[template.id] ?? []).length === 0 && (
-                  <p className="mb-3 text-[12px] text-gray-400">チェックリスト項目はまだありません。</p>
-                )}
-                <div className="space-y-1.5 mb-3">
-                  {(checklistCache[template.id] ?? []).map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2"
-                    >
-                      <span className="text-[13px] text-gray-700">{item.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteChecklistItem(item.id, template.id)}
-                        disabled={isPending}
-                        className="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-400 disabled:opacity-50"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    value={newChecklistName[template.id] ?? ""}
-                    onChange={(e) =>
-                      setNewChecklistName((prev) => ({
-                        ...prev,
-                        [template.id]: e.target.value,
-                      }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddChecklistItem(template.id);
-                      }
-                    }}
-                    placeholder="項目名を入力"
-                    className="min-h-[36px] flex-1 rounded-lg border border-gray-200 bg-white px-3 text-[13px] text-gray-700 placeholder-gray-300 focus:outline-none focus:border-emerald-400"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAddChecklistItem(template.id)}
-                    disabled={!(newChecklistName[template.id] ?? "").trim() || isPending}
-                    className="inline-flex min-h-[36px] items-center gap-1 rounded-lg bg-emerald-500 px-3 text-[12px] font-semibold text-white disabled:opacity-50 hover:bg-emerald-600"
-                  >
-                    <Plus size={12} />
-                    追加
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
 
         {/* 子工程の展開表示 */}
         {!isChild && hasChildren && isExpanded && (
