@@ -24,15 +24,26 @@ export async function updateReport(
     return { success: false, error: "ログインが必要です" };
   }
 
-  // 管理者権限の確認
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin" && profile?.role !== "manager") {
-    return { success: false, error: "管理者または現場管理者の権限が必要です" };
+  const isAdminOrManager = profile?.role === "admin" || profile?.role === "manager";
+
+  // 報告の reporter_id を確認
+  const { data: reportData } = await supabase
+    .from("daily_reports")
+    .select("reporter_id")
+    .eq("id", reportId)
+    .single();
+
+  const isReporter = reportData?.reporter_id === user.id;
+
+  // 管理者/マネージャー または 報告者本人のみ編集可能
+  if (!isAdminOrManager && !isReporter) {
+    return { success: false, error: "この報告を編集する権限がありません" };
   }
 
   // この報告のサイトにアクセス権があるか確認
@@ -58,7 +69,7 @@ export async function updateReport(
     : undefined;
 
   const updateData: Record<string, unknown> = {
-    edited_by_admin: true,
+    edited_by_admin: isAdminOrManager,
   };
 
   if (workContent !== null) updateData.work_content = workContent;
