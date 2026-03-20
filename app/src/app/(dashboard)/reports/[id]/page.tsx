@@ -27,7 +27,8 @@ interface ProcessData { id: string; category: string; name: string; progress_rat
 interface ReportDetailRaw {
   id: string; report_date: string; work_process: string; work_content: string;
   workers: string[] | null; progress_rate: number; weather: string | null;
-  work_hours: number | null; issues: string | null; created_at: string;
+  work_hours: number | null; arrival_time: string | null; departure_time: string | null;
+  issues: string | null; created_at: string;
   approval_status: string; rejection_comment: string | null;
   admin_notes: string | null; edited_by_admin: boolean | null;
   reporter_id: string | null;
@@ -69,7 +70,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
   const { data: report, error: reportError } = await supabase
     .from("daily_reports")
-    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_comment, admin_notes, edited_by_admin, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)`)
+    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, arrival_time, departure_time, issues, created_at, approval_status, rejection_comment, admin_notes, edited_by_admin, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)`)
     .eq("id", id).single();
 
   if (reportError || !report) { console.error("Report fetch error:", reportError); notFound(); }
@@ -238,10 +239,10 @@ export default async function ReportDetailPage({ params }: PageProps) {
             }</span>
           </div>
         )}
-        {raw.work_hours != null && (
+        {(raw.arrival_time || raw.departure_time) && (
           <div className="p-4 rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center gap-1.5 mb-2"><Clock size={14} className="text-[#0EA5E9]/60" /><span className="text-[12px] text-gray-400 font-medium">作業時間</span></div>
-            <span className="text-[15px] text-gray-700 font-medium">{raw.work_hours}時間</span>
+            <div className="flex items-center gap-1.5 mb-2"><Clock size={14} className="text-[#0EA5E9]/60" /><span className="text-[12px] text-gray-400 font-medium">現場時間</span></div>
+            <span className="text-[15px] text-gray-700 font-medium">{raw.arrival_time || "--:--"} 〜 {raw.departure_time || "--:--"}</span>
           </div>
         )}
       </div>

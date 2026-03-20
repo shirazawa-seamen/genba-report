@@ -37,7 +37,7 @@ export default async function ReportEditPage({ params }: PageProps) {
   const { data: report, error } = await supabase
     .from("daily_reports")
     .select(
-      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, admin_notes, approval_status, rejection_comment, reporter_id, sites(name)"
+      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, arrival_time, departure_time, issues, admin_notes, approval_status, rejection_comment, reporter_id, sites(name)"
     )
     .eq("id", id)
     .single();
@@ -105,7 +105,8 @@ export default async function ReportEditPage({ params }: PageProps) {
             workers: (report.workers as string[] | null)?.join("、") ?? "",
             progress_rate: report.progress_rate ?? 0,
             weather: report.weather ?? "",
-            work_hours: report.work_hours ?? undefined,
+            arrival_time: (report.arrival_time as string) ?? undefined,
+            departure_time: (report.departure_time as string) ?? undefined,
             issues: report.issues ?? "",
             admin_notes: String(report.admin_notes ?? ""),
           }}

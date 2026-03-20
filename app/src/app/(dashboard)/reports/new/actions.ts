@@ -15,7 +15,8 @@ interface CreateReportInput {
   workDescription: string;
   workers: string;
   weather: string;
-  workHours: string;
+  arrivalTime: string;
+  departureTime: string;
   issues: string;
   processes: Array<{
     processId: string;
@@ -311,7 +312,8 @@ export async function createDailyReport(
     workers: workersArray,
     progress_rate: Number.parseInt(process.progressRate, 10),
     weather: input.weather || null,
-    work_hours: input.workHours ? parseFloat(input.workHours) : null,
+    arrival_time: input.arrivalTime || null,
+    departure_time: input.departureTime || null,
     issues: input.issues || null,
     approval_status: "submitted",
   }));

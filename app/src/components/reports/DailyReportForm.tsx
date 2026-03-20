@@ -58,7 +58,8 @@ interface FormData {
   workDescription: string;
   workers: string;
   weather: string;
-  workHours: string;
+  arrivalTime: string;
+  departureTime: string;
   issues: string;
   photos: PhotoItem[];
 }
@@ -96,7 +97,8 @@ const INITIAL_FORM_DATA: FormData = {
   workDescription: "",
   workers: "",
   weather: "",
-  workHours: "",
+  arrivalTime: "",
+  departureTime: "",
   issues: "",
   photos: [],
 };
@@ -458,16 +460,20 @@ function Step1({
         placeholder="天候を選択"
       />
 
-      <Input
-        label="作業時間（時間）"
-        type="number"
-        placeholder="例：8"
-        value={data.workHours}
-        onChange={(event) => onChange("workHours", event.target.value)}
-        min={0}
-        max={24}
-        step={0.5}
-      />
+      <div className="grid grid-cols-2 gap-3">
+        <Input
+          label="現場到着時間"
+          type="time"
+          value={data.arrivalTime}
+          onChange={(event) => onChange("arrivalTime", event.target.value)}
+        />
+        <Input
+          label="現場退出時間"
+          type="time"
+          value={data.departureTime}
+          onChange={(event) => onChange("departureTime", event.target.value)}
+        />
+      </div>
 
       <Textarea
         label="報告記入欄"
@@ -784,8 +790,8 @@ function Step4({ data }: { data: FormData }) {
           {data.weather ? (
             <PreviewRow icon={<Cloud size={14} />} label="天候" value={data.weather} />
           ) : null}
-          {data.workHours ? (
-            <PreviewRow icon={<Clock size={14} />} label="作業時間" value={`${data.workHours}時間`} />
+          {(data.arrivalTime || data.departureTime) ? (
+            <PreviewRow icon={<Clock size={14} />} label="現場時間" value={`${data.arrivalTime || "--:--"} 〜 ${data.departureTime || "--:--"}`} />
           ) : null}
         </div>
       </div>
@@ -1054,7 +1060,8 @@ export function DailyReportForm({
         workDescription: formData.workDescription,
         workers: formData.workers,
         weather: formData.weather,
-        workHours: formData.workHours,
+        arrivalTime: formData.arrivalTime,
+        departureTime: formData.departureTime,
         issues: formData.issues,
         processes: formData.selectedProcesses.map((process) => ({
           processId: process.processId,

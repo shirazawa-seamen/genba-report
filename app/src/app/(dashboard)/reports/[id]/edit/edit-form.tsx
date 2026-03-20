@@ -12,7 +12,8 @@ interface ReportEditFormProps {
     workers: string;
     progress_rate: number;
     weather: string;
-    work_hours?: number;
+    arrival_time?: string;
+    departure_time?: string;
     issues: string;
     admin_notes: string;
   };
@@ -87,19 +88,30 @@ export function ReportEditForm({ reportId, initialData }: ReportEditFormProps) {
         </div>
       </div>
 
-      {/* Work Hours */}
-      <div className="flex flex-col gap-1.5">
-        <label className="text-[13px] font-medium text-gray-500">
-          作業時間 (h)
-        </label>
-        <input
-          name="work_hours"
-          type="number"
-          step="0.5"
-          min="0"
-          defaultValue={initialData.work_hours ?? ""}
-          className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
-        />
+      {/* Arrival / Departure Time */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[13px] font-medium text-gray-500">
+            現場到着時間
+          </label>
+          <input
+            name="arrival_time"
+            type="time"
+            defaultValue={initialData.arrival_time ?? ""}
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[13px] font-medium text-gray-500">
+            現場退出時間
+          </label>
+          <input
+            name="departure_time"
+            type="time"
+            defaultValue={initialData.departure_time ?? ""}
+            className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
+          />
+        </div>
       </div>
 
       {/* Issues */}

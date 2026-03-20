@@ -45,7 +45,8 @@ export async function updateReport(
   const workers = formData.get("workers") as string;
   const progressRate = formData.get("progress_rate") as string;
   const weather = formData.get("weather") as string;
-  const workHours = formData.get("work_hours") as string;
+  const arrivalTime = formData.get("arrival_time") as string;
+  const departureTime = formData.get("departure_time") as string;
   const issues = formData.get("issues") as string;
   const adminNotes = formData.get("admin_notes") as string;
 
@@ -64,8 +65,8 @@ export async function updateReport(
   if (workersArray) updateData.workers = workersArray;
   if (progressRate) updateData.progress_rate = parseInt(progressRate, 10);
   if (weather !== null) updateData.weather = weather || null;
-  if (workHours !== null)
-    updateData.work_hours = workHours ? parseFloat(workHours) : null;
+  if (arrivalTime !== null) updateData.arrival_time = arrivalTime || null;
+  if (departureTime !== null) updateData.departure_time = departureTime || null;
   if (issues !== null) updateData.issues = issues || null;
   if (adminNotes !== null) updateData.admin_notes = adminNotes || null;
 

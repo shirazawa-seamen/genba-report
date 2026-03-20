@@ -27,7 +27,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
   const { data: report, error } = await supabase
     .from("daily_reports")
     .select(
-      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, issues, created_at, approval_status, rejection_comment, admin_notes, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)"
+      "id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, arrival_time, departure_time, issues, created_at, approval_status, rejection_comment, admin_notes, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)"
     )
     .eq("id", id)
     .single();
@@ -156,10 +156,12 @@ export default async function ReportPrintPage({ params }: PageProps) {
                 {report.weather ?? "—"}
               </td>
               <td className="border border-gray-400 bg-gray-100 px-3 py-2 font-semibold">
-                作業時間
+                現場時間
               </td>
               <td className="border border-gray-400 px-3 py-2">
-                {report.work_hours != null ? `${report.work_hours}時間` : "—"}
+                {(report.arrival_time || report.departure_time)
+                  ? `${(report.arrival_time as string) || "--:--"} 〜 ${(report.departure_time as string) || "--:--"}`
+                  : "—"}
               </td>
             </tr>
             {report.workers && (report.workers as string[]).length > 0 && (
