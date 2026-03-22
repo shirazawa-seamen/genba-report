@@ -765,7 +765,7 @@ export function ProcessTemplateManager({
       </div>
 
       {showCategoryModal && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 md:items-center">
+        <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/40 p-4 md:items-center">
           <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>

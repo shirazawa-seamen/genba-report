@@ -68,7 +68,7 @@ export function DayReportsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-[10vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/40 p-4 pt-[10vh] overflow-y-auto">
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">

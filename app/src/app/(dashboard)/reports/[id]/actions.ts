@@ -70,6 +70,7 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
   }
 
   // キャッシュを無効化
+  revalidatePath("/");
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
 
@@ -135,6 +136,7 @@ export async function rejectReport(
   }
 
   // キャッシュを無効化
+  revalidatePath("/");
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
 
@@ -255,6 +257,7 @@ export async function resubmitReport(reportId: string): Promise<ApprovalResult> 
     return { success: false, error: `再提出エラー: ${updateError.message}` };
   }
 
+  revalidatePath("/");
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
 
