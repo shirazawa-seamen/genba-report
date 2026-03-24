@@ -1193,6 +1193,7 @@ export function DailyReportForm({
     setSubmitError(null);
 
     startTransition(async () => {
+      try {
       const result = await createDailyReport({
         siteName: formData.siteName,
         siteId: formData.siteId || undefined,
@@ -1247,6 +1248,9 @@ export function DailyReportForm({
       }
 
       setIsComplete(true);
+      } catch (err) {
+        setSubmitError(`送信中にエラーが発生しました: ${err instanceof Error ? err.message : String(err)}`);
+      }
     });
   };
 

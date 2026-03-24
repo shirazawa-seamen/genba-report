@@ -158,14 +158,18 @@ export async function fetchProcesses(siteId: string) {
 
 export async function fetchProcessChecklistItems(processIds: string[]) {
   if (processIds.length === 0) return [];
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("process_checklist_items")
-    .select("id, process_id, name, is_completed, sort_order")
-    .in("process_id", processIds)
-    .order("sort_order");
-  if (error) throw error;
-  return data ?? [];
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("process_checklist_items")
+      .select("id, process_id, name, is_completed, sort_order")
+      .in("process_id", processIds)
+      .order("sort_order");
+    if (error) return []; // テーブル未作成時はフォールバック
+    return data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------
