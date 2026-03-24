@@ -102,7 +102,10 @@ export function SiteSearchList({ sites }: { sites: SiteItem[] }) {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-[14px] text-gray-800 truncate font-medium">{site.name}</p>
+                    <p className="text-[14px] text-gray-800 truncate font-medium">
+                      {site.siteNumber && <span className="text-[11px] text-gray-400 mr-1">{site.siteNumber}</span>}
+                      {site.name}
+                    </p>
                     <span className={`text-[11px] font-medium shrink-0 px-2 py-0.5 rounded-full ${site.periodBg} ${site.periodColor}`}>
                       {site.periodLabel}
                     </span>

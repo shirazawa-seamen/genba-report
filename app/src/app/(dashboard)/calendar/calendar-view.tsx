@@ -399,7 +399,7 @@ export function CalendarView({
                     color: site.siteColor || "#0EA5E9",
                   }}
                 >
-                  <span>{site.name}</span>
+                  <span>{site.siteNumber && <span className="opacity-60 mr-1">{site.siteNumber}</span>}{site.name}</span>
                   {site.companyName && (
                     <span className="text-[10px] text-gray-400">
                       {site.companyName}
@@ -879,7 +879,7 @@ function GanttChart({
                 ) : (
                   <>
                       <span className="w-full truncate text-[11px] md:text-[12px] font-medium" style={{ color }}>
-                      {site.name}
+                      {site.siteNumber && <span className="opacity-50 mr-0.5 text-[9px]">{site.siteNumber}</span>}{site.name}
                     </span>
                   </>
                 )}

@@ -309,7 +309,10 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <div>
-            <h2 className="text-[16px] font-bold text-gray-900">{day.siteName}</h2>
+            <h2 className="text-[16px] font-bold text-gray-900">
+              {day.siteNumber && <span className="text-[12px] text-gray-400 mr-1.5">{day.siteNumber}</span>}
+              {day.siteName}
+            </h2>
             <p className="text-[12px] text-gray-400">{formatDate(day.reportDate)}</p>
           </div>
           <button type="button" onClick={onClose} className="flex items-center justify-center w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 transition-colors">

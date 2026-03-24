@@ -684,8 +684,10 @@ function Step3({
     fileInputRef.current?.click();
   };
 
-  const photoCount = data.photos.filter((item) => !item.file.type.startsWith("video/")).length;
-  const videoCount = data.photos.filter((item) => item.file.type.startsWith("video/")).length;
+  // グローバル写真（工程に紐付いていないもの）のみカウント
+  const globalPhotos = data.photos.filter((item) => !item.processId);
+  const photoCount = globalPhotos.filter((item) => !item.file.type.startsWith("video/")).length;
+  const videoCount = globalPhotos.filter((item) => item.file.type.startsWith("video/")).length;
   const photoTypeOptionsWithEmpty: SelectOption[] = [
     { value: "", label: "未選択" },
     ...PHOTO_TYPE_OPTIONS,
@@ -735,7 +737,7 @@ function Step3({
         </div>
       </div>
 
-      {data.photos.length > 0 ? (
+      {globalPhotos.length > 0 ? (
         <div>
           <p className="mb-3 text-[13px] font-medium text-gray-400">
             選択済み: {photoCount > 0 ? `写真 ${photoCount}枚` : ""}
@@ -743,7 +745,8 @@ function Step3({
             {videoCount > 0 ? `動画 ${videoCount}本` : ""}
           </p>
           <div className="space-y-3">
-            {data.photos.map((item, index) => {
+            {globalPhotos.map((item, _idx) => {
+              const index = data.photos.indexOf(item);
               const isVideo = item.file.type.startsWith("video/");
               const url = URL.createObjectURL(item.file);
 
@@ -861,7 +864,7 @@ function Step3({
                   {processPhotos.length > 0 ? (
                     <div className="grid grid-cols-3 gap-2">
                       {processPhotos.map((item, idx) => {
-                        const globalIdx = data.photos.indexOf(item);
+                        const globalIdx = data.photos.findIndex((p) => p === item || (p.file === item.file && p.processId === item.processId));
                         const url = URL.createObjectURL(item.file);
                         return (
                           <div key={`${process.processId}-${idx}`} className="relative rounded-lg overflow-hidden border border-gray-200">
@@ -1089,7 +1092,6 @@ export function DailyReportForm({
   initialSites: SiteOption[];
   initialWorkers: WorkerOption[];
 }) {
-  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
     ...INITIAL_FORM_DATA,
     siteId: initialSiteId ?? "",
@@ -1098,7 +1100,6 @@ export function DailyReportForm({
   const [isPending, startTransition] = useTransition();
   const [isComplete, setIsComplete] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isNavigating, setIsNavigating] = useState(false);
 
   const handleChange = useCallback((field: keyof FormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -1171,47 +1172,23 @@ export function DailyReportForm({
     }));
   }, []);
 
-  const validateStep = (targetStep: number) => {
+  const validateAll = () => {
     const nextErrors: FormErrors = {};
-
-    if (targetStep === 1) {
-      if (!formData.siteId) nextErrors.siteName = "現場を選択してください";
-      if (!formData.reportDate) nextErrors.reportDate = "報告日を選択してください";
-      if (formData.selectedProcesses.length === 0) {
-        nextErrors.selectedProcesses = "工程を1つ以上選択してください";
-      } else if (
-        formData.selectedProcesses.some((process) => process.progressRate.trim() === "")
-      ) {
-        nextErrors.selectedProcesses = "選択した工程の進捗率を設定してください";
-      }
+    if (!formData.siteId) nextErrors.siteName = "現場を選択してください";
+    if (!formData.reportDate) nextErrors.reportDate = "報告日を選択してください";
+    if (formData.selectedProcesses.length === 0) {
+      nextErrors.selectedProcesses = "工程を1つ以上選択してください";
     }
-
-    if (targetStep === 2) {
-      if (!formData.workDescription.trim()) {
-        nextErrors.workDescription = "作業内容を入力してください";
-      }
+    if (!formData.workDescription.trim()) {
+      nextErrors.workDescription = "作業内容を入力してください";
     }
-
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleNext = () => {
-    if (isNavigating) return;
-    if (!validateStep(step)) return;
-    setIsNavigating(true);
-    setStep((prev) => Math.min(prev + 1, TOTAL_STEPS));
-    setTimeout(() => setIsNavigating(false), 300);
-  };
-
-  const handleBack = () => {
-    setErrors({});
-    setStep((prev) => Math.max(prev - 1, 1));
-  };
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (step !== TOTAL_STEPS || isNavigating) return;
+    if (!validateAll()) return;
 
     setSubmitError(null);
 
@@ -1279,7 +1256,6 @@ export function DailyReportForm({
       siteId: initialSiteId ?? "",
     });
     setErrors({});
-    setStep(1);
     setIsComplete(false);
   };
 
@@ -1296,53 +1272,46 @@ export function DailyReportForm({
             <CompletionScreen onReset={handleReset} />
           ) : (
             <form onSubmit={handleSubmit} noValidate>
-              <StepIndicator
-                currentStep={step}
-                totalSteps={TOTAL_STEPS}
-                labels={STEP_LABELS}
-              />
+              <div className="space-y-8">
+                <Step1
+                  data={formData}
+                  errors={errors}
+                  onChange={handleChange}
+                  onProcessesChange={handleProcessesChange}
+                  initialSites={initialSites}
+                />
 
-              <div className="min-h-[360px]">
-                {step === 1 ? (
-                  <Step1
-                    data={formData}
-                    errors={errors}
-                    onChange={handleChange}
-                    onProcessesChange={handleProcessesChange}
-                    initialSites={initialSites}
-                  />
-                ) : null}
-                {step === 2 ? (
-                  <Step2
-                    data={formData}
-                    errors={errors}
-                    onChange={handleChange}
-                    initialWorkers={initialWorkers}
-                  />
-                ) : null}
-                {step === 3 ? (
-                  <Step3
-                    data={formData}
-                    onPhotoAdd={handlePhotoAdd}
-                    onPhotoRemove={handlePhotoRemove}
-                    onPhotoTypeChange={handlePhotoTypeChange}
-                    onPhotoCaptionChange={handlePhotoCaptionChange}
-                    onProcessPhotoAdd={(files, processId, processName) => {
-                      const newPhotos: PhotoItem[] = Array.from(files).map((file) => ({
-                        file,
-                        photoType: "during",
-                        caption: "",
-                        processId,
-                        processName,
-                      }));
-                      setFormData((prev) => ({
-                        ...prev,
-                        photos: [...prev.photos, ...newPhotos],
-                      }));
-                    }}
-                  />
-                ) : null}
-                {step === 4 ? <Step4 data={formData} /> : null}
+                <div className="border-t border-gray-100" />
+
+                <Step2
+                  data={formData}
+                  errors={errors}
+                  onChange={handleChange}
+                  initialWorkers={initialWorkers}
+                />
+
+                <div className="border-t border-gray-100" />
+
+                <Step3
+                  data={formData}
+                  onPhotoAdd={handlePhotoAdd}
+                  onPhotoRemove={handlePhotoRemove}
+                  onPhotoTypeChange={handlePhotoTypeChange}
+                  onPhotoCaptionChange={handlePhotoCaptionChange}
+                  onProcessPhotoAdd={(files, processId, processName) => {
+                    const newPhotos: PhotoItem[] = Array.from(files).map((file) => ({
+                      file,
+                      photoType: "during",
+                      caption: "",
+                      processId,
+                      processName,
+                    }));
+                    setFormData((prev) => ({
+                      ...prev,
+                      photos: [...prev.photos, ...newPhotos],
+                    }));
+                  }}
+                />
               </div>
 
               {submitError ? (
@@ -1353,45 +1322,17 @@ export function DailyReportForm({
                 </div>
               ) : null}
 
-              <div className="mt-8 flex gap-3">
-                {step > 1 ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    onClick={handleBack}
-                    className="flex-1"
-                  >
-                    <ChevronLeft size={20} />
-                    戻る
-                  </Button>
-                ) : null}
-
-                {step < TOTAL_STEPS ? (
-                  <Button
-                    type="button"
-                    variant="primary"
-                    size="lg"
-                    onClick={handleNext}
-                    disabled={isNavigating}
-                    className="flex-1"
-                  >
-                    次へ
-                    <ChevronRight size={20} />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    size="lg"
-                    loading={isPending}
-                    disabled={isNavigating}
-                    className="flex-1"
-                  >
-                    {isPending ? "送信中..." : "報告を送信"}
-                    {!isPending ? <CheckCircle2 size={20} /> : null}
-                  </Button>
-                )}
+              <div className="mt-8">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  loading={isPending}
+                  className="w-full"
+                >
+                  {isPending ? "送信中..." : "報告を送信"}
+                  {!isPending ? <CheckCircle2 size={20} /> : null}
+                </Button>
               </div>
             </form>
           )}
