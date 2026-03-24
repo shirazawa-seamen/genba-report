@@ -122,6 +122,7 @@ export function SiteDetailEditSession({
 
       <div className="mb-8">
         <ProcessManager
+          siteId={siteId}
           processes={processes}
           onChange={setProcesses}
           canManage

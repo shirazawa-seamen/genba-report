@@ -129,12 +129,13 @@ export async function fetchProcesses(siteId: string) {
     progress_rate: number;
     status: string;
     order_index?: number;
+    parent_process_id?: string | null;
   }[] | null = null;
   let error: Error | null = null;
 
   const primary = await supabase
     .from("processes")
-    .select("id, category, name, progress_rate, status, order_index")
+    .select("id, category, name, progress_rate, status, order_index, parent_process_id")
     .eq("site_id", siteId)
     .order("order_index");
 
@@ -144,7 +145,7 @@ export async function fetchProcesses(siteId: string) {
   if (error?.message?.includes("order_index")) {
     const fallback = await supabase
       .from("processes")
-      .select("id, category, name, progress_rate, status")
+      .select("id, category, name, progress_rate, status, parent_process_id")
       .eq("site_id", siteId)
       .order("category")
       .order("name");
@@ -153,6 +154,18 @@ export async function fetchProcesses(siteId: string) {
   }
   if (error) throw error;
   return data;
+}
+
+export async function fetchProcessChecklistItems(processIds: string[]) {
+  if (processIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("process_checklist_items")
+    .select("id, process_id, name, is_completed, sort_order")
+    .in("process_id", processIds)
+    .order("sort_order");
+  if (error) throw error;
+  return data ?? [];
 }
 
 // ---------------------------------------------------------------------------
@@ -417,6 +430,7 @@ export async function uploadReportPhotos(
   const files = input.photos.getAll("photos") as File[];
   const photoTypes = input.photos.getAll("photoTypes") as string[];
   const captions = input.photos.getAll("captions") as string[];
+  const processIds = input.photos.getAll("processIds") as string[];
   if (files.length === 0) {
     return { success: true, uploadedCount: 0 };
   }
@@ -430,7 +444,9 @@ export async function uploadReportPhotos(
 
     // メディアタイプの判定
     const mediaType = file.type.startsWith("video/") ? "video" : "photo";
-    const photoType = photoTypes[i] || "after";
+    const VALID_PHOTO_TYPES = ["before", "during", "after", "corner_ne", "corner_nw", "corner_se", "corner_sw"];
+    const rawPhotoType = photoTypes[i] || "during";
+    const photoType = VALID_PHOTO_TYPES.includes(rawPhotoType) ? rawPhotoType : "during";
 
     // 動画は50MB制限
     if (mediaType === "video" && file.size > 50 * 1024 * 1024) {
@@ -457,16 +473,19 @@ export async function uploadReportPhotos(
     }
 
     // report_photosテーブルに保存
+    const processId = processIds[i] || null;
     const { error: dbError } = await supabase.from("report_photos").insert({
       report_id: input.reportId,
       storage_path: storagePath,
-      photo_type: photoType || null,
+      photo_type: photoType,
       media_type: mediaType,
       caption: captions[i] || null,
+      ...(processId ? { process_id: processId } : {}),
     });
 
     if (dbError) {
-      errors.push(`${file.name}: DB保存エラー`);
+      console.error("[PhotoUpload] DB insert error:", dbError.message, dbError.code, dbError.details);
+      errors.push(`${file.name}: DB保存エラー (${dbError.message})`);
       // アップロードしたファイルを削除（ロールバック）
       await supabase.storage.from("report-photos").remove([storagePath]);
       continue;

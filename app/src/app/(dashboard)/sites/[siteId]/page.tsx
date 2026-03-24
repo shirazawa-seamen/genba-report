@@ -326,6 +326,7 @@ export default async function SiteDetailPage({
             progressRate: process.progress_rate,
             status: process.status,
             createdAt: process.created_at,
+            parentProcessId: process.parent_process_id ?? null,
           }))}
           initialPeriods={periodList}
           processTemplates={processTemplates}
@@ -343,6 +344,7 @@ export default async function SiteDetailPage({
                 progressRate: process.progress_rate,
                 status: process.status,
                 createdAt: process.created_at,
+                parentProcessId: process.parent_process_id ?? null,
               }))}
               canManage={false}
               initialTemplates={processTemplates}
@@ -371,7 +373,7 @@ export default async function SiteDetailPage({
       {/* Action links */}
       {!isEditMode && <div className="space-y-2.5 mb-8">
         <Link
-          href={userRole === "client" ? `/client?site=${siteId}` : (userRole === "worker_internal" || userRole === "worker_external") ? "/reports" : `/sites/${siteId}/reports`}
+          href={userRole === "client" ? `/client?site=${siteId}` : (userRole === "worker_internal" || userRole === "worker_external") ? "/reports" : `/manager/reports?site=${siteId}`}
           className="group flex items-center gap-4 p-4 rounded-2xl border border-gray-200 bg-white hover:bg-gray-50 transition-colors active:bg-gray-100"
         >
           <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-50 shrink-0">

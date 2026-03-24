@@ -6,15 +6,22 @@ import { getSecureSettingValue } from "@/lib/secureSettings";
 export async function getWorkerTodayInfo(userId: string) {
   const supabase = await createClient();
 
-  // 今日のアサイン現場を取得
+  // 今日のアサイン現場を取得（今日の日付が現場の期間内のもののみ）
+  const today = new Date().toISOString().slice(0, 10);
+
   const { data: memberSites } = await supabase
     .from("site_members")
-    .select("site_id, sites(id, name, address, status)")
+    .select("site_id, sites(id, name, address, status, start_date, end_date)")
     .eq("user_id", userId);
 
   const activeSites = (memberSites ?? [])
-    .map((m) => m.sites as unknown as { id: string; name: string; address: string | null; status: string } | null)
-    .filter((s): s is { id: string; name: string; address: string | null; status: string } => s !== null && s.status === "active");
+    .map((m) => m.sites as unknown as { id: string; name: string; address: string | null; status: string; start_date: string | null; end_date: string | null } | null)
+    .filter((s): s is { id: string; name: string; address: string | null; status: string; start_date: string | null; end_date: string | null } =>
+      s !== null &&
+      s.status === "active" &&
+      (!s.start_date || s.start_date <= today) &&
+      (!s.end_date || s.end_date >= today)
+    );
 
   // 最近の自分の日報を取得
   const { data: recentReports } = await supabase

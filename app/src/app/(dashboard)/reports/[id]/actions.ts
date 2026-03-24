@@ -56,23 +56,31 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
   const newStatus = "approved";
 
   // 報告のステータスを更新
-  const { error: updateError } = await supabase
+  const { data: approvedRows, error: updateError } = await supabase
     .from("daily_reports")
     .update({
       approval_status: newStatus,
       approved_by: user.id,
       approved_at: new Date().toISOString(),
     })
-    .eq("id", reportId);
+    .eq("id", reportId)
+    .select("id");
 
   if (updateError) {
     return { success: false, error: `承認エラー: ${updateError.message}` };
   }
 
-  // キャッシュを無効化
+  if (!approvedRows || approvedRows.length === 0) {
+    return { success: false, error: "更新対象の報告が見つかりませんでした（権限エラーの可能性）" };
+  }
+
+  // キャッシュを無効化（ホーム・報告一覧・報告詳細・マネージャー画面すべて）
   revalidatePath("/");
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
+  revalidatePath("/manager/reports");
+  revalidatePath("/manager/reports");
+  revalidatePath("/sites", "layout");
 
   // 注: 個別の職人報告承認時にはクライアントへ通知しない
   // クライアントへはマネージャーが二次報告（サマリー）を提出した時点で通知する
@@ -121,7 +129,7 @@ export async function rejectReport(
   }
 
   // 報告のステータスを更新
-  const { error: updateError } = await supabase
+  const { data: updatedRows, error: updateError } = await supabase
     .from("daily_reports")
     .update({
       approval_status: "rejected",
@@ -129,16 +137,24 @@ export async function rejectReport(
       approved_by: user.id,
       approved_at: new Date().toISOString(),
     })
-    .eq("id", reportId);
+    .eq("id", reportId)
+    .select("id");
 
   if (updateError) {
     return { success: false, error: `差戻しエラー: ${updateError.message}` };
   }
 
-  // キャッシュを無効化
+  if (!updatedRows || updatedRows.length === 0) {
+    return { success: false, error: "更新対象の報告が見つかりませんでした（権限エラーの可能性）" };
+  }
+
+  // キャッシュを無効化（ホーム・報告一覧・報告詳細・マネージャー画面すべて）
   revalidatePath("/");
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
+  revalidatePath("/manager/reports");
+  revalidatePath("/manager/reports");
+  revalidatePath("/sites", "layout");
 
   // 差戻し → 報告者へメール通知
   try {
@@ -260,6 +276,45 @@ export async function resubmitReport(reportId: string): Promise<ApprovalResult> 
   revalidatePath("/");
   revalidatePath("/reports");
   revalidatePath(`/reports/${reportId}`);
+  revalidatePath("/manager/reports");
+  revalidatePath("/manager/reports");
+  revalidatePath("/sites", "layout");
 
   return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// 複数報告IDの写真を一括取得（signed URL付き）
+// ---------------------------------------------------------------------------
+export async function getReportPhotosForIds(reportIds: string[]) {
+  if (reportIds.length === 0) return [];
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: photos } = await supabase
+    .from("report_photos")
+    .select("id, report_id, storage_path, photo_type, caption, media_type")
+    .in("report_id", reportIds)
+    .order("created_at");
+
+  if (!photos || photos.length === 0) return [];
+
+  const result = await Promise.all(
+    photos.map(async (p) => {
+      const { data } = await supabase.storage
+        .from("report-photos")
+        .createSignedUrl(p.storage_path, 3600);
+      return {
+        id: p.id,
+        reportId: p.report_id as string,
+        url: data?.signedUrl ?? "",
+        caption: p.caption as string | null,
+        mediaType: (p.media_type ?? "photo") as string,
+        photoType: p.photo_type as string | null,
+      };
+    })
+  );
+
+  return result;
 }

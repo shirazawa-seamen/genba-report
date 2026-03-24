@@ -10,9 +10,14 @@ interface DailyReport {
   report_date: string;
   work_process: string;
   work_content: string;
+  issues: string | null;
+  arrival_time: string | null;
+  departure_time: string | null;
+  created_at: string;
   progress_rate: number;
   approval_status: string;
   reporter_id: string | null;
+  process_id: string | null;
   processes: { name: string } | null;
 }
 
@@ -32,14 +37,20 @@ interface SummaryRecord {
 export interface SiteReportDay {
   siteId: string;
   siteName: string;
+  siteNumber: string | null;
   reportDate: string;
   reports: Array<{
     id: string;
+    processId: string | null;
     processName: string;
     progressRate: number;
     workContent: string;
+    issues: string | null;
+    arrivalTime: string | null;
+    departureTime: string | null;
     approvalStatus: string;
     reporterName: string;
+    createdAt: string;
   }>;
   summary: {
     id: string;
@@ -53,7 +64,12 @@ export interface SiteReportDay {
   } | null;
 }
 
-export default async function ManagerReportsPage() {
+interface PageProps {
+  searchParams: Promise<{ filter?: string; site?: string }>;
+}
+
+export default async function ManagerReportsPage({ searchParams }: PageProps) {
+  const { filter: initialFilter, site: siteFilter } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -69,7 +85,7 @@ export default async function ManagerReportsPage() {
   // 全現場の報告を取得（提出済み以上）
   const { data: reports } = await supabase
     .from("daily_reports")
-    .select("id, site_id, report_date, work_process, work_content, progress_rate, approval_status, reporter_id, processes(name)")
+    .select("id, site_id, report_date, work_process, work_content, issues, arrival_time, departure_time, created_at, progress_rate, approval_status, reporter_id, process_id, processes(name)")
     .in("approval_status", ["submitted", "approved", "rejected"])
     .order("report_date", { ascending: false })
     .limit(500);
@@ -86,9 +102,10 @@ export default async function ManagerReportsPage() {
   // 現場名を取得
   const siteIds = [...new Set(reportList.map((r) => r.site_id))];
   const { data: sites } = siteIds.length
-    ? await supabase.from("sites").select("id, name").in("id", siteIds)
+    ? await supabase.from("sites").select("id, name, site_number").in("id", siteIds)
     : { data: [] };
   const siteMap = new Map((sites ?? []).map((s) => [s.id, s.name]));
+  const siteNumberMap = new Map((sites ?? []).map((s) => [s.id, s.site_number as string | null]));
 
   // サマリーを取得
   const { data: summaries } = siteIds.length
@@ -110,6 +127,7 @@ export default async function ManagerReportsPage() {
       dayMap.set(key, {
         siteId: r.site_id,
         siteName: siteMap.get(r.site_id) ?? "不明な現場",
+        siteNumber: siteNumberMap.get(r.site_id) ?? null,
         reportDate: r.report_date,
         reports: [],
         summary: summary
@@ -128,11 +146,16 @@ export default async function ManagerReportsPage() {
     }
     dayMap.get(key)!.reports.push({
       id: r.id,
+      processId: r.process_id ?? null,
       processName: r.processes?.name ?? r.work_process,
       progressRate: r.progress_rate ?? 0,
       workContent: r.work_content ?? "",
+      issues: r.issues ?? null,
+      arrivalTime: r.arrival_time ?? null,
+      departureTime: r.departure_time ?? null,
       approvalStatus: r.approval_status,
       reporterName: r.reporter_id ? reporterMap.get(r.reporter_id) ?? "不明" : "不明",
+      createdAt: r.created_at,
     });
   }
 
@@ -163,14 +186,14 @@ export default async function ManagerReportsPage() {
 
         <div className="mb-8">
           <h1 className="text-[22px] font-bold text-gray-900 tracking-tight">
-            日報管理
+            1次報告
           </h1>
           <p className="text-[13px] text-gray-400 mt-0.5">
-            全現場の日報を確認・承認し、クライアント提出用サマリーを作成
+            2次報告の確認・承認 → 1次報告の作成・提出
           </p>
         </div>
 
-        <ReportWorkflowDashboard days={allDays} />
+        <ReportWorkflowDashboard days={allDays} initialFilter={initialFilter} initialSiteId={siteFilter} />
       </div>
     </div>
   );

@@ -104,7 +104,7 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
 
   const { data: reports, error } = await supabase
     .from("daily_reports")
-    .select("id, progress_rate, work_content, issues, reporter_id, processes(name)")
+    .select("id, progress_rate, work_content, issues, reporter_id, workers, processes(name)")
     .eq("site_id", siteId)
     .eq("report_date", reportDate)
     .neq("approval_status", "rejected")
@@ -138,7 +138,7 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
         })
         .eq("id", existing.id);
       if (updateError) {
-        return { success: false, error: `サマリー更新に失敗しました: ${updateError.message}` };
+        return { success: false, error: `1次報告更新に失敗しました: ${updateError.message}` };
       }
     } else {
       // 新規作成
@@ -155,11 +155,11 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
           updated_at: new Date().toISOString(),
         });
       if (insertError) {
-        return { success: false, error: `サマリー作成に失敗しました: ${insertError.message}` };
+        return { success: false, error: `1次報告作成に失敗しました: ${insertError.message}` };
       }
     }
     revalidatePath(`/sites/${siteId}/reports`);
-    revalidatePath("/manager/summaries");
+    revalidatePath("/manager/reports");
     return { success: true };
   }
 
@@ -202,13 +202,18 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
   ].join("\n");
 
   let summaryText = buildFallbackSummary(site?.name ?? "不明な現場", reportDate, normalizedReports);
+  let llmWarning: string | null = null;
   try {
     const llmSummary = await generateSummaryWithClaude(prompt);
     if (llmSummary) {
       summaryText = llmSummary;
+    } else {
+      llmWarning = "LLM APIキーが未設定のためテンプレート文を使用しました";
     }
   } catch (llmError) {
-    console.error("[LLM] Failed to generate report summary:", llmError);
+    const errDetail = llmError instanceof Error ? llmError.message : String(llmError);
+    console.error("[LLM] Failed to generate report summary:", errDetail);
+    llmWarning = `AI生成に失敗しました（${errDetail}）。テンプレート文を使用しました`;
   }
 
   const officialProgress = Array.from(
@@ -228,6 +233,10 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
 
   const sourceReportIds = reports.map((report) => report.id);
 
+  // 2次報告から作業者を自動引き継ぎ（重複排除）
+  const allWorkers = reports.flatMap((report) => (report.workers as string[] | null) ?? []);
+  const uniqueWorkers = [...new Set(allWorkers)].filter((w) => w.trim().length > 0);
+
   // 既存チェック（upsert の代わりに明示的に insert/update）
   const { data: existingSummary } = await supabase
     .from("client_report_summaries")
@@ -245,13 +254,14 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
         summary_text: summaryText,
         official_progress: officialProgress,
         source_report_ids: sourceReportIds,
+        workers: uniqueWorkers,
         generated_by: context.user.id,
         status: "draft",
         updated_at: new Date().toISOString(),
       })
       .eq("id", existingSummary.id);
     if (updateError) {
-      return { success: false, error: `サマリー更新に失敗しました: ${updateError.message}` };
+      return { success: false, error: `1次報告更新に失敗しました: ${updateError.message}` };
     }
     summaryId = existingSummary.id;
   } else {
@@ -263,6 +273,7 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
         summary_text: summaryText,
         official_progress: officialProgress,
         source_report_ids: sourceReportIds,
+        workers: uniqueWorkers,
         generated_by: context.user.id,
         status: "draft",
         updated_at: new Date().toISOString(),
@@ -270,7 +281,7 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
       .select("id")
       .single();
     if (insertError) {
-      return { success: false, error: `サマリー作成に失敗しました: ${insertError.message}` };
+      return { success: false, error: `1次報告作成に失敗しました: ${insertError.message}` };
     }
     summaryId = inserted?.id ?? null;
   }
@@ -313,15 +324,15 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
         }
       }
     } catch (photoError) {
-      // 写真コピーに失敗してもサマリー生成自体は成功とする
+      // 写真コピーに失敗しても1次報告生成自体は成功とする
       console.error("[SummaryPhotos] Failed to copy report photos:", photoError);
     }
   }
 
   revalidatePath(`/sites/${siteId}/reports`);
-  revalidatePath("/manager/summaries");
+  revalidatePath("/manager/reports");
   revalidatePath("/client");
-  return { success: true };
+  return { success: true, warning: llmWarning, summaryId, summaryText };
 }
 
 // ---------------------------------------------------------------------------
@@ -372,17 +383,18 @@ export async function regenerateSummaryWithPrompt(input: {
   try {
     const result = await generateSummaryWithClaude(prompt);
     if (!result) {
-      return { success: false as const, error: "LLM APIキーが設定されていません" };
+      return { success: false as const, error: "LLM APIキーが設定されていません。管理画面 → セキュア設定で claude_api_key を設定してください。" };
     }
     return { success: true as const, text: result };
   } catch (err) {
-    console.error("[LLM] Regenerate error:", err);
-    return { success: false as const, error: "再生成に失敗しました" };
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("[LLM] Regenerate error:", errMsg);
+    return { success: false as const, error: `再生成に失敗しました: ${errMsg}` };
   }
 }
 
 // ---------------------------------------------------------------------------
-// 自由入力でサマリーを新規作成（LLM なし）
+// 自由入力で1次報告を新規作成（LLM なし）
 // ---------------------------------------------------------------------------
 export async function createClientReportSummaryManual(input: {
   siteId: string;
@@ -430,7 +442,7 @@ export async function createClientReportSummaryManual(input: {
   }
 
   revalidatePath(`/sites/${input.siteId}/reports`);
-  revalidatePath("/manager/summaries");
+  revalidatePath("/manager/reports");
   revalidatePath("/client");
   return { success: true as const, error: null, summaryId: data?.id ?? null };
 }
@@ -557,14 +569,14 @@ export async function submitClientReportSummary(summaryId: string, siteId: strin
       (m) => (m.profiles as unknown as { role?: string } | null)?.role === "client"
     );
     if (!hasClientMember) {
-      warning = "この現場にクライアントが紐付けられていません。クライアントがサマリーを閲覧できるよう、現場にクライアントを招待するか、会社を設定してください。";
+      warning = "この現場にクライアントが紐付けられていません。クライアントが1次報告を閲覧できるよう、現場にクライアントを招待するか、会社を設定してください。";
     }
   }
 
   revalidatePath(`/sites/${siteId}/reports`);
   revalidatePath("/client");
 
-  // クライアントへメール通知（サマリー提出時）
+  // クライアントへメール通知（1次報告提出時）
   try {
     const { data: siteInfo } = await context.supabase
       .from("sites")
@@ -676,7 +688,7 @@ export async function uploadSummaryPhoto(formData: FormData) {
   }
 
   revalidatePath(`/sites/${siteId}/reports`);
-  revalidatePath("/manager/summaries");
+  revalidatePath("/manager/reports");
   return { success: true as const };
 }
 
@@ -719,7 +731,7 @@ export async function deleteSummaryPhoto(photoId: string, siteId: string) {
   }
 
   revalidatePath(`/sites/${siteId}/reports`);
-  revalidatePath("/manager/summaries");
+  revalidatePath("/manager/reports");
   return { success: true };
 }
 
@@ -775,7 +787,7 @@ export async function confirmClientReportSummary(summaryId: string) {
     return { success: false, error: "権限がありません" };
   }
 
-  // サマリーのサイトにクライアントがアクセス権を持っているか確認
+  // 1次報告のサイトにクライアントがアクセス権を持っているか確認
   const { data: summaryData } = await supabase
     .from("client_report_summaries")
     .select("site_id")
@@ -783,7 +795,7 @@ export async function confirmClientReportSummary(summaryId: string) {
     .maybeSingle();
 
   if (!summaryData?.site_id) {
-    return { success: false, error: "サマリーが見つかりません" };
+    return { success: false, error: "1次報告が見つかりません" };
   }
 
   if (!(await canAccessSite(user.id, summaryData.site_id))) {
@@ -803,6 +815,8 @@ export async function confirmClientReportSummary(summaryId: string) {
   }
 
   revalidatePath("/client");
+  revalidatePath("/");
+  revalidatePath("/manager/reports");
   return { success: true };
 }
 
@@ -821,7 +835,7 @@ export async function rejectReportsFromSummary(
     return { success: false, error: "この現場にアクセスする権限がありません" };
   }
 
-  // サマリーから元の報告IDを取得
+  // 1次報告から元の報告IDを取得
   const { data: summary, error: summaryError } = await context.supabase
     .from("client_report_summaries")
     .select("source_report_ids, report_date")
@@ -829,7 +843,7 @@ export async function rejectReportsFromSummary(
     .maybeSingle();
 
   if (summaryError || !summary) {
-    return { success: false, error: "サマリー情報の取得に失敗しました" };
+    return { success: false, error: "1次報告情報の取得に失敗しました" };
   }
 
   const sourceReportIds = Array.isArray(summary.source_report_ids)
@@ -853,7 +867,7 @@ export async function rejectReportsFromSummary(
     return { success: false, error: `報告の差し戻しに失敗しました: ${rejectError.message}` };
   }
 
-  // サマリーを rejected に変更
+  // 1次報告を rejected に変更
   await context.supabase
     .from("client_report_summaries")
     .update({
@@ -892,7 +906,7 @@ export async function requestRevisionClientReportSummary(
     return { success: false, error: "権限がありません" };
   }
 
-  // サマリーのサイトにクライアントがアクセス権を持っているか確認
+  // 1次報告のサイトにクライアントがアクセス権を持っているか確認
   const { data: summaryData } = await supabase
     .from("client_report_summaries")
     .select("site_id, status")
@@ -900,7 +914,7 @@ export async function requestRevisionClientReportSummary(
     .maybeSingle();
 
   if (!summaryData?.site_id) {
-    return { success: false, error: "サマリーが見つかりません" };
+    return { success: false, error: "1次報告が見つかりません" };
   }
 
   if (summaryData.status !== "submitted" && summaryData.status !== "client_confirmed") {
@@ -927,6 +941,7 @@ export async function requestRevisionClientReportSummary(
   }
 
   revalidatePath("/client");
-  revalidatePath("/manager/summaries");
+  revalidatePath("/manager/reports");
+  revalidatePath("/");
   return { success: true };
 }

@@ -24,6 +24,8 @@ interface ReportItem {
   statusLabel: string;
   progressRate: number;
   reporterName: string | null;
+  rejectionComment: string | null;
+  submittedAt: string | null;
 }
 
 interface StatusTab {
@@ -175,7 +177,14 @@ export function ReportSearchList({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-[14px] text-gray-800 truncate font-medium">{r.siteName}</p>
-                  <span className="text-[11px] text-gray-400 shrink-0">{r.formattedDate}</span>
+                  <span className="text-[11px] text-gray-400 shrink-0">
+                    {r.formattedDate}
+                    {r.submittedAt && (
+                      <span className="ml-1 text-gray-300">
+                        {new Date(r.submittedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[12px] text-gray-400 truncate max-w-[180px]">{r.processName}</span>
@@ -191,6 +200,12 @@ export function ReportSearchList({
                     </>
                   )}
                 </div>
+                {r.status === "rejected" && r.rejectionComment && (
+                  <p className="mt-1 text-[11px] text-red-400 flex items-center gap-1 truncate">
+                    <AlertTriangle size={10} className="shrink-0" />
+                    差戻し理由: {r.rejectionComment}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-[11px] text-gray-400">{r.statusLabel}</span>

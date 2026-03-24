@@ -1251,7 +1251,7 @@ async function syncSiteDatesFromPeriods(supabase: any, siteId: string) {
 // ---------------------------------------------------------------------------
 export async function getSiteProcesses(siteId: string): Promise<{
   success: boolean;
-  processes?: { id: string; category: string; name: string; orderIndex: number; progressRate: number; status: string; createdAt: string }[];
+  processes?: { id: string; category: string; name: string; orderIndex: number; progressRate: number; status: string; createdAt: string; parentProcessId: string | null }[];
   error?: string;
 }> {
   const supabase = await createClient();
@@ -1271,7 +1271,7 @@ export async function getSiteProcesses(siteId: string): Promise<{
 
   const primary = await supabase
     .from("processes")
-    .select("id, category, name, order_index, progress_rate, status, created_at")
+    .select("id, category, name, order_index, progress_rate, status, created_at, parent_process_id")
     .eq("site_id", siteId)
     .order("order_index");
 
@@ -1281,7 +1281,7 @@ export async function getSiteProcesses(siteId: string): Promise<{
   if (error?.message?.includes("order_index")) {
     const fallback = await supabase
       .from("processes")
-      .select("id, category, name, progress_rate, status, created_at")
+      .select("id, category, name, progress_rate, status, created_at, parent_process_id")
       .eq("site_id", siteId)
       .order("category")
       .order("name");
@@ -1301,6 +1301,7 @@ export async function getSiteProcesses(siteId: string): Promise<{
       progressRate: p.progress_rate,
       status: p.status,
       createdAt: p.created_at,
+      parentProcessId: (p as Record<string, unknown>).parent_process_id as string | null ?? null,
     })),
   };
 }
@@ -1313,6 +1314,8 @@ export async function addSiteProcess(input: {
   category: string;
   name: string;
   insertAtIndex?: number;
+  templateId?: string; // テンプレートIDを指定するとチェックリスト項目を自動作成
+  parentProcessId?: string; // 親工程ID
 }): Promise<{ success: boolean; processId?: string; error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -1346,22 +1349,32 @@ export async function addSiteProcess(input: {
     }
   }
 
+  const insertData: Record<string, unknown> = {
+    site_id: input.siteId,
+    category: input.category,
+    name: input.name.trim(),
+    order_index: orderIndex,
+  };
+  if (input.parentProcessId) insertData.parent_process_id = input.parentProcessId;
+
   const { data, error } = await supabase
     .from("processes")
-    .insert({ site_id: input.siteId, category: input.category, name: input.name.trim(), order_index: orderIndex })
+    .insert(insertData)
     .select("id")
     .single();
 
   if (error) {
     if (error.message?.includes("order_index")) {
-      const fallback = await supabase
-        .from("processes")
-        .insert({ site_id: input.siteId, category: input.category, name: input.name.trim() })
-        .select("id")
-        .single();
+      const fallbackData: Record<string, unknown> = { site_id: input.siteId, category: input.category, name: input.name.trim() };
+      if (input.parentProcessId) fallbackData.parent_process_id = input.parentProcessId;
+      const fallback = await supabase.from("processes").insert(fallbackData).select("id").single();
       if (fallback.error) {
         if (fallback.error.code === "23505") return { success: false, error: "同じ工程が既に存在します" };
         return { success: false, error: `工程の追加に失敗しました: ${fallback.error.message}` };
+      }
+      // チェックリストテンプレートから自動作成
+      if (input.templateId) {
+        await createChecklistFromTemplate(supabase, fallback.data.id, input.templateId);
       }
       revalidatePath(`/sites/${input.siteId}`);
       return { success: true, processId: fallback.data.id };
@@ -1370,8 +1383,40 @@ export async function addSiteProcess(input: {
     return { success: false, error: `工程の追加に失敗しました: ${error.message}` };
   }
 
+  // チェックリストテンプレートから自動作成
+  if (input.templateId) {
+    await createChecklistFromTemplate(supabase, data.id, input.templateId);
+  }
+
   revalidatePath(`/sites/${input.siteId}`);
   return { success: true, processId: data.id };
+}
+
+// チェックリストテンプレートから現場工程のチェックリスト項目を自動作成
+async function createChecklistFromTemplate(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  processId: string,
+  templateId: string,
+) {
+  try {
+    const { data: templateItems } = await supabase
+      .from("process_checklist_templates")
+      .select("name, sort_order")
+      .eq("process_template_id", templateId)
+      .order("sort_order");
+
+    if (templateItems && templateItems.length > 0) {
+      await supabase.from("process_checklist_items").insert(
+        templateItems.map((item) => ({
+          process_id: processId,
+          name: item.name,
+          sort_order: item.sort_order,
+        }))
+      );
+    }
+  } catch (err) {
+    console.error("[Checklist] Failed to create from template:", err);
+  }
 }
 
 export async function moveSiteProcess(input: {

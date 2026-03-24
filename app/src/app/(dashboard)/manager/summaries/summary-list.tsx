@@ -37,6 +37,7 @@ export interface SummaryItem {
   reportDate: string;
   summaryText: string;
   status: string; // "ungenerated" | "draft" | "submitted" | "client_confirmed" | "revision_requested"
+  submittedAt?: string | null;
   revisionComment?: string | null;
   officialProgress: Array<{
     processId: string;
@@ -221,7 +222,8 @@ function SummaryEditModal({
         setMessage(result.error || "生成に失敗しました");
         return;
       }
-      setMessage("下書きを生成しました");
+      const warn = (result as { warning?: string | null }).warning;
+      setMessage(warn ? `下書きを生成しました（${warn}）` : "下書きを生成しました");
       setPhotosLoaded(false); // 写真を再読込
       router.refresh();
       onClose();
@@ -274,7 +276,7 @@ function SummaryEditModal({
       }
 
       if (!currentSummaryId) {
-        setMessage("サマリーの作成に失敗しました");
+        setMessage("1次報告の作成に失敗しました");
         return;
       }
 
@@ -382,7 +384,7 @@ function SummaryEditModal({
       }
 
       if (!currentSummaryId) {
-        setMessage("サマリーの作成に失敗しました");
+        setMessage("1次報告の作成に失敗しました");
         return;
       }
 
@@ -422,7 +424,14 @@ function SummaryEditModal({
               <p className="text-[14px] font-bold text-gray-900">{item.siteName}</p>
             </div>
             <div className="flex items-center gap-2">
-              <p className="text-[12px] text-gray-500">{formatDate(item.reportDate)}</p>
+              <p className="text-[12px] text-gray-500">
+                {formatDate(item.reportDate)}
+                {item.submittedAt && (
+                  <span className="ml-1 text-gray-400 text-[10px]">
+                    提出: {new Date(item.submittedAt).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                )}
+              </p>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${config.badge}`}
               >
@@ -526,7 +535,7 @@ function SummaryEditModal({
                         <div className="absolute bottom-0 left-0 right-0 p-1 bg-gradient-to-t from-black/50 to-transparent">
                           <span className="text-[8px] text-white flex items-center gap-0.5">
                             {isVideo ? <Video size={8} /> : <Camera size={8} />}
-                            {photo.isFromReport ? "1次" : "追加"}
+                            {photo.isFromReport ? "2次" : "追加"}
                           </span>
                         </div>
                         {isEditable && (
@@ -584,7 +593,7 @@ function SummaryEditModal({
                     className="inline-flex min-h-[30px] items-center gap-1.5 rounded-lg bg-[#0EA5E9] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#0284C7] disabled:opacity-50"
                   >
                     <Sparkles size={11} />
-                    {isPending ? "生成中..." : "1次報告から生成"}
+                    {isPending ? "生成中..." : "2次報告から生成"}
                   </button>
                 ) : (
                   <button
@@ -600,7 +609,7 @@ function SummaryEditModal({
 
               {!hasGenerated && (
                 <p className="text-[11px] text-gray-400">
-                  職人の1次報告をもとにAIが下書きを生成します
+                  職人の2次報告をもとにAIが下書きを生成します
                 </p>
               )}
 

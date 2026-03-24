@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition
 import {
   createDailyReport,
   fetchProcesses,
+  fetchProcessChecklistItems,
   uploadReportPhotos,
 } from "@/app/(dashboard)/reports/new/actions";
 import {
@@ -40,14 +41,18 @@ type ProcessOption = {
   name: string;
   progress_rate: number;
   status: string;
+  parent_process_id?: string | null;
 };
 type WorkerOption = { id: string; name: string; role: string };
-type PhotoItem = { file: File; photoType: string; caption: string };
+type PhotoItem = { file: File; photoType: string; caption: string; processId?: string; processName?: string };
+type ChecklistItem = { id: string; processId: string; name: string; isCompleted: boolean };
 type SelectedProcessItem = {
   processId: string;
   category: string;
   name: string;
   progressRate: string;
+  hasChecklist: boolean;
+  checklistItems: ChecklistItem[];
 };
 
 interface FormData {
@@ -247,7 +252,7 @@ function Step1({
     setProcessesLoading(Boolean(siteId));
   };
 
-  const toggleProcess = (process: ProcessOption) => {
+  const toggleProcess = async (process: ProcessOption) => {
     const current = selectedProcessMap.get(process.id);
 
     if (current) {
@@ -257,6 +262,24 @@ function Step1({
       return;
     }
 
+    // チェックリスト項目を取得
+    let checklistItems: ChecklistItem[] = [];
+    let hasChecklist = false;
+    try {
+      const items = await fetchProcessChecklistItems([process.id]);
+      if (items.length > 0) {
+        hasChecklist = true;
+        checklistItems = items.map((item) => ({
+          id: item.id,
+          processId: item.process_id,
+          name: item.name,
+          isCompleted: item.is_completed,
+        }));
+      }
+    } catch {
+      // チェックリスト取得失敗時は従来の%入力にフォールバック
+    }
+
     onProcessesChange([
       ...data.selectedProcesses,
       {
@@ -264,6 +287,8 @@ function Step1({
         category: process.category,
         name: process.name,
         progressRate: String(process.progress_rate),
+        hasChecklist,
+        checklistItems,
       },
     ]);
   };
@@ -403,37 +428,92 @@ function Step1({
                           className="mt-3 border-t border-cyan-100 pt-3"
                           onClick={(event) => event.stopPropagation()}
                         >
-                          <div className="flex flex-col gap-2">
-                            <label className="text-[12px] font-medium text-gray-500">
-                              担当者見込み進捗
-                            </label>
-                            <div className="relative">
-                              <select
-                                value={selected.progressRate}
-                                onChange={(event) =>
-                                  handleProgressChange(process.id, event.target.value)
-                                }
-                                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 pr-10 text-[14px] text-gray-700 focus:border-[#0EA5E9]/50 focus:outline-none"
-                              >
-                                {PROGRESS_RATE_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
+                          {selected.hasChecklist && selected.checklistItems.length > 0 ? (
+                            /* チェックリスト方式（孫工程あり） */
+                            <div className="flex flex-col gap-2">
+                              <label className="text-[12px] font-medium text-gray-500">
+                                作業チェックリスト（{selected.checklistItems.filter((ci) => ci.isCompleted).length}/{selected.checklistItems.length}）
+                              </label>
+                              <div className="space-y-1.5">
+                                {selected.checklistItems.map((item) => (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = selected.checklistItems.map((ci) =>
+                                        ci.id === item.id ? { ...ci, isCompleted: !ci.isCompleted } : ci
+                                      );
+                                      const completedCount = updated.filter((ci) => ci.isCompleted).length;
+                                      const newRate = updated.length > 0 ? Math.round((completedCount / updated.length) * 100) : 0;
+                                      onProcessesChange(
+                                        data.selectedProcesses.map((p) =>
+                                          p.processId === process.id
+                                            ? { ...p, checklistItems: updated, progressRate: String(newRate) }
+                                            : p
+                                        )
+                                      );
+                                    }}
+                                    className={`flex items-center gap-2.5 w-full text-left rounded-xl px-3 py-2 transition-colors ${
+                                      item.isCompleted ? "bg-emerald-50" : "bg-gray-50 hover:bg-gray-100"
+                                    }`}
+                                  >
+                                    <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                                      item.isCompleted ? "border-emerald-400 bg-emerald-400 text-white" : "border-gray-300 bg-white"
+                                    }`}>
+                                      {item.isCompleted && <CheckCircle2 size={12} />}
+                                    </div>
+                                    <span className={`text-[13px] ${item.isCompleted ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                                      {item.name}
+                                    </span>
+                                  </button>
                                 ))}
-                              </select>
-                            </div>
-                            <div className="mt-1 flex items-center gap-3">
-                              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
-                                <div
-                                  className="h-full rounded-full bg-[#0EA5E9] transition-all duration-500 ease-out"
-                                  style={{ width: `${rate}%` }}
-                                />
                               </div>
-                              <span className="w-10 text-right text-[13px] font-bold text-[#0EA5E9]">
-                                {rate}%
-                              </span>
+                              <div className="mt-1 flex items-center gap-3">
+                                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                                  <div
+                                    className="h-full rounded-full bg-emerald-400 transition-all duration-500 ease-out"
+                                    style={{ width: `${rate}%` }}
+                                  />
+                                </div>
+                                <span className="w-10 text-right text-[13px] font-bold text-emerald-500">
+                                  {rate}%
+                                </span>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            /* 従来の%入力方式（チェックリストなし） */
+                            <div className="flex flex-col gap-2">
+                              <label className="text-[12px] font-medium text-gray-500">
+                                担当者見込み進捗
+                              </label>
+                              <div className="relative">
+                                <select
+                                  value={selected.progressRate}
+                                  onChange={(event) =>
+                                    handleProgressChange(process.id, event.target.value)
+                                  }
+                                  className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-2.5 pr-10 text-[14px] text-gray-700 focus:border-[#0EA5E9]/50 focus:outline-none"
+                                >
+                                  {PROGRESS_RATE_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="mt-1 flex items-center gap-3">
+                                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                                  <div
+                                    className="h-full rounded-full bg-[#0EA5E9] transition-all duration-500 ease-out"
+                                    style={{ width: `${rate}%` }}
+                                  />
+                                </div>
+                                <span className="w-10 text-right text-[13px] font-bold text-[#0EA5E9]">
+                                  {rate}%
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : null}
                     </button>
@@ -573,14 +653,17 @@ function Step3({
   onPhotoRemove,
   onPhotoTypeChange,
   onPhotoCaptionChange,
+  onProcessPhotoAdd,
 }: {
   data: FormData;
   onPhotoAdd: (files: FileList) => void;
   onPhotoRemove: (index: number) => void;
   onPhotoTypeChange: (index: number, photoType: string) => void;
   onPhotoCaptionChange: (index: number, caption: string) => void;
+  onProcessPhotoAdd: (files: FileList, processId: string, processName: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const processFileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -740,6 +823,86 @@ function Step3({
           <p className="text-[13px] leading-relaxed text-gray-400">
             写真・動画は任意です。作業前・作業中・完了後の状況がわかるファイルを添付すると報告の精度が上がります。
           </p>
+        </div>
+      )}
+
+      {/* 工程別写真添付 */}
+      {data.selectedProcesses.length > 0 && (
+        <div className="mt-6">
+          <div className="mb-3 flex items-center gap-2">
+            <Camera size={16} className="text-[#0EA5E9]" />
+            <h3 className="text-[14px] font-semibold text-gray-700">工程別の写真添付</h3>
+          </div>
+          <p className="text-[12px] text-gray-400 mb-3">各工程の施工前・施工中・施工後の写真を添付できます</p>
+          <div className="space-y-3">
+            {data.selectedProcesses.map((process) => {
+              const processPhotos = data.photos.filter((p) => p.processId === process.processId);
+              return (
+                <div key={process.processId} className="rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[13px] font-medium text-gray-700">{process.name}</span>
+                    <label className="inline-flex items-center gap-1 text-[11px] text-[#0EA5E9] font-medium cursor-pointer hover:underline">
+                      <ImagePlus size={12} /> 写真を追加
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        multiple
+                        ref={(el) => { processFileInputRefs.current[process.processId] = el; }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            onProcessPhotoAdd(e.target.files, process.processId, process.name);
+                            e.target.value = "";
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                  {processPhotos.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {processPhotos.map((item, idx) => {
+                        const globalIdx = data.photos.indexOf(item);
+                        const url = URL.createObjectURL(item.file);
+                        return (
+                          <div key={`${process.processId}-${idx}`} className="relative rounded-lg overflow-hidden border border-gray-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" className="aspect-square w-full object-cover" />
+                            <div className="p-1.5 space-y-1">
+                              <select
+                                value={item.photoType}
+                                onChange={(e) => { e.stopPropagation(); onPhotoTypeChange(globalIdx, e.target.value); }}
+                                className="w-full rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[10px] focus:outline-none"
+                              >
+                                <option value="before">施工前</option>
+                                <option value="during">施工中</option>
+                                <option value="after">施工後</option>
+                              </select>
+                              <input
+                                type="text"
+                                placeholder="補足..."
+                                value={item.caption}
+                                onChange={(e) => { e.stopPropagation(); onPhotoCaptionChange(globalIdx, e.target.value); }}
+                                className="w-full rounded border border-gray-200 bg-gray-50 px-1.5 py-1 text-[10px] focus:outline-none"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onPhotoRemove(globalIdx)}
+                              className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/80 text-white"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-300 text-center py-2">写真なし</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -1079,12 +1242,14 @@ export function DailyReportForm({
       const targetReportIds = result.reportIds ?? (result.reportId ? [result.reportId] : []);
 
       if (formData.photos.length > 0 && targetReportIds.length > 0) {
+        const photoErrors: string[] = [];
         for (const reportId of targetReportIds) {
           const photoFormData = new FormData();
           formData.photos.forEach((item) => {
             photoFormData.append("photos", item.file);
-            photoFormData.append("photoTypes", item.photoType || "other");
+            photoFormData.append("photoTypes", item.photoType || "during");
             photoFormData.append("captions", item.caption || "");
+            photoFormData.append("processIds", item.processId || "");
           });
 
           const uploadResult = await uploadReportPhotos({
@@ -1093,8 +1258,14 @@ export function DailyReportForm({
           });
 
           if (!uploadResult.success) {
-            // Upload error is captured in uploadResult.error
+            photoErrors.push(uploadResult.error || "写真のアップロードに失敗しました");
           }
+        }
+
+        if (photoErrors.length > 0) {
+          setSubmitError(`報告は送信されましたが、写真のアップロードに失敗しました: ${photoErrors[0]}`);
+          // 報告自体は成功しているので完了画面は表示しない → ユーザーが確認できるように
+          return;
         }
       }
 
@@ -1156,6 +1327,19 @@ export function DailyReportForm({
                     onPhotoRemove={handlePhotoRemove}
                     onPhotoTypeChange={handlePhotoTypeChange}
                     onPhotoCaptionChange={handlePhotoCaptionChange}
+                    onProcessPhotoAdd={(files, processId, processName) => {
+                      const newPhotos: PhotoItem[] = Array.from(files).map((file) => ({
+                        file,
+                        photoType: "during",
+                        caption: "",
+                        processId,
+                        processName,
+                      }));
+                      setFormData((prev) => ({
+                        ...prev,
+                        photos: [...prev.photos, ...newPhotos],
+                      }));
+                    }}
                   />
                 ) : null}
                 {step === 4 ? <Step4 data={formData} /> : null}

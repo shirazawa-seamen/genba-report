@@ -42,6 +42,7 @@ export interface Process {
   progress_rate: number;
   status: 'in_progress' | 'completed';
   created_at: string;
+  parent_process_id?: string | null;
 }
 
 export interface Site {

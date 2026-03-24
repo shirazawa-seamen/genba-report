@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock, Building2, Printer, AlertTriangle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Building2, Printer, AlertTriangle, Camera, Video } from "lucide-react";
 import { canAccessSite } from "@/lib/siteAccess";
 import { ClientConfirmButton } from "./confirm-button";
 import { ClientRevisionRequestButton } from "./revision-request-button";
+import { getSummaryPhotos } from "@/app/(dashboard)/sites/[siteId]/reports/actions";
 
 interface PageProps {
   params: Promise<{ summaryId: string }>;
@@ -30,7 +31,7 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
   // revision_comment は migration_v22 で追加。未適用時のフォールバック付き
   const initialSummaryResult = await supabase
     .from("client_report_summaries")
-    .select("id, site_id, report_date, summary_text, status, official_progress, revision_comment, sites(name)")
+    .select("id, site_id, report_date, summary_text, status, official_progress, revision_comment, submitted_at, sites(name)")
     .eq("id", summaryId)
     .maybeSingle();
   let summary = initialSummaryResult.data;
@@ -43,8 +44,9 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
       .eq("id", summaryId)
       .maybeSingle();
     if (!fallback) notFound();
-    summary = { ...fallback, revision_comment: null as string | null };
+    summary = { ...fallback, revision_comment: null as string | null, submitted_at: null as string | null };
   }
+  if (!summary) notFound();
   if (!(await canAccessSite(user.id, summary.site_id))) notFound();
 
   const siteName = (summary.sites as unknown as { name?: string } | null)?.name ?? "不明な現場";
@@ -60,6 +62,9 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
     day: "numeric",
     weekday: "short",
   });
+
+  // サマリー写真を取得
+  const photos = await getSummaryPhotos(summary.id);
 
   return (
     <div className="flex-1 overflow-x-hidden px-5 py-8 md:px-8 md:py-10">
@@ -81,6 +86,11 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
                 <p className="text-[15px] font-bold text-gray-900">{siteName}</p>
               </div>
               <p className="text-[13px] text-gray-500">{reportDate}</p>
+              {summary.submitted_at && (
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  提出: {new Date(summary.submitted_at).toLocaleString("ja-JP")}
+                </p>
+              )}
             </div>
             <span
               className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
@@ -145,6 +155,46 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
               {summary.summary_text}
             </p>
           </div>
+
+          {/* 写真・動画 */}
+          {photos.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-gray-100">
+              <div className="flex items-center gap-1.5 mb-3">
+                <Camera size={14} className="text-[#0EA5E9]" />
+                <p className="text-[11px] font-medium text-gray-400">添付写真・動画（{photos.length}件）</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {photos.map((photo) => (
+                  <div key={photo.id} className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+                    {photo.mediaType === "video" ? (
+                      <div className="relative">
+                        <div className="absolute left-1.5 top-1.5 z-10 flex items-center gap-1 rounded-lg bg-black/40 px-1.5 py-0.5 text-[10px] font-semibold text-[#0EA5E9]">
+                          <Video size={10} />
+                          動画
+                        </div>
+                        <video
+                          src={photo.url}
+                          controls
+                          className="aspect-square w-full bg-black object-cover"
+                          preload="metadata"
+                        />
+                      </div>
+                    ) : (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={photo.url}
+                        alt={photo.caption || "報告写真"}
+                        className="aspect-square w-full object-cover"
+                      />
+                    )}
+                    {photo.caption && (
+                      <p className="px-2 py-1.5 text-[10px] text-gray-500 truncate">{photo.caption}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* アクションボタン */}
           <div className="mt-5 pt-4 border-t border-gray-100">

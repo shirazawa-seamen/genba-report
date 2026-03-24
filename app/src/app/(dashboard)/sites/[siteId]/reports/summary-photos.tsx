@@ -116,7 +116,7 @@ export function SummaryPhotos({
                 <div className="absolute bottom-0 left-0 right-0 p-1.5 bg-gradient-to-t from-black/50 to-transparent">
                   <span className="text-[9px] text-white flex items-center gap-0.5">
                     {isVideo ? <Video size={9} /> : <Camera size={9} />}
-                    {photo.isFromReport ? "1次報告" : "追加"}
+                    {photo.isFromReport ? "2次報告" : "追加"}
                   </span>
                 </div>
 

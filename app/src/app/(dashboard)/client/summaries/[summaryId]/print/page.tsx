@@ -58,7 +58,7 @@ export default async function SummaryPrintPage({ params }: PageProps) {
 
   const backHref = userRole === "client"
     ? `/client/summaries/${summaryId}`
-    : "/manager/summaries";
+    : "/manager/reports";
 
   return (
     <>

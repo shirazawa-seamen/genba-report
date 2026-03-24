@@ -80,7 +80,7 @@ export default async function ReportEditPage({ params }: PageProps) {
               {siteName} / {report.report_date} / {processLabel}
             </p>
             <p className="mt-1 text-[12px] text-gray-300">
-              ここで編集する進捗率は担当者見込みです。公式進捗は管理者サマリー側で確定します。
+              ここで編集する進捗率は担当者見込みです。公式進捗は1次報告で確定します。
             </p>
           </div>
         </div>

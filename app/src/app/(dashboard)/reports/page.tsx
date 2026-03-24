@@ -16,6 +16,7 @@ interface DailyReportWithSite {
   work_content: string;
   created_at: string;
   approval_status: string;
+  rejection_comment: string | null;
   reporter_id: string | null;
   site_id: string;
   sites: { name: string } | null;
@@ -65,7 +66,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   let query = supabase
     .from("daily_reports")
     .select(
-      "id, report_date, work_process, progress_rate, work_content, created_at, approval_status, reporter_id, site_id, sites(name), processes(name)",
+      "id, report_date, work_process, progress_rate, work_content, created_at, approval_status, rejection_comment, reporter_id, site_id, sites(name), processes(name)",
       { count: "exact" }
     )
     .order("report_date", { ascending: false })
@@ -178,6 +179,8 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       statusLabel: APPROVAL_STATUS_LABELS[status] ?? status,
       progressRate: avgProgress,
       reporterName: first.reporter_id ? (reporterMap.get(first.reporter_id) || null) : null,
+      rejectionComment: first.rejection_comment ?? null,
+      submittedAt: first.created_at,
     };
   });
 
@@ -203,7 +206,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-[22px] font-bold text-gray-900">1次報告一覧</h1>
+          <h1 className="text-[22px] font-bold text-gray-900">2次報告一覧</h1>
           <p className="text-[13px] text-gray-400 mt-0.5">
             {activeFilter ? `${APPROVAL_STATUS_LABELS[activeFilter] ?? activeFilter}: ` : ""}
             {isManager && activeScope === "mine" ? "自分の現場 / " : ""}

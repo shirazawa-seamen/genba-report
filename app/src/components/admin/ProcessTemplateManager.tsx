@@ -400,7 +400,7 @@ export function ProcessTemplateManager({
     const index = templates.findIndex((item) => item.id === template.id);
     const isEditing = editingId === template.id;
     const hasChildren = template.children.length > 0;
-    const isExpanded = expandedParents.has(template.id);
+    const isExpanded = isChild ? checklistExpanded.has(template.id) : expandedParents.has(template.id);
 
     return (
       <div key={template.id}>
@@ -514,6 +514,16 @@ export function ProcessTemplateManager({
                       {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </button>
                   )}
+                  {isChild && (
+                    <button
+                      type="button"
+                      onClick={() => toggleChecklist(template.id)}
+                      className="rounded p-0.5 text-gray-400 hover:text-emerald-500"
+                      title="チェックリスト"
+                    >
+                      {checklistExpanded.has(template.id) ? <ChevronDown size={14} /> : <CheckSquare size={14} />}
+                    </button>
+                  )}
                   <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-[#0EA5E9]">
                     {template.processCode}
                   </span>
@@ -555,20 +565,81 @@ export function ProcessTemplateManager({
                   onClick={() => handleStartEdit(template)}
                   disabled={isPending}
                   className="rounded-lg p-2 text-gray-300 hover:bg-white hover:text-[#0EA5E9]"
+                  title="編集"
                 >
                   <Pencil size={14} />
                 </button>
+                {!isChild && (
+                  <button
+                    type="button"
+                    onClick={() => handleCreateChild(template.id)}
+                    disabled={isPending}
+                    className="rounded-lg p-2 text-gray-300 hover:bg-emerald-50 hover:text-emerald-500"
+                    title="子工程を追加"
+                  >
+                    <Plus size={14} />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(template.id)}
                   disabled={isPending}
                   className="rounded-lg p-2 text-gray-300 hover:bg-red-50 hover:text-red-400"
+                  title="削除"
                 >
                   <Trash2 size={14} />
                 </button>
               </div>
             </div>
           )}
+          {/* チェックリスト（孫工程）— 子工程カード内 */}
+          {isChild && isExpanded && (
+            <div className="mt-2 mx-1 mb-1 px-1">
+            {checklistLoading.has(template.id) ? (
+              <p className="text-[11px] text-gray-300 py-1">読み込み中...</p>
+            ) : (
+              <>
+                <div className="space-y-1">
+                  {(checklistCache[template.id] ?? []).map((item) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <CheckSquare size={11} className="text-gray-300 shrink-0" />
+                      <span className="flex-1 text-[11px] text-gray-600">{item.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteChecklistItem(item.id, template.id)}
+                        disabled={isPending}
+                        className="text-gray-200 hover:text-red-400 transition-colors"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  ))}
+                  {(checklistCache[template.id] ?? []).length === 0 && !checklistLoading.has(template.id) && (
+                    <p className="text-[10px] text-gray-300">項目なし</p>
+                  )}
+                </div>
+                <div className="mt-2 flex gap-1.5">
+                  <input
+                    type="text"
+                    value={newChecklistName[template.id] ?? ""}
+                    onChange={(e) => setNewChecklistName((prev) => ({ ...prev, [template.id]: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleAddChecklistItem(template.id); }}
+                    placeholder="項目を追加..."
+                    className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] focus:border-[#0EA5E9]/50 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAddChecklistItem(template.id)}
+                    disabled={isPending || !(newChecklistName[template.id] ?? "").trim()}
+                    className="rounded-lg bg-[#0EA5E9] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
+                  >
+                    追加
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         </div>
 
         {/* 子工程の展開表示 */}
@@ -579,37 +650,28 @@ export function ProcessTemplateManager({
             )}
           </div>
         )}
-      </div>
-    );
+      </div>);
   }
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-[20px] font-bold text-gray-900">標準工程マスター</h1>
-            <p className="mt-1 text-[12px] text-gray-400">
-              一般住宅の標準工程と工程種別を、時系列に沿って管理します。
-            </p>
-          </div>
-          <span className="rounded-full border border-gray-200 px-3 py-1 text-[11px] text-gray-400">
-            工程 {templates.length}件 / 種別 {categories.length}件
-          </span>
-        </div>
-
-        {message && (
-          <div
-            className={`mt-4 rounded-lg border px-3 py-2 text-[12px] ${
-              message.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-600"
-                : "border-red-200 bg-red-50 text-red-400"
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
+      <div className="flex items-center justify-between gap-3">
+        <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[12px] text-gray-500 shadow-sm">
+          工程 {templates.length}件 / 種別 {categories.length}件
+        </span>
       </div>
+
+      {message && (
+        <div
+          className={`rounded-lg border px-3 py-2 text-[12px] ${
+            message.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-600"
+              : "border-red-200 bg-red-50 text-red-400"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-start justify-between gap-3">

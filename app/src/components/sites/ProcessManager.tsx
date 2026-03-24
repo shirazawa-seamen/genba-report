@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardList,
+  CornerDownRight,
   GripVertical,
   Pencil,
   Plus,
@@ -22,6 +23,8 @@ import type { ProcessCategoryRecord } from "@/lib/processCategories";
 import type { ProcessTemplateRecord } from "@/lib/processTemplateTypes";
 import type { ProcessChecklistItem } from "@/app/(dashboard)/sites/actions";
 import {
+  addSiteProcess,
+  getSiteProcesses,
   getProcessChecklist,
   toggleChecklistItem,
   addChecklistItem,
@@ -36,9 +39,11 @@ export interface SiteProcessDraftItem {
   progressRate: number;
   status: string;
   createdAt: string;
+  parentProcessId?: string | null;
 }
 
 interface ProcessManagerProps {
+  siteId?: string;
   processes: SiteProcessDraftItem[];
   canManage: boolean;
   initialTemplates: ProcessTemplateRecord[];
@@ -61,7 +66,108 @@ function reorderItems(items: SiteProcessDraftItem[], fromIndex: number, toIndex:
   return next.map((item, index) => ({ ...item, orderIndex: index + 1 }));
 }
 
+function ChecklistPanel({
+  processId, canManage, isEditing, cache, loading, isPending, newItemName,
+  onToggleItem, onDeleteItem, onAddItem, onNameChange, onLoad,
+}: {
+  processId: string;
+  canManage: boolean;
+  isEditing: boolean;
+  cache: Record<string, ProcessChecklistItem[]>;
+  loading: Set<string>;
+  isPending: boolean;
+  newItemName: Record<string, string>;
+  onToggleItem: (item: ProcessChecklistItem) => void;
+  onDeleteItem: (itemId: string) => void;
+  onAddItem: () => void;
+  onNameChange: (name: string) => void;
+  onLoad: () => void;
+}) {
+  useEffect(() => { onLoad(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const items = cache[processId] ?? [];
+  const isLoading = loading.has(processId);
+
+  // 項目なし＆編集中でない場合は何も表示しない
+  if (!isLoading && items.length === 0 && !isEditing) return null;
+
+  return (
+    <div className="mt-2">
+      {isLoading ? (
+        <p className="text-[11px] text-gray-300 py-1">読み込み中...</p>
+      ) : (
+        <>
+          {items.length > 0 && (
+            <div className="space-y-1.5">
+              {items.map((item) => (
+                <div key={item.id} className="flex items-center gap-2">
+                  {isEditing ? (
+                    <button
+                      type="button"
+                      onClick={() => onToggleItem(item)}
+                      disabled={isPending}
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                        item.isCompleted
+                          ? "border-emerald-400 bg-emerald-400 text-white"
+                          : "border-gray-300 bg-white hover:border-[#0EA5E9]"
+                      }`}
+                    >
+                      {item.isCompleted && <CheckCircle2 size={12} />}
+                    </button>
+                  ) : (
+                    <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                      item.isCompleted
+                        ? "border-emerald-400 bg-emerald-400 text-white"
+                        : "border-gray-200 bg-gray-50"
+                    }`}>
+                      {item.isCompleted && <CheckCircle2 size={12} />}
+                    </div>
+                  )}
+                  <span className={`flex-1 text-[12px] ${item.isCompleted ? "text-gray-300 line-through" : "text-gray-700"}`}>
+                    {item.name}
+                  </span>
+                  {isEditing && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteItem(item.id)}
+                      disabled={isPending}
+                      className="text-gray-200 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {isEditing && (
+            <div className={`flex gap-1.5 ${items.length > 0 ? "mt-2" : ""}`}>
+              <input
+                type="text"
+                value={newItemName[processId] ?? ""}
+                onChange={(e) => onNameChange(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") onAddItem(); }}
+                placeholder="チェック項目を追加..."
+                className="flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] focus:border-[#0EA5E9]/50 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={onAddItem}
+                disabled={isPending || !(newItemName[processId] ?? "").trim()}
+                className="rounded-lg bg-[#0EA5E9] px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50 transition-colors"
+              >
+                追加
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ProcessManager({
+  siteId,
   processes,
   canManage,
   initialTemplates,
@@ -105,7 +211,10 @@ export function ProcessManager({
   const templateCandidates = useMemo(
     () =>
       initialTemplates.filter(
-        (item) => !existingKeys.has(`${item.category}::${item.name.trim()}`)
+        (item) =>
+          // 子テンプレートは候補に出さない（親選択時に自動追加される）
+          !item.parentTemplateId &&
+          !existingKeys.has(`${item.category}::${item.name.trim()}`)
       ),
     [existingKeys, initialTemplates]
   );
@@ -242,6 +351,53 @@ export function ProcessManager({
       (item) => item.parentTemplateId === template.id
     );
 
+    // siteIdがある場合はDB直接保存（チェックリスト自動生成付き）
+    if (siteId) {
+      closeAddModal();
+      startChecklistTransition(async () => {
+        // 親工程を追加
+        const parentResult = await addSiteProcess({
+          siteId,
+          category: template.category,
+          name: template.name,
+          templateId: template.id,
+        });
+
+        if (!parentResult.success) {
+          setMessage({ type: "error", text: parentResult.error || "工程の追加に失敗しました" });
+          return;
+        }
+
+        const parentProcessId = parentResult.processId;
+        let childCount = 0;
+
+        // 子工程を追加
+        for (const child of childTemplates) {
+          if (existingKeys.has(`${child.category}::${child.name.trim()}`)) continue;
+          const childResult = await addSiteProcess({
+            siteId,
+            category: child.category,
+            name: child.name,
+            templateId: child.id,
+            parentProcessId: parentProcessId,
+          });
+          if (childResult.success) childCount++;
+        }
+
+        setMessage({
+          type: "success",
+          text: childCount > 0
+            ? `「${template.processCode} ${template.name}」と子工程${childCount}件を追加しました（チェックリスト自動作成）`
+            : `「${template.processCode} ${template.name}」を追加しました`,
+        });
+
+        // ページをリロードして最新データを反映
+        window.location.reload();
+      });
+      return;
+    }
+
+    // siteIdがない場合は従来のローカルstate方式
     const insertAtIndex = processes.findIndex((process) => {
       const matchedTemplate = initialTemplates.find(
         (item) => item.category === process.category && item.name === process.name
@@ -439,10 +595,26 @@ export function ProcessManager({
           ),
         }));
       } else {
-        // Refresh to get server-calculated progress
+        // Refresh checklist
         const refreshed = await getProcessChecklist(processId);
         if (refreshed.success && refreshed.items) {
           setChecklistCache((prev) => ({ ...prev, [processId]: refreshed.items! }));
+        }
+        // Refresh progress rate from DB (trigger updates it)
+        if (siteId && onChange) {
+          const freshProcesses = await getSiteProcesses(siteId);
+          if (freshProcesses.success && freshProcesses.processes) {
+            onChange(freshProcesses.processes.map((p) => ({
+              id: p.id,
+              category: p.category,
+              name: p.name,
+              orderIndex: p.orderIndex,
+              progressRate: p.progressRate,
+              status: p.status,
+              createdAt: p.createdAt,
+              parentProcessId: p.parentProcessId,
+            })));
+          }
         }
       }
     });
@@ -531,18 +703,20 @@ export function ProcessManager({
       );
     }
 
+    const isChild = !!process.parentProcessId;
+
     return (
       <div
         key={process.id}
         ref={(element) => {
           itemRefs.current[process.id] = element;
         }}
-        className={`rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition ${
-          draggingId === process.id ? "scale-[0.98] opacity-70 shadow-lg" : ""
-        }`}
+        className={`rounded-2xl border bg-white shadow-sm transition ${
+          isChild ? "ml-6 border-gray-100 p-3" : "border-gray-200 p-4"
+        } ${draggingId === process.id ? "scale-[0.98] opacity-70 shadow-lg" : ""}`}
       >
         <div className="flex items-start gap-3">
-          {canManage ? (
+          {canManage && !isChild ? (
             <button
               type="button"
               onMouseDown={(event) => {
@@ -563,14 +737,15 @@ export function ProcessManager({
           ) : null}
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-2">
-              <span className="truncate text-[14px] font-semibold text-gray-800">
+              {isChild && <CornerDownRight size={12} className="shrink-0 text-gray-300" />}
+              <span className={`truncate font-semibold ${isChild ? "text-[13px] text-gray-600" : "text-[14px] text-gray-800"}`}>
                 {process.name}
               </span>
               {process.status === "completed" ? (
                 <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
               ) : null}
             </div>
-            <p className="mb-3 text-[11px] text-gray-400">{categoryLabel}</p>
+            {!isChild && <p className="mb-3 text-[11px] text-gray-400">{categoryLabel}</p>}
             <div className="flex items-center gap-2">
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
                 <div
@@ -582,6 +757,26 @@ export function ProcessManager({
                 {process.progressRate}%
               </span>
             </div>
+            {/* チェックリスト（子工程のみ） */}
+            {isChild && <ChecklistPanel
+              processId={process.id}
+              canManage={canManage}
+              isEditing={canManage}
+              cache={checklistCache}
+              loading={checklistLoading}
+              isPending={isPendingChecklist}
+              newItemName={newItemName}
+              onToggleItem={(item) => handleToggleCheckItem(item, process.id)}
+              onDeleteItem={(itemId) => handleDeleteCheckItem(itemId, process.id)}
+              onAddItem={() => handleAddCheckItem(process.id)}
+              onNameChange={(name) => setNewItemName((prev) => ({ ...prev, [process.id]: name }))}
+              onLoad={() => {
+                if (!checklistCache[process.id] && !checklistLoading.has(process.id)) {
+                  toggleChecklistPanel(process.id);
+                }
+              }}
+            />}
+
             {isDeleting ? (
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3">
                 <AlertTriangle size={14} className="shrink-0 text-red-400" />

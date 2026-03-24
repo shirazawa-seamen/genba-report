@@ -21,7 +21,7 @@ export function CreateSummaryButton({ siteId }: { siteId: string }) {
         setMessage(result.error || "作成に失敗しました");
         return;
       }
-      setMessage("2次報告を作成しました");
+      setMessage("1次報告を作成しました");
       setIsOpen(false);
       router.refresh();
     });
@@ -35,7 +35,7 @@ export function CreateSummaryButton({ siteId }: { siteId: string }) {
         className="inline-flex items-center gap-1.5 min-h-[36px] px-3 rounded-xl border border-cyan-200 bg-cyan-50 text-[12px] font-medium text-[#0EA5E9] transition-colors hover:bg-cyan-100"
       >
         <Plus size={14} />
-        2次報告を作成
+        1次報告を作成
       </button>
     );
   }
@@ -54,7 +54,7 @@ export function CreateSummaryButton({ siteId }: { siteId: string }) {
         disabled={isPending || !date}
         className="inline-flex items-center gap-1.5 min-h-[36px] px-4 rounded-xl bg-[#0EA5E9] text-[12px] font-bold text-white transition-all hover:bg-[#0284C7] disabled:opacity-50"
       >
-        {isPending ? "作成中..." : "作成（1次報告があればLLM自動生成）"}
+        {isPending ? "作成中..." : "作成（2次報告があればLLM自動生成）"}
       </button>
       <button
         type="button"

@@ -28,7 +28,7 @@ interface ReportDetailRaw {
   id: string; report_date: string; work_process: string; work_content: string;
   workers: string[] | null; progress_rate: number; weather: string | null;
   work_hours: number | null; arrival_time: string | null; departure_time: string | null;
-  issues: string | null; created_at: string;
+  issues: string | null; created_at: string; approved_at: string | null;
   approval_status: string; rejection_comment: string | null;
   admin_notes: string | null; edited_by_admin: boolean | null;
   reporter_id: string | null;
@@ -70,7 +70,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
   const { data: report, error: reportError } = await supabase
     .from("daily_reports")
-    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, arrival_time, departure_time, issues, created_at, approval_status, rejection_comment, admin_notes, edited_by_admin, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)`)
+    .select(`id, report_date, work_process, work_content, workers, progress_rate, weather, work_hours, arrival_time, departure_time, issues, created_at, approved_at, approval_status, rejection_comment, admin_notes, edited_by_admin, reporter_id, sites(name, address), processes(id, category, name, progress_rate, status)`)
     .eq("id", id).single();
 
   if (reportError || !report) { console.error("Report fetch error:", reportError); notFound(); }
@@ -304,8 +304,11 @@ export default async function ReportDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      <div className="text-[11px] text-gray-300 mt-4">
-        <p>作成: {new Date(raw.created_at).toLocaleString("ja-JP")}</p>
+      <div className="text-[11px] text-gray-300 mt-4 space-y-0.5">
+        <p>提出日時: {new Date(raw.created_at).toLocaleString("ja-JP")}</p>
+        {raw.approved_at && (
+          <p>{raw.approval_status === "rejected" ? "差戻し" : "承認"}日時: {new Date(raw.approved_at).toLocaleString("ja-JP")}</p>
+        )}
       </div>
     </div>
   );

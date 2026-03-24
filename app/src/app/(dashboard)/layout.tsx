@@ -40,21 +40,15 @@ export default async function DashboardLayout({
     { label: 'ホーム', shortLabel: 'ホーム', href: '/', icon: Home, iconName: 'Home', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場一覧', shortLabel: '現場', href: '/sites', icon: Building2, iconName: 'Building2', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場カレンダー', shortLabel: '予定', href: '/calendar', icon: Calendar, iconName: 'Calendar', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
-    { label: '1次報告', shortLabel: '1次', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
-    { label: '2次報告', shortLabel: '2次', href: '/manager/summaries', icon: Send, iconName: 'Send', roles: ['admin', 'manager'] },
+    { label: '1次報告', shortLabel: '1次', href: '/manager/reports', icon: Send, iconName: 'Send', roles: ['admin', 'manager'] },
+    { label: '2次報告', shortLabel: '2次', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
     { label: '確認', shortLabel: '確認', href: '/client', icon: CheckSquare, iconName: 'CheckSquare', roles: ['client'] },
-    { label: '新規報告', shortLabel: '新規', href: '/reports/new', icon: PlusCircle, iconName: 'PlusCircle', roles: ['worker_internal', 'worker_external'] },
+    { label: '新規2次報告', shortLabel: '新規', href: '/reports/new', icon: PlusCircle, iconName: 'PlusCircle', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
     { label: '材料カタログ', shortLabel: '材料', href: '/admin/materials', icon: Package, iconName: 'Package', roles: ['admin', 'manager'] },
   ]
 
   const navItems = allNavItems
     .filter(item => item.roles.includes(userRole))
-    .map(item => {
-      if (item.href === '/reports' && !isManagerOrAdmin) {
-        return { ...item, label: '報告一覧', shortLabel: '報告' }
-      }
-      return item
-    })
 
   // フッターナビ: マネージャー/管理者は材料カタログを除外（サイドバーにあるため）
   const bottomNavItems = navItems.filter(item =>
