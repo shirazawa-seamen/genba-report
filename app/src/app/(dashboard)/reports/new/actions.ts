@@ -234,6 +234,7 @@ export async function fetchLatestProgress(processId: string) {
 export async function createDailyReport(
   input: CreateReportInput
 ): Promise<CreateReportResult> {
+  try {
   const supabase = await createClient();
 
   // 認証ユーザーの取得
@@ -399,6 +400,10 @@ export async function createDailyReport(
     reportId: createdReportIds[0],
     reportIds: createdReportIds,
   };
+  } catch (err) {
+    console.error("[createDailyReport] Unexpected error:", err);
+    return { success: false, error: `予期しないエラーが発生しました: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +423,7 @@ interface UploadPhotosResult {
 export async function uploadReportPhotos(
   input: UploadPhotosInput
 ): Promise<UploadPhotosResult> {
+  try {
   const supabase = await createClient();
 
   // 認証ユーザーの取得
@@ -509,6 +515,10 @@ export async function uploadReportPhotos(
     success: true,
     uploadedCount: uploadedPaths.length,
   };
+  } catch (err) {
+    console.error("[uploadReportPhotos] Unexpected error:", err);
+    return { success: false, error: `写真アップロード中にエラーが発生しました: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }
 
 // ---------------------------------------------------------------------------
