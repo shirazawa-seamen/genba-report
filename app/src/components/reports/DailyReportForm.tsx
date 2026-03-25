@@ -91,6 +91,7 @@ const WEATHER_OPTIONS: SelectOption[] = [
 ];
 
 const STEP_LABELS = ["基本情報", "作業内容", "写真・動画", "確認"];
+const MAX_PHOTOS = 20;
 
 // 画像圧縮（最大1920px、JPEG品質0.8、動画はそのまま）
 async function compressImage(file: File): Promise<File> {
@@ -1169,8 +1170,13 @@ export function DailyReportForm({
   const handlePhotoAdd = useCallback(async (files: FileList) => {
     const sizeErrors: string[] = [];
     const validFiles: File[] = [];
+    const currentCount = formData.photos.length;
 
     for (const file of Array.from(files)) {
+      if (currentCount + validFiles.length >= MAX_PHOTOS) {
+        sizeErrors.push(`添付は最大${MAX_PHOTOS}枚までです`);
+        break;
+      }
       const isVideo = file.type.startsWith("video/");
       const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_PHOTO_SIZE;
       if (file.size > maxSize) {
@@ -1190,7 +1196,7 @@ export function DailyReportForm({
       const items: PhotoItem[] = compressed.map((file) => ({ file, photoType: "", caption: "" }));
       setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...items] }));
     }
-  }, []);
+  }, [formData.photos.length]);
 
   const handlePhotoRemove = useCallback((index: number) => {
     setFormData((prev) => ({

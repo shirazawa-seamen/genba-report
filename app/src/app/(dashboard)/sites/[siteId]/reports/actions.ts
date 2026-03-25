@@ -300,11 +300,12 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
         (existingPhotos ?? []).map((p) => p.storage_path)
       );
 
-      // 1次報告の写真を取得
+      // 最初の報告IDの写真のみ取得（複数工程で同じ写真が重複するのを防止）
+      const firstReportId = sourceReportIds[0];
       const { data: reportPhotos } = await supabase
         .from("report_photos")
         .select("id, report_id, storage_path, photo_type, caption, media_type")
-        .in("report_id", sourceReportIds)
+        .eq("report_id", firstReportId)
         .order("created_at");
 
       if (reportPhotos && reportPhotos.length > 0) {
