@@ -33,7 +33,6 @@ import {
 import { PHOTO_TYPE_LABELS } from "@/lib/constants";
 import {
   getProcessChecklist,
-  toggleChecklistItem,
 } from "@/app/(dashboard)/sites/actions";
 import type { ProcessChecklistItem } from "@/app/(dashboard)/sites/actions";
 import type { SiteReportDay } from "./page";
@@ -137,24 +136,6 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
       setChecklistLoaded(true);
     });
   }, [checklistLoaded, day.reports]);
-
-  const handleChecklistToggle = (item: ProcessChecklistItem, processId: string) => {
-    const newCompleted = !item.isCompleted;
-    setChecklistCache((prev) => ({
-      ...prev,
-      [processId]: (prev[processId] ?? []).map((ci) => ci.id === item.id ? { ...ci, isCompleted: newCompleted } : ci),
-    }));
-    startTransition(async () => {
-      const result = await toggleChecklistItem(item.id, newCompleted);
-      if (!result.success) {
-        setChecklistCache((prev) => ({
-          ...prev,
-          [processId]: (prev[processId] ?? []).map((ci) => ci.id === item.id ? { ...ci, isCompleted: !newCompleted } : ci),
-        }));
-        setMessage("チェック更新に失敗しました");
-      }
-    });
-  };
 
   // 2次報告の写真を読み込み
   useEffect(() => {
@@ -383,22 +364,19 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                               {items.length > 0 && (
                                 <div className="ml-2 mt-1 space-y-1">
                                   {items.map((item) => (
-                                    <button
+                                    <div
                                       key={item.id}
-                                      type="button"
-                                      onClick={() => r.processId && handleChecklistToggle(item, r.processId)}
-                                      disabled={isPending}
-                                      className="flex items-center gap-1.5 w-full text-left"
+                                      className="flex items-center gap-1.5"
                                     >
-                                      <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                                        item.isCompleted ? "border-emerald-400 bg-emerald-400 text-white" : "border-gray-300 bg-white hover:border-[#0EA5E9]"
+                                      <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                        item.isCompleted ? "border-emerald-400 bg-emerald-400 text-white" : "border-gray-200 bg-gray-50"
                                       }`}>
                                         {item.isCompleted && <CheckCircle2 size={10} />}
                                       </div>
                                       <span className={`text-[10px] ${item.isCompleted ? "text-gray-300 line-through" : "text-gray-600"}`}>
                                         {item.name}
                                       </span>
-                                    </button>
+                                    </div>
                                   ))}
                                 </div>
                               )}
