@@ -91,6 +91,45 @@ const WEATHER_OPTIONS: SelectOption[] = [
 ];
 
 const STEP_LABELS = ["基本情報", "作業内容", "写真・動画", "確認"];
+
+// 画像圧縮（最大1920px、JPEG品質0.8、動画はそのまま）
+async function compressImage(file: File): Promise<File> {
+  if (file.type.startsWith("video/")) return file;
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX_SIZE = 1920;
+      let { width, height } = img;
+      if (width > MAX_SIZE || height > MAX_SIZE) {
+        if (width > height) {
+          height = Math.round(height * (MAX_SIZE / width));
+          width = MAX_SIZE;
+        } else {
+          width = Math.round(width * (MAX_SIZE / height));
+          height = MAX_SIZE;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob || blob.size >= file.size) { resolve(file); return; }
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+        },
+        "image/jpeg",
+        0.8
+      );
+    };
+    img.onerror = () => resolve(file);
+    img.src = URL.createObjectURL(file);
+  });
+}
 const TOTAL_STEPS = 4;
 const MAX_PHOTO_SIZE = 10 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
@@ -1127,29 +1166,29 @@ export function DailyReportForm({
     });
   }, []);
 
-  const handlePhotoAdd = useCallback((files: FileList) => {
-    const validItems: PhotoItem[] = [];
+  const handlePhotoAdd = useCallback(async (files: FileList) => {
     const sizeErrors: string[] = [];
+    const validFiles: File[] = [];
 
-    Array.from(files).forEach((file) => {
+    for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith("video/");
       const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_PHOTO_SIZE;
       if (file.size > maxSize) {
-        sizeErrors.push(
-          `${file.name}: ${isVideo ? "動画" : "写真"}は${isVideo ? "50MB" : "10MB"}以下にしてください`
-        );
+        sizeErrors.push(`${file.name}: ${isVideo ? "動画" : "写真"}は${isVideo ? "50MB" : "10MB"}以下にしてください`);
       } else {
-        validItems.push({ file, photoType: "", caption: "" });
+        validFiles.push(file);
       }
-    });
+    }
 
     if (sizeErrors.length > 0) {
       setSubmitError(sizeErrors.join("\n"));
       setTimeout(() => setSubmitError(null), 5000);
     }
 
-    if (validItems.length > 0) {
-      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...validItems] }));
+    if (validFiles.length > 0) {
+      const compressed = await Promise.all(validFiles.map(compressImage));
+      const items: PhotoItem[] = compressed.map((file) => ({ file, photoType: "", caption: "" }));
+      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...items] }));
     }
   }, []);
 
@@ -1304,8 +1343,9 @@ export function DailyReportForm({
                   onPhotoRemove={handlePhotoRemove}
                   onPhotoTypeChange={handlePhotoTypeChange}
                   onPhotoCaptionChange={handlePhotoCaptionChange}
-                  onProcessPhotoAdd={(files, processId, processName) => {
-                    const newPhotos: PhotoItem[] = Array.from(files).map((file) => ({
+                  onProcessPhotoAdd={async (files, processId, processName) => {
+                    const compressed = await Promise.all(Array.from(files).map(compressImage));
+                    const newPhotos: PhotoItem[] = compressed.map((file) => ({
                       file,
                       photoType: "during",
                       caption: "",
