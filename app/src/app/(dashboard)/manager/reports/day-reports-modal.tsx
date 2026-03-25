@@ -527,6 +527,20 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                   </div>
                 )}
 
+                {/* 天気・時間・作業者（2次報告から集約） */}
+                {(() => {
+                  const weather = day.reports.find((r) => (r as Record<string, unknown>).weather)?.workContent ? null : null;
+                  // 2次報告の情報を集約して表示
+                  const allReporters = [...new Set(day.reports.map((r) => r.reporterName))];
+                  const firstReport = day.reports[0];
+                  return (
+                    <div className="flex flex-wrap gap-2 text-[11px] text-gray-500 mb-2">
+                      {firstReport?.arrivalTime && <span>🕐 {firstReport.arrivalTime} 〜 {firstReport.departureTime ?? "--:--"}</span>}
+                      <span>👷 {allReporters.join("、")}</span>
+                    </div>
+                  );
+                })()}
+
                 {/* 進捗率（読み取り専用） */}
                 {day.summary?.officialProgress && day.summary.officialProgress.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">

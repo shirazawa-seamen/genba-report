@@ -31,7 +31,7 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
   // revision_comment は migration_v22 で追加。未適用時のフォールバック付き
   const initialSummaryResult = await supabase
     .from("client_report_summaries")
-    .select("id, site_id, report_date, summary_text, status, official_progress, revision_comment, submitted_at, sites(name)")
+    .select("id, site_id, report_date, summary_text, status, official_progress, revision_comment, submitted_at, weather, arrival_time, departure_time, workers, sites(name)")
     .eq("id", summaryId)
     .maybeSingle();
   let summary = initialSummaryResult.data;
@@ -44,7 +44,7 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
       .eq("id", summaryId)
       .maybeSingle();
     if (!fallback) notFound();
-    summary = { ...fallback, revision_comment: null as string | null, submitted_at: null as string | null };
+    summary = { ...fallback, revision_comment: null as string | null, submitted_at: null as string | null, weather: null as string | null, arrival_time: null as string | null, departure_time: null as string | null, workers: null as string[] | null };
   }
   if (!summary) notFound();
   if (!(await canAccessSite(user.id, summary.site_id))) notFound();
@@ -146,6 +146,19 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* 天気・時間・作業者 */}
+          {(summary.weather || summary.arrival_time || summary.departure_time || (summary.workers && (summary.workers as string[]).length > 0)) && (
+            <div className="pt-3 border-t border-gray-100 flex flex-wrap gap-3 text-[12px] text-gray-500">
+              {summary.weather && <span>🌤 {summary.weather}</span>}
+              {(summary.arrival_time || summary.departure_time) && (
+                <span>🕐 {summary.arrival_time ?? "--:--"} 〜 {summary.departure_time ?? "--:--"}</span>
+              )}
+              {summary.workers && (summary.workers as string[]).length > 0 && (
+                <span>👷 {(summary.workers as string[]).join("、")}</span>
+              )}
             </div>
           )}
 

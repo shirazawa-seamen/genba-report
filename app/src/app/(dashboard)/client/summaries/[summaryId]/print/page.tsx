@@ -28,7 +28,7 @@ export default async function SummaryPrintPage({ params }: PageProps) {
 
   const { data: summary } = await supabase
     .from("client_report_summaries")
-    .select("id, site_id, report_date, summary_text, status, official_progress, submitted_at, sites(name, address)")
+    .select("id, site_id, report_date, summary_text, status, official_progress, submitted_at, weather, arrival_time, departure_time, workers, sites(name, address)")
     .eq("id", summaryId)
     .maybeSingle();
 
@@ -121,6 +121,32 @@ export default async function SummaryPrintPage({ params }: PageProps) {
                   : "—"}
               </td>
             </tr>
+            <tr>
+              <td className="border border-gray-400 bg-gray-100 px-3 py-2 font-semibold">
+                天気
+              </td>
+              <td className="border border-gray-400 px-3 py-2">
+                {((summary as Record<string, unknown>).weather as string) ?? "—"}
+              </td>
+              <td className="border border-gray-400 bg-gray-100 px-3 py-2 font-semibold">
+                現場時間
+              </td>
+              <td className="border border-gray-400 px-3 py-2">
+                {(summary as Record<string, unknown>).arrival_time || (summary as Record<string, unknown>).departure_time
+                  ? `${(summary as Record<string, unknown>).arrival_time ?? "--:--"} 〜 ${(summary as Record<string, unknown>).departure_time ?? "--:--"}`
+                  : "—"}
+              </td>
+            </tr>
+            {Array.isArray((summary as Record<string, unknown>).workers) && ((summary as Record<string, unknown>).workers as string[]).length > 0 && (
+              <tr>
+                <td className="border border-gray-400 bg-gray-100 px-3 py-2 font-semibold">
+                  作業者
+                </td>
+                <td colSpan={3} className="border border-gray-400 px-3 py-2">
+                  {((summary as Record<string, unknown>).workers as string[]).join("、")}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 

@@ -104,7 +104,7 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
 
   const { data: reports, error } = await supabase
     .from("daily_reports")
-    .select("id, progress_rate, work_content, issues, reporter_id, workers, processes(name)")
+    .select("id, progress_rate, work_content, issues, reporter_id, workers, weather, arrival_time, departure_time, processes(name)")
     .eq("site_id", siteId)
     .eq("report_date", reportDate)
     .neq("approval_status", "rejected")
@@ -176,7 +176,15 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
     workContent: report.work_content ?? "",
     reporterName: report.reporter_id ? reporterMap.get(report.reporter_id) ?? "不明" : "不明",
     issues: report.issues ?? null,
+    weather: (report.weather as string | null) ?? null,
+    arrivalTime: (report.arrival_time as string | null) ?? null,
+    departureTime: (report.departure_time as string | null) ?? null,
   }));
+
+  // 天気・時間は最初の報告から取得（同日同現場で統一）
+  const summaryWeather = normalizedReports.find((r) => r.weather)?.weather ?? null;
+  const summaryArrivalTime = normalizedReports.find((r) => r.arrivalTime)?.arrivalTime ?? null;
+  const summaryDepartureTime = normalizedReports.find((r) => r.departureTime)?.departureTime ?? null;
 
   const prompt = [
     "あなたは建設現場の現場監督です。以下の複数の職人報告をもとに、クライアントへ提出する日次報告文を作成してください。",
@@ -194,6 +202,8 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
     "",
     `現場: ${site?.name ?? "不明な現場"}`,
     `日付: ${reportDate}`,
+    summaryWeather ? `天気: ${summaryWeather}` : "",
+    summaryArrivalTime || summaryDepartureTime ? `現場時間: ${summaryArrivalTime ?? "--:--"} 〜 ${summaryDepartureTime ?? "--:--"}` : "",
     "",
     "以下が職人からの報告です:",
     ...normalizedReports.map((report, index) =>
@@ -255,6 +265,9 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
         official_progress: officialProgress,
         source_report_ids: sourceReportIds,
         workers: uniqueWorkers,
+        weather: summaryWeather,
+        arrival_time: summaryArrivalTime,
+        departure_time: summaryDepartureTime,
         generated_by: context.user.id,
         status: "draft",
         updated_at: new Date().toISOString(),
@@ -274,6 +287,9 @@ export async function generateClientReportSummary(siteId: string, reportDate: st
         official_progress: officialProgress,
         source_report_ids: sourceReportIds,
         workers: uniqueWorkers,
+        weather: summaryWeather,
+        arrival_time: summaryArrivalTime,
+        departure_time: summaryDepartureTime,
         generated_by: context.user.id,
         status: "draft",
         updated_at: new Date().toISOString(),
