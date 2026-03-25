@@ -302,11 +302,24 @@ export async function getReportPhotosForIds(reportIds: string[]) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data: photos } = await supabase
+  // process_idカラムがない場合のフォールバック
+  let photos: Array<Record<string, unknown>> | null = null;
+  const primaryResult = await supabase
     .from("report_photos")
-    .select("id, report_id, storage_path, photo_type, caption, media_type")
+    .select("id, report_id, storage_path, photo_type, caption, media_type, process_id, processes(name)")
     .in("report_id", reportIds)
     .order("created_at");
+
+  if (primaryResult.error) {
+    const fallbackResult = await supabase
+      .from("report_photos")
+      .select("id, report_id, storage_path, photo_type, caption, media_type")
+      .in("report_id", reportIds)
+      .order("created_at");
+    photos = fallbackResult.data;
+  } else {
+    photos = primaryResult.data;
+  }
 
   if (!photos || photos.length === 0) return [];
 
@@ -314,14 +327,16 @@ export async function getReportPhotosForIds(reportIds: string[]) {
     photos.map(async (p) => {
       const { data } = await supabase.storage
         .from("report-photos")
-        .createSignedUrl(p.storage_path, 3600);
+        .createSignedUrl(p.storage_path as string, 3600);
+      const processName = (p.processes as unknown as { name?: string } | null)?.name ?? null;
       return {
-        id: p.id,
+        id: p.id as string,
         reportId: p.report_id as string,
         url: data?.signedUrl ?? "",
         caption: p.caption as string | null,
         mediaType: (p.media_type ?? "photo") as string,
         photoType: p.photo_type as string | null,
+        processName,
       };
     })
   );

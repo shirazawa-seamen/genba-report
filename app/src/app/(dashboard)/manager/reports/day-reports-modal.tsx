@@ -110,7 +110,7 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   const [checklistLoaded, setChecklistLoaded] = useState(false);
 
   // 2次報告写真状態
-  type ReportPhoto = { id: string; reportId: string; url: string; caption: string | null; mediaType: string; photoType: string | null };
+  type ReportPhoto = { id: string; reportId: string; url: string; caption: string | null; mediaType: string; photoType: string | null; processName: string | null };
   const [reportPhotos, setReportPhotos] = useState<ReportPhoto[]>([]);
   const [reportPhotosLoaded, setReportPhotosLoaded] = useState(false);
 
@@ -466,11 +466,10 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                                   /* eslint-disable-next-line @next/next/no-img-element */
                                   <img src={photo.url} alt={photo.caption || ""} className="w-full h-full object-cover" />
                                 )}
-                                {photo.photoType && (
-                                  <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] px-1 py-0.5 text-center">
-                                    {PHOTO_TYPE_LABELS[photo.photoType] ?? photo.photoType}
-                                  </span>
-                                )}
+                                <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] px-1 py-0.5 text-center truncate">
+                                  {photo.processName && <span>{photo.processName} / </span>}
+                                  {photo.photoType ? (PHOTO_TYPE_LABELS[photo.photoType] ?? photo.photoType) : ""}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -578,7 +577,7 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                     {photos.length > 0 ? (
                       <div className="grid grid-cols-4 gap-1.5">
                         {photos.map((photo) => (
-                          <div key={photo.id} className="relative group rounded-lg overflow-hidden aspect-square bg-gray-200">
+                          <div key={photo.id} className="relative rounded-lg overflow-hidden aspect-square bg-gray-200">
                             {photo.mediaType === "video" ? (
                               <div className="w-full h-full flex items-center justify-center bg-gray-800">
                                 <Video size={16} className="text-white/60" />
@@ -592,7 +591,7 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                             )}
                             {canEdit && (
                               <button type="button" onClick={() => handlePhotoDelete(photo.id)} disabled={isPending}
-                                className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500">
+                                className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500/80 text-white hover:bg-red-600">
                                 <Trash2 size={9} />
                               </button>
                             )}
