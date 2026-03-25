@@ -100,6 +100,22 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   const [showRegenPrompt, setShowRegenPrompt] = useState(false);
   const [regenPrompt, setRegenPrompt] = useState("");
 
+  // 1次報告 公式値（マネージャーが編集可能）
+  const firstReport = day.reports[0];
+  const [officialProgress, setOfficialProgress] = useState(
+    day.summary?.officialProgress ?? day.reports.reduce((acc, r) => {
+      if (!acc.find((p) => p.processName === r.processName)) {
+        acc.push({ processId: r.processId ?? r.processName, processName: r.processName, progressRate: r.progressRate });
+      }
+      return acc;
+    }, [] as Array<{ processId: string; processName: string; progressRate: number }>)
+  );
+  const [officialWeather, setOfficialWeather] = useState<string>(
+    (firstReport as Record<string, unknown>)?.weather as string ?? ""
+  );
+  const [officialArrival, setOfficialArrival] = useState<string>(firstReport?.arrivalTime ?? "");
+  const [officialDeparture, setOfficialDeparture] = useState<string>(firstReport?.departureTime ?? "");
+
   // 1次報告写真状態
   const [photos, setPhotos] = useState<Array<{ id: string; url: string; caption: string | null; mediaType: string; isFromReport: boolean }>>([]);
   const [photosLoaded, setPhotosLoaded] = useState(false);
@@ -259,12 +275,15 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
     if (!summaryId) return;
     setMessage(null);
     startTransition(async () => {
-      // まずテキストを保存
+      // テキスト・進捗率・天気・時間を保存
       const saveResult = await saveClientReportSummaryDraft({
         summaryId,
         siteId: day.siteId,
         summaryText,
-        officialProgress: day.summary?.officialProgress ?? [],
+        officialProgress,
+        weather: officialWeather || undefined,
+        arrivalTime: officialArrival || undefined,
+        departureTime: officialDeparture || undefined,
       });
       if (!saveResult.success) { setMessage(saveResult.error || "保存に失敗しました"); return; }
 
@@ -527,27 +546,61 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                   </div>
                 )}
 
-                {/* 天気・時間・作業者（2次報告から集約） */}
-                {(() => {
-                  const weather = day.reports.find((r) => (r as Record<string, unknown>).weather)?.workContent ? null : null;
-                  // 2次報告の情報を集約して表示
-                  const allReporters = [...new Set(day.reports.map((r) => r.reporterName))];
-                  const firstReport = day.reports[0];
-                  return (
-                    <div className="flex flex-wrap gap-2 text-[11px] text-gray-500 mb-2">
-                      {firstReport?.arrivalTime && <span>🕐 {firstReport.arrivalTime} 〜 {firstReport.departureTime ?? "--:--"}</span>}
-                      <span>👷 {allReporters.join("、")}</span>
+                {/* 天気・時間（マネージャー編集可能） */}
+                {canEdit ? (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-1">天気</label>
+                        <select value={officialWeather} onChange={(e) => setOfficialWeather(e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] focus:outline-none focus:border-[#0EA5E9]/50">
+                          <option value="">未選択</option>
+                          <option value="晴れ">晴れ</option>
+                          <option value="曇り">曇り</option>
+                          <option value="雨">雨</option>
+                          <option value="雪">雪</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-1">入場</label>
+                        <input type="time" value={officialArrival} onChange={(e) => setOfficialArrival(e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] focus:outline-none focus:border-[#0EA5E9]/50" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-400 block mb-1">退場</label>
+                        <input type="time" value={officialDeparture} onChange={(e) => setOfficialDeparture(e.target.value)}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] focus:outline-none focus:border-[#0EA5E9]/50" />
+                      </div>
                     </div>
-                  );
-                })()}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 text-[11px] text-gray-500">
+                    {officialWeather && <span>🌤 {officialWeather}</span>}
+                    {(officialArrival || officialDeparture) && <span>🕐 {officialArrival || "--:--"} 〜 {officialDeparture || "--:--"}</span>}
+                  </div>
+                )}
 
-                {/* 進捗率（読み取り専用） */}
-                {day.summary?.officialProgress && day.summary.officialProgress.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {day.summary.officialProgress.map((p, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 rounded-md bg-cyan-50 px-2 py-1 text-[10px] text-cyan-700">
-                        {p.processName} <span className="font-semibold">{p.progressRate}%</span>
-                      </span>
+                {/* 進捗率（マネージャー編集可能） */}
+                {officialProgress.length > 0 && (
+                  <div className="space-y-1.5">
+                    {officialProgress.map((p, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-[11px] text-gray-600 min-w-0 flex-1 truncate">{p.processName}</span>
+                        {canEdit ? (
+                          <select value={p.progressRate} onChange={(e) => {
+                            const updated = [...officialProgress];
+                            updated[i] = { ...updated[i], progressRate: Number(e.target.value) };
+                            setOfficialProgress(updated);
+                          }}
+                            className="w-20 rounded-lg border border-gray-200 bg-white px-1.5 py-1 text-[11px] text-right font-semibold text-[#0EA5E9] focus:outline-none focus:border-[#0EA5E9]/50">
+                            {Array.from({ length: 11 }, (_, j) => j * 10).map((v) => (
+                              <option key={v} value={v}>{v}%</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-[#0EA5E9]">{p.progressRate}%</span>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}

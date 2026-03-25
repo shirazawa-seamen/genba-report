@@ -470,6 +470,9 @@ export async function saveClientReportSummaryDraft(input: {
   summaryText: string;
   officialProgress: Array<{ processId: string; processName: string; progressRate: number }>;
   workers?: string[];
+  weather?: string;
+  arrivalTime?: string;
+  departureTime?: string;
 }) {
   const context = await requireManager();
   if (!context.supabase || !context.user) {
@@ -494,9 +497,10 @@ export async function saveClientReportSummaryDraft(input: {
     updated_at: new Date().toISOString(),
     status: "draft",
   };
-  if (input.workers !== undefined) {
-    updateData.workers = input.workers;
-  }
+  if (input.workers !== undefined) updateData.workers = input.workers;
+  if (input.weather !== undefined) updateData.weather = input.weather;
+  if (input.arrivalTime !== undefined) updateData.arrival_time = input.arrivalTime;
+  if (input.departureTime !== undefined) updateData.departure_time = input.departureTime;
 
   const { error } = await context.supabase
     .from("client_report_summaries")
