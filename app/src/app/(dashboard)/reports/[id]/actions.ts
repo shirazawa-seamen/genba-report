@@ -64,7 +64,7 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
       approved_at: new Date().toISOString(),
     })
     .eq("id", reportId)
-    .select("id");
+    .select("id, process_id, progress_rate");
 
   if (updateError) {
     return { success: false, error: `承認エラー: ${updateError.message}` };
@@ -72,6 +72,16 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
 
   if (!approvedRows || approvedRows.length === 0) {
     return { success: false, error: "更新対象の報告が見つかりませんでした（権限エラーの可能性）" };
+  }
+
+  // 承認した報告の進捗率をprocessesテーブルに反映
+  for (const row of approvedRows) {
+    if (row.process_id && row.progress_rate != null) {
+      await supabase
+        .from("processes")
+        .update({ progress_rate: row.progress_rate })
+        .eq("id", row.process_id);
+    }
   }
 
   // キャッシュを無効化（ホーム・報告一覧・報告詳細・マネージャー画面すべて）
