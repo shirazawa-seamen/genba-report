@@ -407,6 +407,19 @@ export async function createDailyReport(
 }
 
 // ---------------------------------------------------------------------------
+// 報告の削除（写真アップロード失敗時のロールバック用）
+// ---------------------------------------------------------------------------
+export async function deleteCreatedReports(reportIds: string[]) {
+  if (reportIds.length === 0) return;
+  try {
+    const supabase = await createClient();
+    await supabase.from("daily_reports").delete().in("id", reportIds);
+  } catch (err) {
+    console.error("[deleteCreatedReports] Failed to rollback:", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 写真・動画のアップロード
 // ---------------------------------------------------------------------------
 interface UploadPhotosInput {

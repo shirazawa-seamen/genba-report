@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   createDailyReport,
+  deleteCreatedReports,
   fetchProcesses,
   fetchProcessChecklistItems,
   uploadReportPhotos,
@@ -1199,58 +1200,56 @@ export function DailyReportForm({
 
     startTransition(async () => {
       try {
-      const result = await createDailyReport({
-        siteName: formData.siteName,
-        siteId: formData.siteId || undefined,
-        reportDate: formData.reportDate,
-        workDescription: formData.workDescription,
-        workers: formData.workers,
-        weather: formData.weather,
-        arrivalTime: formData.arrivalTime,
-        departureTime: formData.departureTime,
-        issues: formData.issues,
-        processes: formData.selectedProcesses.map((process) => ({
-          processId: process.processId,
-          workProcess: process.category,
-          progressRate: process.progressRate,
-          name: process.name,
-        })),
-      });
+        const result = await createDailyReport({
+          siteName: formData.siteName,
+          siteId: formData.siteId || undefined,
+          reportDate: formData.reportDate,
+          workDescription: formData.workDescription,
+          workers: formData.workers,
+          weather: formData.weather,
+          arrivalTime: formData.arrivalTime,
+          departureTime: formData.departureTime,
+          issues: formData.issues,
+          processes: formData.selectedProcesses.map((process) => ({
+            processId: process.processId,
+            workProcess: process.category,
+            progressRate: process.progressRate,
+            name: process.name,
+          })),
+        });
 
-      if (!result.success) {
-        setSubmitError(result.error || "報告の送信に失敗しました");
-        return;
-      }
+        if (!result.success) {
+          setSubmitError(result.error || "報告の送信に失敗しました");
+          return;
+        }
 
-      const targetReportIds = result.reportIds ?? (result.reportId ? [result.reportId] : []);
+        const targetReportIds = result.reportIds ?? (result.reportId ? [result.reportId] : []);
 
-      if (formData.photos.length > 0 && targetReportIds.length > 0) {
-        const photoErrors: string[] = [];
-        for (const reportId of targetReportIds) {
-          const photoFormData = new FormData();
-          formData.photos.forEach((item) => {
-            photoFormData.append("photos", item.file);
-            photoFormData.append("photoTypes", item.photoType || "during");
-            photoFormData.append("captions", item.caption || "");
-            photoFormData.append("processIds", item.processId || "");
-          });
+        if (formData.photos.length > 0 && targetReportIds.length > 0) {
+          for (const reportId of targetReportIds) {
+            const photoFormData = new FormData();
+            formData.photos.forEach((item) => {
+              photoFormData.append("photos", item.file);
+              photoFormData.append("photoTypes", item.photoType || "during");
+              photoFormData.append("captions", item.caption || "");
+              photoFormData.append("processIds", item.processId || "");
+            });
 
-          const uploadResult = await uploadReportPhotos({
-            reportId,
-            photos: photoFormData,
-          });
+            const uploadResult = await uploadReportPhotos({
+              reportId,
+              photos: photoFormData,
+            });
 
-          if (!uploadResult.success) {
-            photoErrors.push(uploadResult.error || "写真のアップロードに失敗しました");
+            if (!uploadResult.success) {
+              // 写真アップロード失敗 → 作成した報告を削除してロールバック
+              await deleteCreatedReports(targetReportIds);
+              setSubmitError(`写真のアップロードに失敗したため、報告は送信されませんでした: ${uploadResult.error}`);
+              return;
+            }
           }
         }
 
-        if (photoErrors.length > 0) {
-          setSubmitError(`報告は送信されましたが、写真のアップロードに失敗しました: ${photoErrors[0]}`);
-        }
-      }
-
-      setIsComplete(true);
+        setIsComplete(true);
       } catch (err) {
         setSubmitError(`送信中にエラーが発生しました: ${err instanceof Error ? err.message : String(err)}`);
       }
