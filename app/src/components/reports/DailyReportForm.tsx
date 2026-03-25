@@ -1061,7 +1061,7 @@ function Step4({ data }: { data: FormData }) {
   );
 }
 
-function CompletionScreen({ onReset }: { onReset: () => void }) {
+function CompletionScreen({ onReset, warning }: { onReset: () => void; warning?: string | null }) {
   return (
     <div className="flex flex-col items-center justify-center gap-6 py-8 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-emerald-500/30 bg-emerald-500/10">
@@ -1071,6 +1071,11 @@ function CompletionScreen({ onReset }: { onReset: () => void }) {
         <h2 className="text-[22px] font-bold text-gray-900">報告完了</h2>
         <p className="mt-2 text-[14px] text-gray-400">日次報告が正常に送信されました</p>
       </div>
+      {warning && (
+        <div className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left">
+          <p className="text-[13px] text-amber-600">{warning}</p>
+        </div>
+      )}
       <div className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm">
         <p className="text-[13px] leading-relaxed text-gray-500">
           報告内容は担当者に通知されました。内容の確認・修正は報告一覧から行えます。
@@ -1242,8 +1247,6 @@ export function DailyReportForm({
 
         if (photoErrors.length > 0) {
           setSubmitError(`報告は送信されましたが、写真のアップロードに失敗しました: ${photoErrors[0]}`);
-          // 報告自体は成功しているので完了画面は表示しない → ユーザーが確認できるように
-          return;
         }
       }
 
@@ -1273,7 +1276,7 @@ export function DailyReportForm({
 
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
           {isComplete ? (
-            <CompletionScreen onReset={handleReset} />
+            <CompletionScreen onReset={handleReset} warning={submitError} />
           ) : (
             <form onSubmit={handleSubmit} noValidate>
               <div className="space-y-8">
