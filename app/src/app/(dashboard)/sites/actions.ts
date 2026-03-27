@@ -749,6 +749,7 @@ export async function getSiteDocuments(siteId: string): Promise<{
     file_size: number | null;
     version: number;
     created_at: string;
+    thumbnail_url: string | null;
   }[];
   error?: string;
 }> {
@@ -771,7 +772,30 @@ export async function getSiteDocuments(siteId: string): Promise<{
     return { success: false, error: "ドキュメントの取得に失敗しました" };
   }
 
-  return { success: true, documents: data };
+  // 画像ファイルのサムネイル用signed URLを一括取得
+  const IMAGE_EXT = /\.(jpe?g|png|gif|webp|svg|bmp)$/i;
+  const imagePaths = data
+    .filter((d) => IMAGE_EXT.test(d.file_name))
+    .map((d) => d.storage_path);
+
+  const urlMap = new Map<string, string>();
+  if (imagePaths.length > 0) {
+    const { data: signed } = await supabase.storage
+      .from("site-documents")
+      .createSignedUrls(imagePaths, 3600);
+    if (signed) {
+      for (const s of signed) {
+        if (s.signedUrl && s.path) urlMap.set(s.path, s.signedUrl);
+      }
+    }
+  }
+
+  const documents = data.map((d) => ({
+    ...d,
+    thumbnail_url: urlMap.get(d.storage_path) ?? null,
+  }));
+
+  return { success: true, documents };
 }
 
 // ---------------------------------------------------------------------------
