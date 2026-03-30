@@ -6,8 +6,8 @@ import {
   deleteCreatedReports,
   fetchProcesses,
   fetchProcessChecklistItems,
-  uploadReportPhotos,
 } from "@/app/(dashboard)/reports/new/actions";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import {
   AlertTriangle,
   Building2,
@@ -1270,25 +1270,50 @@ export function DailyReportForm({
 
         const targetReportIds = result.reportIds ?? (result.reportId ? [result.reportId] : []);
 
+        // 写真をクライアントから直接Supabase Storageにアップロード
         if (formData.photos.length > 0 && targetReportIds.length > 0) {
-          for (const reportId of targetReportIds) {
-            const photoFormData = new FormData();
-            formData.photos.forEach((item) => {
-              photoFormData.append("photos", item.file);
-              photoFormData.append("photoTypes", item.photoType || "during");
-              photoFormData.append("captions", item.caption || "");
-              photoFormData.append("processIds", item.processId || "");
-            });
+          const supabase = createBrowserClient();
+          const firstReportId = targetReportIds[0];
+          const VALID_PHOTO_TYPES = ["before", "during", "after", "corner_ne", "corner_nw", "corner_se", "corner_sw"];
 
-            const uploadResult = await uploadReportPhotos({
-              reportId,
-              photos: photoFormData,
-            });
+          for (let i = 0; i < formData.photos.length; i++) {
+            const item = formData.photos[i];
+            const file = item.file;
+            if (!file || file.size === 0) continue;
 
-            if (!uploadResult.success) {
-              // 写真アップロード失敗 → 作成した報告を削除してロールバック
+            const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+            const storagePath = `reports/${firstReportId}/${Date.now()}_${i}.${ext}`;
+            const mediaType = file.type.startsWith("video/") ? "video" : "photo";
+            const photoType = VALID_PHOTO_TYPES.includes(item.photoType) ? item.photoType : "during";
+
+            // Storageにアップロード
+            const { error: uploadError } = await supabase.storage
+              .from("report-photos")
+              .upload(storagePath, file, { cacheControl: "3600", upsert: false });
+
+            if (uploadError) {
               await deleteCreatedReports(targetReportIds);
-              setSubmitError(`写真のアップロードに失敗したため、報告は送信されませんでした: ${uploadResult.error}`);
+              setSubmitError(`写真のアップロードに失敗しました: ${uploadError.message}`);
+              return;
+            }
+
+            // report_photosテーブルにINSERT
+            const insertData: Record<string, unknown> = {
+              report_id: firstReportId,
+              storage_path: storagePath,
+              photo_type: photoType,
+              media_type: mediaType,
+              caption: item.caption || null,
+            };
+            if (item.processId) insertData.process_id = item.processId;
+
+            const { error: dbError } = await supabase.from("report_photos").insert(insertData);
+
+            if (dbError) {
+              // DB保存失敗 → アップロード済みファイルを削除
+              await supabase.storage.from("report-photos").remove([storagePath]);
+              await deleteCreatedReports(targetReportIds);
+              setSubmitError(`写真の保存に失敗しました: ${dbError.message}`);
               return;
             }
           }
