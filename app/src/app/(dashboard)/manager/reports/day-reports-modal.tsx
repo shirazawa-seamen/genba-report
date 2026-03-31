@@ -335,6 +335,8 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
     });
   };
 
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+
   const summaryExists = !!summaryId;
   const summaryConfig = SUMMARY_STATUS_CONFIG[summaryStatus] ?? SUMMARY_STATUS_CONFIG.ungenerated;
   const canEdit = summaryStatus === "draft" || summaryStatus === "revision_requested";
@@ -723,11 +725,27 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
 
                 {/* アクションボタン */}
                 <div className="flex flex-wrap gap-2">
-                  {canSubmit && (
-                    <button type="button" onClick={handleSubmitSummary} disabled={isPending}
+                  {canSubmit && !showSubmitConfirm && (
+                    <button type="button" onClick={() => setShowSubmitConfirm(true)} disabled={isPending}
                       className="inline-flex min-h-[32px] items-center gap-1.5 rounded-xl bg-[#0EA5E9] px-4 text-[12px] font-bold text-white hover:bg-[#0284C7] disabled:opacity-50 transition-colors">
-                      <Send size={12} /> {isPending ? "提出中..." : "クライアントに提出"}
+                      <Send size={12} /> クライアントに提出
                     </button>
+                  )}
+                  {showSubmitConfirm && (
+                    <div className="w-full rounded-xl border border-[#0EA5E9]/30 bg-[#0EA5E9]/5 p-3">
+                      <p className="text-[12px] font-medium text-gray-700 mb-2">クライアントに提出しますか？</p>
+                      <p className="text-[11px] text-gray-400 mb-3">提出後はクライアントが確認できるようになります</p>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setShowSubmitConfirm(false)}
+                          className="flex-1 min-h-[32px] rounded-lg border border-gray-200 text-[12px] text-gray-500 hover:bg-gray-100 transition-colors">
+                          キャンセル
+                        </button>
+                        <button type="button" onClick={() => { setShowSubmitConfirm(false); handleSubmitSummary(); }} disabled={isPending}
+                          className="flex-1 min-h-[32px] rounded-lg bg-[#0EA5E9] text-[12px] font-bold text-white hover:bg-[#0284C7] disabled:opacity-50 transition-colors">
+                          {isPending ? "提出中..." : "提出する"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                   {canEdit && !showRegenPrompt && (
                     <button type="button" onClick={() => setShowRegenPrompt(true)}

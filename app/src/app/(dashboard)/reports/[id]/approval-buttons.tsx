@@ -304,9 +304,11 @@ export function SubmitDraftButton({ reportId, siblingIds }: { reportId: string; 
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleSubmit = () => {
     setError(null);
+    setShowConfirm(false);
     startTransition(async () => {
       const ids = siblingIds.length > 0 ? siblingIds : [reportId];
       const result = await submitDraftReport(ids);
@@ -320,14 +322,29 @@ export function SubmitDraftButton({ reportId, siblingIds }: { reportId: string; 
 
   return (
     <>
-      <button
-        onClick={handleSubmit}
-        disabled={isPending}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0EA5E9] min-h-[44px] px-4 text-[14px] font-medium text-white hover:bg-[#0EA5E9]/90 transition-colors disabled:opacity-50"
-      >
-        {isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-        {isPending ? "提出中..." : "提出する"}
-      </button>
+      {!showConfirm ? (
+        <button
+          onClick={() => setShowConfirm(true)}
+          disabled={isPending}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0EA5E9] min-h-[44px] px-4 text-[14px] font-medium text-white hover:bg-[#0EA5E9]/90 transition-colors disabled:opacity-50"
+        >
+          {isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          {isPending ? "提出中..." : "提出する"}
+        </button>
+      ) : (
+        <div className="w-full rounded-xl border border-[#0EA5E9]/30 bg-[#0EA5E9]/5 p-4">
+          <p className="text-[13px] font-medium text-gray-700 mb-2">この報告を提出しますか？</p>
+          <p className="text-[12px] text-gray-400 mb-3">提出後はマネージャーに通知されます</p>
+          <div className="flex gap-2">
+            <button onClick={() => setShowConfirm(false)} className="flex-1 min-h-[40px] rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-100 transition-colors">
+              キャンセル
+            </button>
+            <button onClick={handleSubmit} disabled={isPending} className="flex-1 min-h-[40px] rounded-xl bg-[#0EA5E9] text-[13px] font-bold text-white hover:bg-[#0284C7] disabled:opacity-50 transition-colors">
+              {isPending ? "提出中..." : "提出する"}
+            </button>
+          </div>
+        </div>
+      )}
       {error && (
         <div className="w-full mt-2 rounded-xl bg-red-50 border border-red-200 p-3">
           <p className="text-[13px] text-red-400 flex items-center gap-2">
