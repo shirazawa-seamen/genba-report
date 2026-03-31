@@ -18,6 +18,7 @@ interface CreateReportInput {
   arrivalTime: string;
   departureTime: string;
   issues: string;
+  isDraft?: boolean; // 下書き保存の場合 true
   processes: Array<{
     processId: string;
     workProcess: string;
@@ -333,7 +334,7 @@ export async function createDailyReport(
     arrival_time: input.arrivalTime || null,
     departure_time: input.departureTime || null,
     issues: input.issues || null,
-    approval_status: "submitted",
+    approval_status: input.isDraft ? "draft" : "submitted",
   }));
 
   const { data: createdReports, error: insertError } = await supabase
@@ -345,7 +346,9 @@ export async function createDailyReport(
     if (insertError.code === "23505") {
       return {
         success: false,
-        error: "選択した工程の中に、この日付で自分が既に報告済みのものがあります",
+        error: input.isDraft
+          ? "選択した工程の中に、この日付で自分が既に下書き・報告済みのものがあります"
+          : "選択した工程の中に、この日付で自分が既に報告済みのものがあります",
       };
     }
     return { success: false, error: `報告作成エラー: ${insertError.message}` };
@@ -355,6 +358,15 @@ export async function createDailyReport(
 
   // 報告一覧のキャッシュを無効化
   revalidatePath("/reports");
+
+  // 下書きの場合はメール通知をスキップ
+  if (input.isDraft) {
+    return {
+      success: true,
+      reportId: createdReportIds[0],
+      reportIds: createdReportIds,
+    };
+  }
 
   // メール通知（非同期・エラーは無視）
   try {
@@ -592,4 +604,223 @@ export async function saveReportMaterials(
   }
 
   return { success: true, savedCount: rows.length };
+}
+
+// ---------------------------------------------------------------------------
+// 下書き報告の取得（編集用）
+// ---------------------------------------------------------------------------
+export async function fetchDraftReport(reportId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // 下書き報告を取得（自分の報告のみ）
+  const { data: report, error } = await supabase
+    .from("daily_reports")
+    .select(`
+      id, site_id, process_id, report_date, work_process, work_content,
+      workers, progress_rate, weather, arrival_time, departure_time,
+      issues, approval_status,
+      sites(id, name),
+      processes(id, category, name, progress_rate)
+    `)
+    .eq("id", reportId)
+    .eq("reporter_id", user.id)
+    .eq("approval_status", "draft")
+    .single();
+
+  if (error || !report) return null;
+  return report;
+}
+
+// ---------------------------------------------------------------------------
+// 同日・同報告者の下書きグループを取得
+// ---------------------------------------------------------------------------
+export async function fetchDraftGroup(reportId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // まず指定の下書き報告を取得
+  const { data: baseReport } = await supabase
+    .from("daily_reports")
+    .select("site_id, report_date, reporter_id")
+    .eq("id", reportId)
+    .eq("reporter_id", user.id)
+    .eq("approval_status", "draft")
+    .single();
+
+  if (!baseReport) return null;
+
+  // 同日・同現場・同報告者の全下書きを取得
+  const { data: reports, error } = await supabase
+    .from("daily_reports")
+    .select(`
+      id, site_id, process_id, report_date, work_process, work_content,
+      workers, progress_rate, weather, arrival_time, departure_time,
+      issues, approval_status,
+      sites(id, name),
+      processes(id, category, name, progress_rate)
+    `)
+    .eq("site_id", baseReport.site_id)
+    .eq("report_date", baseReport.report_date)
+    .eq("reporter_id", user.id)
+    .eq("approval_status", "draft");
+
+  if (error) return null;
+
+  // 写真も取得
+  const reportIds = (reports ?? []).map((r) => r.id);
+  const { data: photos } = await supabase
+    .from("report_photos")
+    .select("id, report_id, storage_path, photo_type, media_type, caption, process_id")
+    .in("report_id", reportIds);
+
+  return { reports: reports ?? [], photos: photos ?? [] };
+}
+
+// ---------------------------------------------------------------------------
+// 下書き報告の更新
+// ---------------------------------------------------------------------------
+interface UpdateDraftInput {
+  reportIds: string[]; // 既存の下書きレポートID群
+  siteId: string;
+  reportDate: string;
+  workDescription: string;
+  workers: string;
+  weather: string;
+  arrivalTime: string;
+  departureTime: string;
+  issues: string;
+  processes: Array<{
+    processId: string;
+    workProcess: string;
+    progressRate: string;
+    name?: string;
+  }>;
+}
+
+export async function updateDraftReport(
+  input: UpdateDraftInput
+): Promise<CreateReportResult> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return { success: false, error: "ログインが必要です" };
+
+    const workersArray = input.workers
+      .split(/[、,]/)
+      .map((w) => w.trim())
+      .filter((w) => w.length > 0);
+
+    // 既存の下書きを削除
+    if (input.reportIds.length > 0) {
+      await supabase.from("daily_reports").delete().in("id", input.reportIds);
+    }
+
+    // 新しい下書きとして再作成
+    const reportRows = input.processes.map((process) => ({
+      site_id: input.siteId,
+      process_id: process.processId,
+      reporter_id: user.id,
+      report_date: input.reportDate,
+      work_process: process.workProcess,
+      work_content: input.workDescription,
+      workers: workersArray,
+      progress_rate: Number.parseInt(process.progressRate, 10) || 0,
+      weather: input.weather || null,
+      arrival_time: input.arrivalTime || null,
+      departure_time: input.departureTime || null,
+      issues: input.issues || null,
+      approval_status: "draft",
+    }));
+
+    const { data: createdReports, error: insertError } = await supabase
+      .from("daily_reports")
+      .insert(reportRows)
+      .select("id, process_id");
+
+    if (insertError) {
+      return { success: false, error: `下書き更新エラー: ${insertError.message}` };
+    }
+
+    revalidatePath("/reports");
+
+    const createdReportIds = (createdReports ?? []).map((r) => r.id);
+    return { success: true, reportId: createdReportIds[0], reportIds: createdReportIds };
+  } catch (err) {
+    return { success: false, error: `予期しないエラー: ${err instanceof Error ? err.message : String(err)}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 下書きの提出（draft → submitted）
+// ---------------------------------------------------------------------------
+export async function submitDraftReport(
+  reportIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return { success: false, error: "ログインが必要です" };
+
+    const { error: updateError } = await supabase
+      .from("daily_reports")
+      .update({ approval_status: "submitted" })
+      .in("id", reportIds)
+      .eq("reporter_id", user.id)
+      .eq("approval_status", "draft");
+
+    if (updateError) {
+      return { success: false, error: `提出エラー: ${updateError.message}` };
+    }
+
+    revalidatePath("/reports");
+
+    // メール通知
+    try {
+      const adminClient = createAdminClient();
+      const { data: adminManagerProfiles } = await adminClient
+        .from("profiles")
+        .select("id")
+        .in("role", ["admin", "manager"]);
+
+      if (adminManagerProfiles && adminManagerProfiles.length > 0) {
+        const { data: authUsers } = await adminClient.auth.admin.listUsers();
+        const adminIds = new Set(adminManagerProfiles.map((p) => p.id));
+        const adminEmails = (authUsers?.users ?? [])
+          .filter((u) => adminIds.has(u.id) && u.email)
+          .map((u) => u.email!);
+
+        // 最初の報告から現場情報を取得
+        const { data: reportData } = await supabase
+          .from("daily_reports")
+          .select("site_id, report_date, sites(name)")
+          .eq("id", reportIds[0])
+          .single();
+
+        const reporterName =
+          user.user_metadata?.full_name ??
+          user.user_metadata?.name ??
+          user.email?.split("@")[0] ??
+          "不明";
+
+        const siteName = (reportData?.sites as { name?: string } | null)?.name ?? "不明な現場";
+
+        notifyReportSubmitted({
+          reporterName,
+          siteName,
+          reportDate: reportData?.report_date ?? "",
+          reportId: reportIds[0],
+          adminEmails,
+        }).catch((err) => console.error("[Email] Notification error:", err));
+      }
+    } catch (err) {
+      console.error("[Email] Failed to send notification:", err);
+    }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: `予期しないエラー: ${err instanceof Error ? err.message : String(err)}` };
+  }
 }

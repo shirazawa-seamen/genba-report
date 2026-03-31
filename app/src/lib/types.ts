@@ -67,11 +67,13 @@ export interface Site {
 // ドキュメント種別
 // ---------------------------------------------------------------------------
 export type DocumentType =
-  | 'blueprint'      // 図面
-  | 'specification'  // 仕様書
-  | 'purchase_order' // 発注書
-  | 'schedule'       // 工程表
-  | 'other';         // その他
+  | 'blueprint'          // 図面
+  | 'specification'      // 仕様書
+  | 'purchase_order'     // 発注書
+  | 'schedule'           // 工程表
+  | 'contract'           // 契約書
+  | 'site_survey_photo'  // 現調写真
+  | 'other';             // その他
 
 // ---------------------------------------------------------------------------
 // 現場ドキュメント

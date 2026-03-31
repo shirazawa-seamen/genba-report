@@ -179,6 +179,8 @@ export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   specification: "仕様書",
   purchase_order: "発注書",
   schedule: "工程表",
+  contract: "契約書",
+  site_survey_photo: "現調写真",
   other: "その他",
 };
 
@@ -187,6 +189,8 @@ export const DOCUMENT_TYPE_OPTIONS = [
   { value: "specification", label: "仕様書" },
   { value: "purchase_order", label: "発注書" },
   { value: "schedule", label: "工程表" },
+  { value: "contract", label: "契約書" },
+  { value: "site_survey_photo", label: "現調写真" },
   { value: "other", label: "その他" },
 ];
 
@@ -198,6 +202,8 @@ export const SETUP_CHECK_ITEMS = [
   { key: "has_specification", label: "仕様書", icon: "FileText" },
   { key: "has_purchase_order", label: "発注書", icon: "FileCheck" },
   { key: "has_schedule", label: "工程表", icon: "CalendarRange" },
+  { key: "has_contract", label: "契約書", icon: "FileCheck" },
+  { key: "has_site_survey_photo", label: "現調写真", icon: "Camera" },
 ] as const;
 
 // ---------------------------------------------------------------------------

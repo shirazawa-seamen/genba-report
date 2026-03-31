@@ -12,6 +12,7 @@ import {
   Package,
   Users,
   ClipboardList,
+  User,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/constants'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
@@ -44,6 +45,7 @@ export default async function DashboardLayout({
     { label: '2次報告', shortLabel: '2次', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
     { label: '確認', shortLabel: '確認', href: '/client', icon: CheckSquare, iconName: 'CheckSquare', roles: ['client'] },
     { label: '新規2次報告', shortLabel: '新規', href: '/reports/new', icon: PlusCircle, iconName: 'PlusCircle', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
+    { label: 'マイページ', shortLabel: 'マイ', href: '/mypage', icon: User, iconName: 'User', roles: ['worker_internal', 'worker_external'] },
     { label: '材料カタログ', shortLabel: '材料', href: '/admin/materials', icon: Package, iconName: 'Package', roles: ['admin', 'manager'] },
   ]
 

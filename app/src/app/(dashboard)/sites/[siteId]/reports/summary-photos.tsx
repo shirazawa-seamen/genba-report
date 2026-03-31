@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { Camera, Video, X, Plus, ImageIcon } from "lucide-react";
+import { PhotoPreviewModal, type PhotoItem } from "@/components/ui/PhotoGallery";
 import {
   uploadSummaryPhoto,
   deleteSummaryPhoto,
@@ -31,6 +32,7 @@ export function SummaryPhotos({
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
 
   const refreshPhotos = async () => {
     if (!summaryId) return;
@@ -95,7 +97,8 @@ export function SummaryPhotos({
             return (
               <div
                 key={photo.id}
-                className="relative rounded-xl overflow-hidden border border-gray-200 group"
+                className="relative rounded-xl overflow-hidden border border-gray-200 group cursor-pointer"
+                onClick={() => { if (!isVideo) setPreviewId(photo.id); }}
               >
                 {isVideo ? (
                   <video
@@ -124,7 +127,7 @@ export function SummaryPhotos({
                 {editable && (
                   <button
                     type="button"
-                    onClick={() => handleDelete(photo.id)}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(photo.id); }}
                     disabled={isPending}
                     className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
                   >
@@ -167,6 +170,17 @@ export function SummaryPhotos({
 
       {message && (
         <p className="mt-1 text-[11px] text-red-500">{message}</p>
+      )}
+
+      {previewId && (
+        <PhotoPreviewModal
+          photos={photos.filter((p) => p.mediaType !== "video").map((p): PhotoItem => ({
+            id: p.id, url: p.url, caption: p.caption,
+            badge: p.isFromReport ? "2次報告" : undefined,
+          }))}
+          initialId={previewId}
+          onClose={() => setPreviewId(null)}
+        />
       )}
     </div>
   );

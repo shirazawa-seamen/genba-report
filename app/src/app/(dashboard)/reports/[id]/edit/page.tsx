@@ -52,6 +52,52 @@ export default async function ReportEditPage({ params }: PageProps) {
     redirect("/");
   }
 
+  // 下書きの場合、同日・同現場・同報告者の兄弟レポートIDを取得
+  let siblingIds: string[] = [];
+  if (report.approval_status === "draft") {
+    const { data: currentReport } = await supabase
+      .from("daily_reports")
+      .select("site_id")
+      .eq("id", id)
+      .single();
+
+    if (currentReport?.site_id) {
+      const { data: siblings } = await supabase
+        .from("daily_reports")
+        .select("id")
+        .eq("site_id", currentReport.site_id)
+        .eq("reporter_id", user.id)
+        .eq("report_date", report.report_date)
+        .eq("approval_status", "draft");
+
+      siblingIds = (siblings ?? []).map((s) => s.id);
+    }
+  }
+
+  // 既存写真を取得
+  const { data: photos } = await supabase
+    .from("report_photos")
+    .select("id, storage_path, photo_type, caption, media_type, process_id")
+    .eq("report_id", id)
+    .order("created_at", { ascending: true });
+
+  const existingPhotos = await Promise.all(
+    (photos ?? []).map(async (p) => {
+      const { data } = await supabase.storage
+        .from("report-photos")
+        .createSignedUrl(p.storage_path, 3600);
+      return {
+        id: p.id,
+        url: data?.signedUrl ?? "",
+        storagePath: p.storage_path,
+        photoType: p.photo_type ?? "during",
+        caption: p.caption ?? "",
+        mediaType: p.media_type ?? "photo",
+        processId: p.process_id ?? null,
+      };
+    })
+  );
+
   const sites = Array.isArray(report.sites)
     ? report.sites[0]
     : report.sites;
@@ -100,6 +146,9 @@ export default async function ReportEditPage({ params }: PageProps) {
 
         <ReportEditForm
           reportId={id}
+          isDraft={report.approval_status === "draft"}
+          siblingIds={siblingIds}
+          existingPhotos={existingPhotos}
           initialData={{
             work_content: report.work_content ?? "",
             workers: (report.workers as string[] | null)?.join("、") ?? "",

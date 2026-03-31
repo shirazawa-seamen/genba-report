@@ -14,6 +14,7 @@ import {
   FileCheck,
   CalendarRange,
   Package,
+  Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -36,9 +37,12 @@ function getDocumentIcon(type: string) {
     case "specification":
       return FileText;
     case "purchase_order":
+    case "contract":
       return FileCheck;
     case "schedule":
       return CalendarRange;
+    case "site_survey_photo":
+      return Camera;
     default:
       return Package;
   }
@@ -311,29 +315,36 @@ interface UploadModalProps {
 
 function UploadModal({ siteId, onClose }: UploadModalProps) {
   const [isPending, startTransition] = useTransition();
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [documentType, setDocumentType] = useState<DocumentType>("other");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      if (!title) {
-        setTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
+    const selectedFiles = Array.from(e.target.files ?? []);
+    if (selectedFiles.length > 0) {
+      setFiles((prev) => [...prev, ...selectedFiles]);
+      if (!title && selectedFiles.length === 1) {
+        setTitle(selectedFiles[0].name.replace(/\.[^/.]+$/, ""));
       }
     }
+    e.target.value = "";
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleUpload = () => {
-    if (!file) {
+    if (files.length === 0) {
       setError("ファイルを選択してください");
       return;
     }
-    if (!title.trim()) {
+    // 複数ファイルの場合はタイトル不要（ファイル名から自動生成）
+    if (files.length === 1 && !title.trim()) {
       setError("タイトルを入力してください");
       return;
     }
@@ -341,40 +352,56 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
     setError(null);
     startTransition(async () => {
       try {
-        const uploadResult = await getUploadUrl(siteId, file.name, documentType);
-        if (!uploadResult.success || !uploadResult.uploadUrl || !uploadResult.storagePath) {
-          setError(uploadResult.error || "アップロードURLの取得に失敗しました");
-          return;
+        let uploadedCount = 0;
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          setUploadProgress(`${i + 1}/${files.length} アップロード中...`);
+
+          const fileTitle = files.length === 1
+            ? title.trim()
+            : file.name.replace(/\.[^/.]+$/, "");
+
+          const uploadResult = await getUploadUrl(siteId, file.name, documentType);
+          if (!uploadResult.success || !uploadResult.uploadUrl || !uploadResult.storagePath) {
+            setError(`${file.name}: ${uploadResult.error || "URLの取得に失敗"}`);
+            continue;
+          }
+
+          const uploadResponse = await fetch(uploadResult.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type },
+            body: file,
+          });
+
+          if (!uploadResponse.ok) {
+            setError(`${file.name}: アップロードに失敗`);
+            continue;
+          }
+
+          const createResult = await createSiteDocument({
+            siteId,
+            documentType,
+            title: fileTitle,
+            description: files.length === 1 ? (description.trim() || undefined) : undefined,
+            storagePath: uploadResult.storagePath,
+            fileName: file.name,
+            fileSize: file.size,
+          });
+
+          if (!createResult.success) {
+            setError(`${file.name}: ${createResult.error || "登録に失敗"}`);
+            continue;
+          }
+
+          uploadedCount++;
         }
 
-        const uploadResponse = await fetch(uploadResult.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-
-        if (!uploadResponse.ok) {
-          setError("ファイルのアップロードに失敗しました");
-          return;
+        setUploadProgress("");
+        if (uploadedCount > 0) {
+          onClose();
         }
-
-        const createResult = await createSiteDocument({
-          siteId,
-          documentType,
-          title: title.trim(),
-          description: description.trim() || undefined,
-          storagePath: uploadResult.storagePath,
-          fileName: file.name,
-          fileSize: file.size,
-        });
-
-        if (!createResult.success) {
-          setError(createResult.error || "ドキュメントの登録に失敗しました");
-          return;
-        }
-
-        onClose();
       } catch (err) {
+        setUploadProgress("");
         setError("アップロード中にエラーが発生しました");
       }
     });
@@ -398,10 +425,12 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
             <label className="text-[13px] font-medium text-gray-500 mb-1.5 block">
               ファイル
               <span className="ml-1 text-[#0EA5E9] text-xs">*</span>
+              <span className="ml-2 text-[11px] text-gray-400 font-normal">複数選択可</span>
             </label>
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               onChange={handleFileChange}
               className="hidden"
             />
@@ -409,13 +438,30 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
               onClick={() => fileInputRef.current?.click()}
               className={[
                 "w-full min-h-[48px] px-4 py-3 rounded-xl border transition-all duration-200 text-left text-[14px]",
-                file
+                files.length > 0
                   ? "border-emerald-300 bg-emerald-50 text-emerald-600"
                   : "border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300",
               ].join(" ")}
             >
-              {file ? file.name : "ファイルを選択"}
+              {files.length > 0 ? `${files.length}件のファイルを選択中` : "ファイルを選択（複数可）"}
             </button>
+            {files.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {files.map((f, i) => (
+                  <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1.5">
+                    <span className="flex-1 text-[12px] text-gray-600 truncate">{f.name}</span>
+                    <span className="text-[11px] text-gray-400 shrink-0">{formatFileSize(f.size)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="text-gray-300 hover:text-red-400 transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <Select
@@ -425,25 +471,42 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
             onChange={(e) => setDocumentType(e.target.value as DocumentType)}
           />
 
-          <Input
-            label="タイトル"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="ドキュメントのタイトル"
-            required
-          />
+          {files.length <= 1 && (
+            <>
+              <Input
+                label="タイトル"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="ドキュメントのタイトル"
+                required
+              />
 
-          <Textarea
-            label="説明（任意）"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="ドキュメントの説明や備考"
-            rows={2}
-          />
+              <Textarea
+                label="説明（任意）"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="ドキュメントの説明や備考"
+                rows={2}
+              />
+            </>
+          )}
+
+          {files.length > 1 && (
+            <p className="text-[11px] text-gray-400">
+              複数ファイルの場合、タイトルはファイル名から自動設定されます
+            </p>
+          )}
 
           {error && (
             <p className="text-[13px] text-red-400 bg-red-50 rounded-xl px-4 py-2.5">
               {error}
+            </p>
+          )}
+
+          {uploadProgress && (
+            <p className="text-[13px] text-[#0EA5E9] bg-cyan-50 rounded-xl px-4 py-2.5 flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin" />
+              {uploadProgress}
             </p>
           )}
 
@@ -463,9 +526,9 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
               className="flex-1"
               onClick={handleUpload}
               loading={isPending}
-              disabled={!file || !title.trim()}
+              disabled={files.length === 0 || (files.length === 1 && !title.trim())}
             >
-              アップロード
+              {files.length > 1 ? `${files.length}件アップロード` : "アップロード"}
             </Button>
           </div>
         </div>

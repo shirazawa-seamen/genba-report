@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Clock, Building2, Printer, AlertTriangle, Camera, Video } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Clock, Building2, Printer, AlertTriangle, Camera } from "lucide-react";
+import { PhotoGallery, type PhotoItem } from "@/components/ui/PhotoGallery";
 import { canAccessSite } from "@/lib/siteAccess";
 import { ClientConfirmButton } from "./confirm-button";
 import { ClientRevisionRequestButton } from "./revision-request-button";
@@ -176,36 +177,16 @@ export default async function ClientSummaryDetailPage({ params }: PageProps) {
                 <Camera size={14} className="text-[#0EA5E9]" />
                 <p className="text-[11px] font-medium text-gray-400">添付写真・動画（{photos.length}件）</p>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {photos.map((photo) => (
-                  <div key={photo.id} className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                    {photo.mediaType === "video" ? (
-                      <div className="relative">
-                        <div className="absolute left-1.5 top-1.5 z-10 flex items-center gap-1 rounded-lg bg-black/40 px-1.5 py-0.5 text-[10px] font-semibold text-[#0EA5E9]">
-                          <Video size={10} />
-                          動画
-                        </div>
-                        <video
-                          src={photo.url}
-                          controls
-                          className="aspect-square w-full bg-black object-cover"
-                          preload="metadata"
-                        />
-                      </div>
-                    ) : (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={photo.url}
-                        alt={photo.caption || "報告写真"}
-                        className="aspect-square w-full object-cover"
-                      />
-                    )}
-                    {photo.caption && (
-                      <p className="px-2 py-1.5 text-[10px] text-gray-500 truncate">{photo.caption}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
+              <PhotoGallery
+                photos={photos.map((p): PhotoItem => ({
+                  id: p.id,
+                  url: p.url,
+                  caption: p.caption,
+                  mediaType: p.mediaType,
+                }))}
+                columns={3}
+                aspect="square"
+              />
             </div>
           )}
 

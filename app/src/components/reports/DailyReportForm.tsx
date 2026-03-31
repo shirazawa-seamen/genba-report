@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import {
   createDailyReport,
   deleteCreatedReports,
@@ -24,6 +25,7 @@ import {
   ImagePlus,
   Loader2,
   Plus,
+  Save,
   UserCheck,
   Users,
   Video,
@@ -91,7 +93,7 @@ const WEATHER_OPTIONS: SelectOption[] = [
 ];
 
 const STEP_LABELS = ["基本情報", "作業内容", "写真・動画", "確認"];
-const MAX_PHOTOS = 20;
+const MAX_PHOTOS = 50;
 
 // 画像圧縮（最大1920px、JPEG品質0.8、動画はそのまま）
 async function compressImage(file: File): Promise<File> {
@@ -266,6 +268,15 @@ function Step1({
     [data.selectedProcesses]
   );
 
+  // 子を持つプロセスID（＝親工程）を特定
+  const parentIds = useMemo(() => {
+    const ids = new Set<string>();
+    processes.forEach((p) => {
+      if (p.parent_process_id) ids.add(p.parent_process_id);
+    });
+    return ids;
+  }, [processes]);
+
   const groupedProcesses = useMemo(() => {
     const groups = new Map<string, ProcessOption[]>();
     processes.forEach((process) => {
@@ -281,7 +292,7 @@ function Step1({
         label: getCategoryLabel(category),
         items,
       }));
-  }, [processes]);
+  }, [processes, parentIds]);
 
   const handleSiteChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const siteId = event.target.value;
@@ -432,22 +443,44 @@ function Step1({
                 {group.items.map((process) => {
                   const selected = selectedProcessMap.get(process.id);
                   const rate = Number(selected?.progressRate ?? process.progress_rate) || 0;
+                  const isParent = parentIds.has(process.id);
+                  const isChild = !!process.parent_process_id;
+
+                  if (isParent) {
+                    return (
+                      <div
+                        key={process.id}
+                        className="w-full rounded-2xl border border-gray-100 bg-gray-50/50 px-4 py-2.5 text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <p className="text-[13px] font-semibold text-gray-500">
+                            {process.name}
+                          </p>
+                          <span className="text-[12px] font-medium text-gray-400">
+                            {process.progress_rate}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
 
                   return (
-                    <button
+                    <div
                       key={process.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => toggleProcess(process)}
-                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleProcess(process); } }}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer ${
                         selected
                           ? "border-cyan-300 bg-cyan-50 shadow-sm"
                           : "border-gray-200 bg-white hover:border-cyan-200 hover:bg-cyan-50/40"
-                      }`}
+                      } ${isChild ? "ml-4" : ""}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-[14px] font-semibold text-gray-800">
-                            {process.name}
+                            {isChild ? "↳ " : ""}{process.name}
                           </p>
                           <p className="mt-1 text-[11px] text-gray-400">
                             現在の公式進捗 {process.progress_rate}%
@@ -557,7 +590,7 @@ function Step1({
                           )}
                         </div>
                       ) : null}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -1129,6 +1162,35 @@ function CompletionScreen({ onReset, warning }: { onReset: () => void; warning?:
   );
 }
 
+function DraftSavedScreen({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-6 py-8 text-center">
+      <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-amber-500/30 bg-amber-500/10">
+        <Save size={40} className="text-amber-400" />
+      </div>
+      <div>
+        <h2 className="text-[22px] font-bold text-gray-900">下書き保存完了</h2>
+        <p className="mt-2 text-[14px] text-gray-400">報告が下書きとして保存されました</p>
+      </div>
+      <div className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm">
+        <p className="text-[13px] leading-relaxed text-gray-500">
+          下書きは報告一覧から確認・編集・提出できます。
+        </p>
+      </div>
+      <div className="flex w-full flex-col gap-3">
+        <Link href="/reports">
+          <Button variant="primary" size="lg" className="w-full">
+            報告一覧を見る
+          </Button>
+        </Link>
+        <Button variant="outline" size="lg" onClick={onReset} className="w-full">
+          新しい報告を作成
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function DailyReportForm({
   initialSiteId,
   initialSites,
@@ -1145,6 +1207,7 @@ export function DailyReportForm({
   const [errors, setErrors] = useState<FormErrors>({});
   const [isPending, startTransition] = useTransition();
   const [isComplete, setIsComplete] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleChange = useCallback((field: keyof FormData, value: string) => {
@@ -1235,6 +1298,105 @@ export function DailyReportForm({
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
+  };
+
+  // 下書き用バリデーション（現場と日付のみ必須）
+  const validateForDraft = () => {
+    const nextErrors: FormErrors = {};
+    if (!formData.siteId) nextErrors.siteName = "現場を選択してください";
+    if (!formData.reportDate) nextErrors.reportDate = "報告日を選択してください";
+    if (formData.selectedProcesses.length === 0) {
+      nextErrors.selectedProcesses = "工程を1つ以上選択してください";
+    }
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+
+  const handleSaveDraft = async () => {
+    if (!validateForDraft()) return;
+    setSubmitError(null);
+    setIsSavingDraft(true);
+
+    try {
+      const result = await createDailyReport({
+        siteName: formData.siteName,
+        siteId: formData.siteId || undefined,
+        reportDate: formData.reportDate,
+        workDescription: formData.workDescription,
+        workers: formData.workers,
+        weather: formData.weather,
+        arrivalTime: formData.arrivalTime,
+        departureTime: formData.departureTime,
+        issues: formData.issues,
+        isDraft: true,
+        processes: formData.selectedProcesses.map((process) => ({
+          processId: process.processId,
+          workProcess: process.category,
+          progressRate: process.progressRate,
+          name: process.name,
+        })),
+      });
+
+      if (!result.success) {
+        setSubmitError(result.error || "下書き保存に失敗しました");
+        return;
+      }
+
+      const targetReportIds = result.reportIds ?? (result.reportId ? [result.reportId] : []);
+
+      // 写真をクライアントから直接アップロード
+      if (formData.photos.length > 0 && targetReportIds.length > 0) {
+        const supabase = createBrowserClient();
+        const firstReportId = targetReportIds[0];
+        const VALID_PHOTO_TYPES = ["before", "during", "after", "corner_ne", "corner_nw", "corner_se", "corner_sw"];
+
+        for (let i = 0; i < formData.photos.length; i++) {
+          const item = formData.photos[i];
+          const file = item.file;
+          if (!file || file.size === 0) continue;
+
+          const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+          const storagePath = `reports/${firstReportId}/${Date.now()}_${i}.${ext}`;
+          const mediaType = file.type.startsWith("video/") ? "video" : "photo";
+          const photoType = VALID_PHOTO_TYPES.includes(item.photoType) ? item.photoType : "during";
+
+          const { error: uploadError } = await supabase.storage
+            .from("report-photos")
+            .upload(storagePath, file, { cacheControl: "3600", upsert: false });
+
+          if (uploadError) {
+            await deleteCreatedReports(targetReportIds);
+            setSubmitError(`写真のアップロードに失敗しました: ${uploadError.message}`);
+            return;
+          }
+
+          const insertData: Record<string, unknown> = {
+            report_id: firstReportId,
+            storage_path: storagePath,
+            photo_type: photoType,
+            media_type: mediaType,
+            caption: item.caption || null,
+          };
+          if (item.processId) insertData.process_id = item.processId;
+
+          const { error: dbError } = await supabase.from("report_photos").insert(insertData);
+          if (dbError) {
+            await supabase.storage.from("report-photos").remove([storagePath]);
+            await deleteCreatedReports(targetReportIds);
+            setSubmitError(`写真の保存に失敗しました: ${dbError.message}`);
+            return;
+          }
+        }
+      }
+
+      setDraftSaved(true);
+    } catch (err) {
+      setSubmitError(`保存中にエラーが発生しました: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsSavingDraft(false);
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -1333,6 +1495,7 @@ export function DailyReportForm({
     });
     setErrors({});
     setIsComplete(false);
+    setDraftSaved(false);
   };
 
   return (
@@ -1344,8 +1507,12 @@ export function DailyReportForm({
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
-          {isComplete ? (
-            <CompletionScreen onReset={handleReset} warning={submitError} />
+          {isComplete || draftSaved ? (
+            draftSaved ? (
+              <DraftSavedScreen onReset={handleReset} />
+            ) : (
+              <CompletionScreen onReset={handleReset} warning={submitError} />
+            )
           ) : (
             <form onSubmit={handleSubmit} noValidate>
               <div className="space-y-8">
@@ -1399,16 +1566,29 @@ export function DailyReportForm({
                 </div>
               ) : null}
 
-              <div className="mt-8">
+              <div className="mt-8 flex flex-col gap-3">
                 <Button
                   type="submit"
                   variant="primary"
                   size="lg"
                   loading={isPending}
                   className="w-full"
+                  disabled={isSavingDraft}
                 >
                   {isPending ? "送信中..." : "報告を送信"}
                   {!isPending ? <CheckCircle2 size={20} /> : null}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  loading={isSavingDraft}
+                  disabled={isPending}
+                  className="w-full"
+                  onClick={handleSaveDraft}
+                >
+                  {isSavingDraft ? "保存中..." : "下書き保存"}
+                  {!isSavingDraft ? <Save size={20} /> : null}
                 </Button>
               </div>
             </form>

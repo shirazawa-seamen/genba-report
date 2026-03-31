@@ -30,6 +30,7 @@ interface PageProps {
 const PAGE_SIZE = 20;
 const STATUS_TABS = [
   { value: "all", label: "すべて" },
+  { value: "draft", label: "下書き" },
   { value: "submitted", label: "承認待ち" },
   { value: "approved", label: "承認済み" },
   { value: "client_confirmed", label: "確認済み" },
@@ -78,8 +79,14 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     query = query.eq("reporter_id", user.id);
   }
 
-  if (activeFilter) {
+  // 下書きは自分のもののみ表示（他人の下書きは非表示）
+  if (activeFilter === "draft") {
+    query = query.eq("approval_status", "draft").eq("reporter_id", user.id);
+  } else if (activeFilter) {
     query = query.eq("approval_status", activeFilter);
+  } else if (!isWorker) {
+    // 「すべて」タブでは他人の下書きを除外（自分の下書きは表示）
+    query = query.or(`approval_status.neq.draft,reporter_id.eq.${user.id}`);
   }
   if (scopedSiteIds) {
     if (scopedSiteIds.length === 0) {
@@ -94,7 +101,14 @@ export default async function ReportsPage({ searchParams }: PageProps) {
     let q = supabase
       .from("daily_reports")
       .select("*", { count: "exact", head: true });
-    if (status) q = q.eq("approval_status", status);
+    if (status === "draft") {
+      q = q.eq("approval_status", "draft").eq("reporter_id", user.id);
+    } else if (status) {
+      q = q.eq("approval_status", status);
+    } else if (!isWorker) {
+      // 全件カウントでも他人の下書きを除外
+      q = q.or(`approval_status.neq.draft,reporter_id.eq.${user.id}`);
+    }
     if (isWorker) q = q.eq("reporter_id", user.id);
     if (scopedSiteIds) {
       if (scopedSiteIds.length === 0) {
@@ -109,6 +123,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   const [
     { data: reports, error },
     { count: allCount },
+    { count: draftCount },
     { count: submittedCount },
     { count: approvedCount },
     { count: confirmedCount },
@@ -116,6 +131,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   ] = await Promise.all([
     query,
     buildCountQuery(),
+    buildCountQuery("draft"),
     buildCountQuery("submitted"),
     buildCountQuery("approved"),
     buildCountQuery("client_confirmed"),
@@ -190,6 +206,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
       (
         {
           all: allCount ?? 0,
+          draft: draftCount ?? 0,
           submitted: submittedCount ?? 0,
           approved: approvedCount ?? 0,
           client_confirmed: confirmedCount ?? 0,

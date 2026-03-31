@@ -2,8 +2,10 @@
 
 import React, { useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { approveReport, rejectReport, resubmitReport } from "./actions";
-import { CheckCircle2, XCircle, Loader2, AlertTriangle, Shield, ArrowRight, RotateCcw } from "lucide-react";
+import { submitDraftReport } from "@/app/(dashboard)/reports/new/actions";
+import { CheckCircle2, XCircle, Loader2, AlertTriangle, Shield, ArrowRight, RotateCcw, Send } from "lucide-react";
 
 interface ApprovalButtonsProps {
   reportId: string;
@@ -288,6 +290,46 @@ export function ResubmitButton({ reportId }: { reportId: string }) {
       </button>
       {error && (
         <div className="mt-3 rounded-xl bg-red-50 border border-red-200 p-3">
+          <p className="text-[13px] text-red-400 flex items-center gap-2">
+            <AlertTriangle size={14} />
+            {error}
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function SubmitDraftButton({ reportId, siblingIds }: { reportId: string; siblingIds: string[] }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    setError(null);
+    startTransition(async () => {
+      const ids = siblingIds.length > 0 ? siblingIds : [reportId];
+      const result = await submitDraftReport(ids);
+      if (result.success) {
+        router.refresh();
+      } else {
+        setError(result.error ?? "提出に失敗しました");
+      }
+    });
+  };
+
+  return (
+    <>
+      <button
+        onClick={handleSubmit}
+        disabled={isPending}
+        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0EA5E9] min-h-[44px] px-4 text-[14px] font-medium text-white hover:bg-[#0EA5E9]/90 transition-colors disabled:opacity-50"
+      >
+        {isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+        {isPending ? "提出中..." : "提出する"}
+      </button>
+      {error && (
+        <div className="w-full mt-2 rounded-xl bg-red-50 border border-red-200 p-3">
           <p className="text-[13px] text-red-400 flex items-center gap-2">
             <AlertTriangle size={14} />
             {error}

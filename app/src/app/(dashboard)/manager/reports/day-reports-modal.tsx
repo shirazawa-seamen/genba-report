@@ -31,6 +31,7 @@ import {
   deleteSummaryPhoto,
 } from "@/app/(dashboard)/sites/[siteId]/reports/actions";
 import { PHOTO_TYPE_LABELS } from "@/lib/constants";
+import { PhotoPreviewModal, type PhotoItem } from "@/components/ui/PhotoGallery";
 import {
   getProcessChecklist,
 } from "@/app/(dashboard)/sites/actions";
@@ -119,6 +120,9 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   // 1次報告写真状態
   const [photos, setPhotos] = useState<Array<{ id: string; url: string; caption: string | null; mediaType: string; isFromReport: boolean }>>([]);
   const [photosLoaded, setPhotosLoaded] = useState(false);
+  // 写真のローカル変更管理
+  const [pendingNewPhotos, setPendingNewPhotos] = useState<Array<{ id: string; file: File; url: string; mediaType: string }>>([]);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
 
   // チェックリスト状態（工程別）
   const [checklistCache, setChecklistCache] = useState<Record<string, ProcessChecklistItem[]>>({});
@@ -128,6 +132,10 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   type ReportPhoto = { id: string; reportId: string; url: string; caption: string | null; mediaType: string; photoType: string | null; processName: string | null };
   const [reportPhotos, setReportPhotos] = useState<ReportPhoto[]>([]);
   const [reportPhotosLoaded, setReportPhotosLoaded] = useState(false);
+
+  // 写真プレビュー
+  const [previewPhotos, setPreviewPhotos] = useState<PhotoItem[] | null>(null);
+  const [previewInitialId, setPreviewInitialId] = useState<string | null>(null);
 
   useEffect(() => {
     setSummaryId(day.summary?.id ?? null);
@@ -161,6 +169,9 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
     getReportPhotosForIds(allReportIds).then((data) => {
       setReportPhotos(data);
       setReportPhotosLoaded(true);
+    }).catch((err) => {
+      console.error("2次報告写真の読み込みに失敗:", err);
+      setReportPhotosLoaded(true);
     });
   }, [day.reports, reportPhotosLoaded]);
 
@@ -170,6 +181,9 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
     getSummaryPhotos(summaryId).then((data) => {
       setPhotos(data);
       setPhotosLoaded(true);
+    }).catch((err) => {
+      console.error("1次報告写真の読み込みに失敗:", err);
+      setPhotosLoaded(true);
     });
   }, [summaryId, photosLoaded]);
 
@@ -177,36 +191,54 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
     if (!e.target.files || !summaryId) return;
     const file = e.target.files[0];
     if (!file) return;
-    setMessage(null);
-    startTransition(async () => {
+    // ローカルステートに追加（サーバーには送信しない）
+    const newPhoto = {
+      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      url: URL.createObjectURL(file),
+      mediaType: file.type.startsWith("video/") ? "video" : "photo",
+    };
+    setPendingNewPhotos((prev) => [...prev, newPhoto]);
+    setMessage("写真を追加しました（提出時に保存されます）");
+    e.target.value = "";
+  };
+
+  const handlePhotoDelete = (photoId: string) => {
+    // ペンディング写真の場合はローカルから削除
+    if (photoId.startsWith("pending-")) {
+      setPendingNewPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      return;
+    }
+    // 既存写真の場合は削除フラグを設定
+    setPendingDeleteIds((prev) => new Set(prev).add(photoId));
+  };
+
+  // 写真の変更をサーバーに反映（提出時に呼ばれる）
+  const commitPhotoChanges = async (): Promise<boolean> => {
+    // 削除
+    for (const photoId of pendingDeleteIds) {
+      const result = await deleteSummaryPhoto(photoId, day.siteId);
+      if (!result.success) {
+        setMessage(result.error || "写真削除に失敗しました");
+        return false;
+      }
+    }
+    // 新規追加
+    for (const photo of pendingNewPhotos) {
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("summaryId", summaryId);
+      formData.append("file", photo.file);
+      formData.append("summaryId", summaryId!);
       formData.append("siteId", day.siteId);
       formData.append("caption", "");
       const result = await uploadSummaryPhoto(formData);
       if (!result.success) {
         setMessage(result.error || "写真アップロードに失敗しました");
-        return;
+        return false;
       }
-      setPhotosLoaded(false); // 再読み込み
-      setMessage("写真を追加しました");
-    });
-    e.target.value = "";
-  };
-
-  const handlePhotoDelete = (photoId: string) => {
-    if (!day.siteId) return;
-    setMessage(null);
-    startTransition(async () => {
-      const result = await deleteSummaryPhoto(photoId, day.siteId);
-      if (!result.success) {
-        setMessage(result.error || "写真削除に失敗しました");
-        return;
-      }
-      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-      setMessage("写真を削除しました");
-    });
+    }
+    setPendingNewPhotos([]);
+    setPendingDeleteIds(new Set());
+    return true;
   };
 
   const groups = groupByReporter(day.reports);
@@ -287,6 +319,12 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
       });
       if (!saveResult.success) { setMessage(saveResult.error || "保存に失敗しました"); return; }
 
+      // 写真の変更を反映
+      if (pendingNewPhotos.length > 0 || pendingDeleteIds.size > 0) {
+        const photoResult = await commitPhotoChanges();
+        if (!photoResult) return;
+      }
+
       // 提出
       const result = await submitClientReportSummary(summaryId, day.siteId);
       if (!result.success) { setMessage(result.error || "提出に失敗しました"); return; }
@@ -304,6 +342,7 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   const submittedGroupCount = groups.filter((g) => g.submittedIds.length > 0).length;
 
   return (
+    <>
     <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/40 p-4 pt-[5vh] overflow-y-auto">
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl mb-10">
         {/* Header */}
@@ -454,7 +493,20 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                         return (
                           <div className="grid grid-cols-4 gap-1 mb-2">
                             {groupPhotos.map((photo) => (
-                              <div key={photo.id} className="relative rounded-md overflow-hidden aspect-square bg-gray-200">
+                              <div
+                                key={photo.id}
+                                className="relative rounded-md overflow-hidden aspect-square bg-gray-200 cursor-pointer"
+                                onClick={() => {
+                                  if (photo.mediaType !== "video") {
+                                    const items = groupPhotos.filter((p) => p.mediaType !== "video").map((p): PhotoItem => ({
+                                      id: p.id, url: p.url, caption: p.caption,
+                                      label: [p.processName, p.photoType ? (PHOTO_TYPE_LABELS[p.photoType] ?? p.photoType) : null].filter(Boolean).join(" / "),
+                                    }));
+                                    setPreviewPhotos(items);
+                                    setPreviewInitialId(photo.id);
+                                  }
+                                }}
+                              >
                                 {photo.mediaType === "video" ? (
                                   <div className="w-full h-full flex items-center justify-center bg-gray-800">
                                     <Video size={14} className="text-white/60" />
@@ -605,49 +657,69 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                   </div>
                 )}
 
-                {/* 写真 */}
-                {photosLoaded && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
-                        <Camera size={11} /> 写真・動画（{photos.length}件）
-                      </span>
-                      {canEdit && (
-                        <label className="inline-flex items-center gap-1 text-[11px] text-[#0EA5E9] font-medium cursor-pointer hover:underline">
-                          <ImagePlus size={11} /> 追加
-                          <input type="file" accept="image/*,video/*" onChange={handlePhotoUpload} className="hidden" />
-                        </label>
+                {/* 写真（1次報告写真 + 2次報告写真を統合表示） */}
+                {(photosLoaded || reportPhotosLoaded) && (() => {
+                  const allPhotos = [
+                    ...photos.filter((p) => !pendingDeleteIds.has(p.id)).map((p) => ({ ...p, source: "summary" as const })),
+                    ...pendingNewPhotos.map((p) => ({ id: p.id, url: p.url, caption: null, mediaType: p.mediaType, isFromReport: false, source: "summary" as const, isPending: true })),
+                    ...reportPhotos.map((p) => ({ id: p.id, url: p.url, caption: p.caption, mediaType: p.mediaType, isFromReport: true, source: "report" as const })),
+                  ];
+                  return (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
+                          <Camera size={11} /> 写真・動画（{allPhotos.length}件）
+                        </span>
+                        {canEdit && (
+                          <label className="inline-flex items-center gap-1 text-[11px] text-[#0EA5E9] font-medium cursor-pointer hover:underline">
+                            <ImagePlus size={11} /> 追加
+                            <input type="file" accept="image/*,video/*" onChange={handlePhotoUpload} className="hidden" />
+                          </label>
+                        )}
+                      </div>
+                      {allPhotos.length > 0 ? (
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {allPhotos.map((photo) => (
+                            <div
+                              key={`${photo.source}-${photo.id}`}
+                              className="relative rounded-lg overflow-hidden aspect-square bg-gray-200 cursor-pointer"
+                              onClick={() => {
+                                if (photo.mediaType !== "video") {
+                                  const items = allPhotos.filter((p) => p.mediaType !== "video").map((p): PhotoItem => ({
+                                    id: `${p.source}-${p.id}`, url: p.url, caption: p.caption,
+                                    badge: p.isFromReport ? "2次" : undefined,
+                                  }));
+                                  setPreviewPhotos(items);
+                                  setPreviewInitialId(`${photo.source}-${photo.id}`);
+                                }
+                              }}
+                            >
+                              {photo.mediaType === "video" ? (
+                                <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                                  <Video size={16} className="text-white/60" />
+                                </div>
+                              ) : (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={photo.url} alt={photo.caption || ""} className="w-full h-full object-cover" />
+                              )}
+                              {photo.isFromReport && (
+                                <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/40 text-white px-1 rounded">2次</span>
+                              )}
+                              {canEdit && photo.source === "summary" && (
+                                <button type="button" onClick={(e) => { e.stopPropagation(); handlePhotoDelete(photo.id); }} disabled={isPending}
+                                  className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500/80 text-white hover:bg-red-600">
+                                  <Trash2 size={9} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-300 text-center py-2">写真はまだありません</p>
                       )}
                     </div>
-                    {photos.length > 0 ? (
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {photos.map((photo) => (
-                          <div key={photo.id} className="relative rounded-lg overflow-hidden aspect-square bg-gray-200">
-                            {photo.mediaType === "video" ? (
-                              <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                                <Video size={16} className="text-white/60" />
-                              </div>
-                            ) : (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img src={photo.url} alt={photo.caption || ""} className="w-full h-full object-cover" />
-                            )}
-                            {photo.isFromReport && (
-                              <span className="absolute bottom-0.5 left-0.5 text-[8px] bg-black/40 text-white px-1 rounded">2次</span>
-                            )}
-                            {canEdit && (
-                              <button type="button" onClick={() => handlePhotoDelete(photo.id)} disabled={isPending}
-                                className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500/80 text-white hover:bg-red-600">
-                                <Trash2 size={9} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-gray-300 text-center py-2">写真はまだありません</p>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* アクションボタン */}
                 <div className="flex flex-wrap gap-2">
@@ -695,5 +767,14 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
         </div>
       </div>
     </div>
+
+    {previewPhotos && previewInitialId && (
+      <PhotoPreviewModal
+        photos={previewPhotos}
+        initialId={previewInitialId}
+        onClose={() => { setPreviewPhotos(null); setPreviewInitialId(null); }}
+      />
+    )}
+    </>
   );
 }

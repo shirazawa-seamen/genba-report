@@ -885,6 +885,8 @@ export async function createSiteDocument(input: {
     specification: "has_specification",
     purchase_order: "has_purchase_order",
     schedule: "has_schedule",
+    contract: "has_contract",
+    site_survey_photo: "has_site_survey_photo",
     other: "",
   };
 
@@ -959,7 +961,7 @@ export async function getDownloadUrl(
 
   const { data, error } = await supabase.storage
     .from("site-documents")
-    .createSignedUrl(storagePath, 3600); // 1時間有効
+    .createSignedUrl(storagePath, 3600, { download: false }); // 1時間有効、インライン表示
 
   if (error || !data) {
     return { success: false, error: "ダウンロードURLの生成に失敗しました" };
@@ -1862,4 +1864,92 @@ export async function deleteChecklistItem(
   }
 
   return getProcessChecklist(processId);
+}
+
+// ---------------------------------------------------------------------------
+// 工程の一括追加
+// ---------------------------------------------------------------------------
+export async function batchAddSiteProcesses(input: {
+  siteId: string;
+  processes: Array<{
+    category: string;
+    name: string;
+    templateId?: string;
+    parentTemplateName?: string;
+  }>;
+}): Promise<{ success: boolean; addedCount: number; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, addedCount: 0, error: "認証エラー" };
+
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (!profile || !["admin", "manager"].includes(profile.role)) {
+    return { success: false, addedCount: 0, error: "権限がありません" };
+  }
+
+  const { data: existing } = await supabase
+    .from("processes")
+    .select("id, order_index, name, category")
+    .eq("site_id", input.siteId)
+    .order("order_index", { ascending: false })
+    .limit(1);
+
+  let nextOrderIndex = ((existing?.[0] as { order_index?: number } | undefined)?.order_index ?? 0) + 1;
+
+  const addedProcessMap = new Map<string, string>();
+
+  const { data: allExisting } = await supabase
+    .from("processes")
+    .select("id, name, category")
+    .eq("site_id", input.siteId);
+  for (const p of allExisting ?? []) {
+    addedProcessMap.set(`${p.category}::${p.name}`, p.id);
+  }
+
+  let addedCount = 0;
+  const errors: string[] = [];
+
+  for (const proc of input.processes) {
+    if (!proc.name.trim()) continue;
+
+    const insertData: Record<string, unknown> = {
+      site_id: input.siteId,
+      category: proc.category,
+      name: proc.name.trim(),
+      order_index: nextOrderIndex,
+    };
+
+    if (proc.parentTemplateName) {
+      const parentId = addedProcessMap.get(`${proc.category}::${proc.parentTemplateName}`);
+      if (parentId) insertData.parent_process_id = parentId;
+    }
+
+    const { data, error } = await supabase
+      .from("processes")
+      .insert(insertData)
+      .select("id")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") continue;
+      errors.push(`${proc.name}: ${error.message}`);
+      continue;
+    }
+
+    addedProcessMap.set(`${proc.category}::${proc.name.trim()}`, data.id);
+    nextOrderIndex++;
+    addedCount++;
+
+    if (proc.templateId) {
+      await createChecklistFromTemplate(supabase, data.id, proc.templateId);
+    }
+  }
+
+  revalidatePath(`/sites/${input.siteId}`);
+
+  if (errors.length > 0 && addedCount === 0) {
+    return { success: false, addedCount: 0, error: errors.join("\n") };
+  }
+
+  return { success: true, addedCount };
 }

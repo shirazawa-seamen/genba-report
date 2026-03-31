@@ -11,16 +11,15 @@ import {
   Cloud,
   Clock,
   AlertTriangle,
-  Camera,
   FileText,
-  Video,
   CheckCircle2,
   XCircle,
   Shield,
   Edit3,
 } from "lucide-react";
-import { ApprovalButtons, ResubmitButton } from "./approval-buttons";
+import { ApprovalButtons, ResubmitButton, SubmitDraftButton } from "./approval-buttons";
 import { canAccessReport } from "@/lib/siteAccess";
+import { PhotoGallery, type PhotoItem } from "@/components/ui/PhotoGallery";
 
 interface SiteData { name: string; address: string | null }
 interface ProcessData { id: string; category: string; name: string; progress_rate: number; status: string }
@@ -266,22 +265,27 @@ export default async function ReportDetailPage({ params }: PageProps) {
       {photosWithUrls.length > 0 && (
         <div className="mb-8">
           <h3 className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider mb-3">写真・動画 ({photosWithUrls.length})</h3>
-          <div className="grid grid-cols-2 gap-2.5">
-            {photosWithUrls.map((p) => {
-              const isVideo = p.media_type === "video";
-              const typeLabel = p.photo_type ? (PHOTO_TYPE_LABELS[p.photo_type] ?? p.photo_type) : (isVideo ? "動画" : "写真");
-              return (
-                <div key={p.id} className="relative rounded-2xl overflow-hidden border border-gray-200">
-                  {isVideo ? (<video src={p.url} controls className="w-full aspect-[4/3] object-cover" />) : (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={p.url} alt={p.caption || typeLabel} className="w-full aspect-[4/3] object-cover" />
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 p-2.5 bg-gradient-to-t from-black/60 to-transparent">
-                    <span className="text-[11px] text-white flex items-center gap-1">{isVideo ? <Video size={11} /> : <Camera size={11} />}{typeLabel}</span>
-                  </div>
-                </div>
-              );
-            })}
+          <PhotoGallery
+            photos={photosWithUrls.map((p): PhotoItem => ({
+              id: p.id,
+              url: p.url,
+              caption: p.caption,
+              mediaType: p.media_type,
+              label: p.photo_type ? (PHOTO_TYPE_LABELS[p.photo_type] ?? p.photo_type) : (p.media_type === "video" ? "動画" : "写真"),
+            }))}
+            columns={2}
+            aspect="4/3"
+          />
+        </div>
+      )}
+
+      {status === "draft" && raw.reporter_id === user.id && (
+        <div className="mb-8 p-5 rounded-2xl border border-amber-200 bg-amber-50/50">
+          <div className="flex items-center gap-2 mb-4"><FileText size={16} className="text-amber-500" /><span className="text-[14px] font-semibold text-amber-500">下書き</span></div>
+          <p className="text-[13px] text-gray-500 mb-4">この報告は下書きです。編集して提出できます。</p>
+          <div className="flex flex-wrap gap-3">
+            <Link href={`/reports/${raw.id}/edit`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white min-h-[44px] px-4 text-[14px] font-medium text-amber-500 hover:bg-amber-50 transition-colors"><Edit3 size={16} />編集する</Link>
+            <SubmitDraftButton reportId={raw.id} siblingIds={siblingReports.map((s) => s.id)} />
           </div>
         </div>
       )}

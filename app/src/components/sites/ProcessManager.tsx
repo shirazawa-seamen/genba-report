@@ -24,6 +24,7 @@ import type { ProcessTemplateRecord } from "@/lib/processTemplateTypes";
 import type { ProcessChecklistItem } from "@/app/(dashboard)/sites/actions";
 import {
   addSiteProcess,
+  batchAddSiteProcesses,
   getSiteProcesses,
   getProcessChecklist,
   toggleChecklistItem,
@@ -179,6 +180,18 @@ export function ProcessManager({
     text: string;
   } | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addMode, setAddMode] = useState<"template" | "custom">("template");
+  const [customCategory, setCustomCategory] = useState("");
+  const [customName, setCustomName] = useState("");
+  // 一括追加キュー
+  const [pendingProcesses, setPendingProcesses] = useState<Array<{
+    id: string;
+    category: string;
+    name: string;
+    templateId?: string;
+    childTemplates?: Array<{ category: string; name: string; templateId?: string }>;
+  }>>([]);
+  const [isBatchSaving, setIsBatchSaving] = useState(false);
   const [selectedPhase, setSelectedPhase] = useState<"A" | "B" | "C" | "D" | "">("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -319,6 +332,9 @@ export function ProcessManager({
     setSelectedPhase("");
     setSelectedCategory("");
     setSelectedTemplateId("");
+    setAddMode("template");
+    setCustomCategory("");
+    setCustomName("");
     setShowAddModal(true);
   };
 
@@ -327,6 +343,64 @@ export function ProcessManager({
     setSelectedPhase("");
     setSelectedCategory("");
     setSelectedTemplateId("");
+    setCustomCategory("");
+    setCustomName("");
+  };
+
+  // キューからアイテム削除
+  const removePendingProcess = (id: string) => {
+    setPendingProcesses((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  // 一括保存
+  const handleBatchSave = async () => {
+    if (!siteId || pendingProcesses.length === 0) return;
+    setIsBatchSaving(true);
+    setMessage(null);
+
+    // キューをフラット化（親工程→子工程の順に）
+    const flatProcesses: Array<{
+      category: string;
+      name: string;
+      templateId?: string;
+      parentTemplateName?: string;
+    }> = [];
+
+    for (const proc of pendingProcesses) {
+      flatProcesses.push({
+        category: proc.category,
+        name: proc.name,
+        templateId: proc.templateId,
+      });
+      if (proc.childTemplates) {
+        for (const child of proc.childTemplates) {
+          flatProcesses.push({
+            category: child.category,
+            name: child.name,
+            templateId: child.templateId,
+            parentTemplateName: proc.name,
+          });
+        }
+      }
+    }
+
+    const result = await batchAddSiteProcesses({
+      siteId,
+      processes: flatProcesses,
+    });
+
+    if (result.success) {
+      setPendingProcesses([]);
+      setMessage({
+        type: "success",
+        text: `${result.addedCount}件の工程を追加しました`,
+      });
+      window.location.reload();
+    } else {
+      setMessage({ type: "error", text: result.error || "一括保存に失敗しました" });
+    }
+
+    setIsBatchSaving(false);
   };
 
   const updateProcesses = (next: SiteProcessDraftItem[]) => {
@@ -340,60 +414,76 @@ export function ProcessManager({
     setDeletingId(null);
   };
 
+  // カスタム工程をキューに追加
+  const handleAddCustomProcess = () => {
+    if (!customCategory || !customName.trim()) return;
+
+    // 重複チェック（既存 + キュー）
+    const key = `${customCategory}::${customName.trim()}`;
+    if (existingKeys.has(key) || pendingProcesses.some((p) => `${p.category}::${p.name}` === key)) {
+      setMessage({ type: "error", text: "同じ工程が既に存在または追加済みです" });
+      return;
+    }
+
+    setPendingProcesses((prev) => [
+      ...prev,
+      {
+        id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        category: customCategory,
+        name: customName.trim(),
+      },
+    ]);
+    setCustomName("");
+    setMessage({ type: "success", text: `「${customName.trim()}」をキューに追加しました` });
+  };
+
+  // テンプレート工程をキューに追加
   const handlePickTemplateProcess = () => {
     const template = availableTemplates.find(
       (item) => item.id === resolvedSelectedTemplateId
     );
-    if (!template || !onChange) return;
+    if (!template) return;
 
     // 子テンプレートも取得
     const childTemplates = initialTemplates.filter(
       (item) => item.parentTemplateId === template.id
     );
 
-    // siteIdがある場合はDB直接保存（チェックリスト自動生成付き）
+    // 重複チェック
+    const key = `${template.category}::${template.name.trim()}`;
+    if (existingKeys.has(key) || pendingProcesses.some((p) => `${p.category}::${p.name}` === key)) {
+      setMessage({ type: "error", text: "同じ工程が既に存在または追加済みです" });
+      return;
+    }
+
+    // siteIdがある場合はキューに追加（一括保存方式）
     if (siteId) {
-      closeAddModal();
-      startChecklistTransition(async () => {
-        // 親工程を追加
-        const parentResult = await addSiteProcess({
-          siteId,
+      const validChildren = childTemplates.filter(
+        (child) => !existingKeys.has(`${child.category}::${child.name.trim()}`)
+      );
+      setPendingProcesses((prev) => [
+        ...prev,
+        {
+          id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           category: template.category,
           name: template.name,
           templateId: template.id,
-        });
-
-        if (!parentResult.success) {
-          setMessage({ type: "error", text: parentResult.error || "工程の追加に失敗しました" });
-          return;
-        }
-
-        const parentProcessId = parentResult.processId;
-        let childCount = 0;
-
-        // 子工程を追加
-        for (const child of childTemplates) {
-          if (existingKeys.has(`${child.category}::${child.name.trim()}`)) continue;
-          const childResult = await addSiteProcess({
-            siteId,
+          childTemplates: validChildren.map((child) => ({
             category: child.category,
             name: child.name,
             templateId: child.id,
-            parentProcessId: parentProcessId,
-          });
-          if (childResult.success) childCount++;
-        }
+          })),
+        },
+      ]);
 
-        setMessage({
-          type: "success",
-          text: childCount > 0
-            ? `「${template.processCode} ${template.name}」と子工程${childCount}件を追加しました（チェックリスト自動作成）`
-            : `「${template.processCode} ${template.name}」を追加しました`,
-        });
-
-        // ページをリロードして最新データを反映
-        window.location.reload();
+      const childCount = validChildren.length;
+      setMessage({
+        type: "success",
+        text: childCount > 0
+          ? `「${template.processCode} ${template.name}」(+子工程${childCount}件)をキューに追加しました`
+          : `「${template.processCode} ${template.name}」をキューに追加しました`,
       });
+      setSelectedTemplateId("");
       return;
     }
 
@@ -856,24 +946,57 @@ export function ProcessManager({
                   工程を追加する
                 </p>
                 <p className="mt-1 text-[11px] text-gray-400">
-                  フェーズから選んで標準工程候補を追加します
+                  標準工程またはカスタム工程を追加できます
                 </p>
               </div>
               <button
                 type="button"
                 onClick={openAddModal}
-                disabled={templateCandidates.length === 0}
-                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-[#0EA5E9] px-4 text-[13px] font-bold text-white transition-colors hover:bg-[#0284C7] disabled:opacity-50"
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-[#0EA5E9] px-4 text-[13px] font-bold text-white transition-colors hover:bg-[#0284C7]"
               >
                 <Plus size={14} />
                 追加する
               </button>
             </div>
-            {templateCandidates.length === 0 ? (
-              <p className="mt-3 text-[11px] text-gray-400">
-                追加できる標準工程はありません。
-              </p>
-            ) : null}
+
+            {/* ペンディングキュー */}
+            {pendingProcesses.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-[11px] font-medium text-gray-500">
+                  追加予定 ({pendingProcesses.length}件)
+                </p>
+                {pendingProcesses.map((proc) => (
+                  <div key={proc.id} className="flex items-center gap-2 rounded-xl bg-white border border-cyan-100 px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[13px] font-medium text-gray-700 truncate block">
+                        {proc.name}
+                      </span>
+                      <span className="text-[11px] text-gray-400">
+                        {categoryLabelMap[proc.category] ?? proc.category}
+                        {proc.childTemplates && proc.childTemplates.length > 0 && (
+                          <> (+子工程{proc.childTemplates.length}件)</>
+                        )}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePendingProcess(proc.id)}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-300 hover:bg-red-50 hover:text-red-400 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleBatchSave}
+                  disabled={isBatchSaving}
+                  className="w-full inline-flex items-center justify-center gap-1.5 min-h-[40px] rounded-xl bg-emerald-500 text-[13px] font-bold text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  {isBatchSaving ? "保存中..." : `${pendingProcesses.length}件を一括保存`}
+                </button>
+              </div>
+            )}
           </div>
         ) : null}
 
@@ -919,9 +1042,6 @@ export function ProcessManager({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h4 className="text-[16px] font-bold text-gray-900">工程を追加する</h4>
-                <p className="mt-1 text-[12px] text-gray-400">
-                  フェーズ、工程種別、工程の順に選択してください
-                </p>
               </div>
               <button
                 type="button"
@@ -933,97 +1053,162 @@ export function ProcessManager({
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="relative">
-                <select
-                  value={resolvedSelectedPhase}
-                  onChange={(event) => {
-                    setSelectedPhase(event.target.value as "A" | "B" | "C" | "D" | "");
-                    setSelectedCategory("");
-                    setSelectedTemplateId("");
-                  }}
-                  className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50"
-                >
-                  <option value="">フェーズを選択</option>
-                  {phaseOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300"
-                />
-              </div>
+            {/* タブ切り替え */}
+            <div className="flex gap-1 rounded-xl bg-gray-100 p-1 mb-4">
+              <button
+                type="button"
+                onClick={() => setAddMode("template")}
+                className={`flex-1 rounded-lg py-2 text-[12px] font-medium transition-all ${
+                  addMode === "template" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                }`}
+              >
+                標準工程
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddMode("custom")}
+                className={`flex-1 rounded-lg py-2 text-[12px] font-medium transition-all ${
+                  addMode === "custom" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"
+                }`}
+              >
+                カスタム工程
+              </button>
+            </div>
 
-              <div className="relative">
-                <select
-                  value={resolvedSelectedCategory}
-                  onChange={(event) => {
-                    setSelectedCategory(event.target.value);
-                    setSelectedTemplateId("");
-                  }}
-                  disabled={!resolvedSelectedPhase}
-                  className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50 disabled:bg-gray-50 disabled:text-gray-300"
-                >
-                  <option value="">工程種別を選択</option>
-                  {availableCategories.map((category) => (
-                    <option key={category.id} value={category.value}>
-                      {category.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300"
+            {addMode === "custom" ? (
+              /* カスタム工程入力フォーム */
+              <div className="space-y-3">
+                <div className="relative">
+                  <select
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50"
+                  >
+                    <option value="">工程種別を選択</option>
+                    {categoryOptions.map((cat) => (
+                      <option key={cat.id} value={cat.value}>{cat.label}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300" />
+                </div>
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddCustomProcess(); } }}
+                  placeholder="工程名を入力"
+                  className="w-full min-h-[48px] rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50"
                 />
+                <div className="flex gap-2">
+                  <button type="button" onClick={closeAddModal} className="flex-1 min-h-[44px] rounded-xl border border-gray-300 text-[13px] text-gray-500 transition-colors hover:bg-gray-100">
+                    閉じる
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddCustomProcess}
+                    disabled={!customCategory || !customName.trim()}
+                    className="flex-1 min-h-[44px] rounded-xl bg-[#0EA5E9] text-[13px] font-bold text-white transition-colors hover:bg-[#0284C7] disabled:opacity-50"
+                  >
+                    キューに追加
+                  </button>
+                </div>
               </div>
-
-              <div className="relative">
-                <select
-                  value={resolvedSelectedTemplateId}
-                  onChange={(event) => setSelectedTemplateId(event.target.value)}
-                  disabled={!resolvedSelectedCategory}
-                  className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50 disabled:bg-gray-50 disabled:text-gray-300"
-                >
-                  <option value="">工程を選択</option>
-                  {availableTemplates.map((template) => {
-                    const childCount = initialTemplates.filter(
-                      (t) => t.parentTemplateId === template.id
-                    ).length;
-                    return (
-                      <option key={template.id} value={template.id}>
-                        {template.processCode} {template.name}
-                        {childCount > 0 ? ` (+子工程${childCount}件)` : ""}
+            ) : (
+            /* 標準工程選択フォーム */
+            <>
+              <div className="space-y-3">
+                <div className="relative">
+                  <select
+                    value={resolvedSelectedPhase}
+                    onChange={(event) => {
+                      setSelectedPhase(event.target.value as "A" | "B" | "C" | "D" | "");
+                      setSelectedCategory("");
+                      setSelectedTemplateId("");
+                    }}
+                    className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50"
+                  >
+                    <option value="">フェーズを選択</option>
+                    {phaseOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
                       </option>
-                    );
-                  })}
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300"
-                />
-              </div>
-            </div>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300"
+                  />
+                </div>
 
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={closeAddModal}
-                className="flex-1 min-h-[44px] rounded-xl border border-gray-300 text-[13px] text-gray-500 transition-colors hover:bg-gray-100"
-              >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                onClick={handlePickTemplateProcess}
-                disabled={!resolvedSelectedTemplateId}
-                className="flex-1 min-h-[44px] rounded-xl bg-[#0EA5E9] text-[13px] font-bold text-white transition-colors hover:bg-[#0284C7] disabled:opacity-50"
-              >
-                追加する
-              </button>
-            </div>
+                <div className="relative">
+                  <select
+                    value={resolvedSelectedCategory}
+                    onChange={(event) => {
+                      setSelectedCategory(event.target.value);
+                      setSelectedTemplateId("");
+                    }}
+                    disabled={!resolvedSelectedPhase}
+                    className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50 disabled:bg-gray-50 disabled:text-gray-300"
+                  >
+                    <option value="">工程種別を選択</option>
+                    {availableCategories.map((category) => (
+                      <option key={category.id} value={category.value}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300"
+                  />
+                </div>
+
+                <div className="relative">
+                  <select
+                    value={resolvedSelectedTemplateId}
+                    onChange={(event) => setSelectedTemplateId(event.target.value)}
+                    disabled={!resolvedSelectedCategory}
+                    className="w-full min-h-[48px] appearance-none rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14px] text-gray-700 focus:outline-none focus:border-[#0EA5E9]/50 disabled:bg-gray-50 disabled:text-gray-300"
+                  >
+                    <option value="">工程を選択</option>
+                    {availableTemplates.map((template) => {
+                      const childCount = initialTemplates.filter(
+                        (t) => t.parentTemplateId === template.id
+                      ).length;
+                      return (
+                        <option key={template.id} value={template.id}>
+                          {template.processCode} {template.name}
+                          {childCount > 0 ? ` (+子工程${childCount}件)` : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-300"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeAddModal}
+                  className="flex-1 min-h-[44px] rounded-xl border border-gray-300 text-[13px] text-gray-500 transition-colors hover:bg-gray-100"
+                >
+                  閉じる
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePickTemplateProcess}
+                  disabled={!resolvedSelectedTemplateId}
+                  className="flex-1 min-h-[44px] rounded-xl bg-[#0EA5E9] text-[13px] font-bold text-white transition-colors hover:bg-[#0284C7] disabled:opacity-50"
+                >
+                  キューに追加
+                </button>
+              </div>
+            </>
+            )}
           </div>
         </div>
       ) : null}
