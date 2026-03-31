@@ -31,8 +31,8 @@ export default async function CalendarPage({ searchParams }: PageProps) {
   const statusFilter =
     status === "completed" ? "completed" : status === "all" ? "all" : "active";
 
-  // Determine month to display
-  const now = new Date();
+  // Determine month to display (JST基準)
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
   const targetMonth = month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [yearStr, monthStr] = targetMonth.split("-");
   const year = parseInt(yearStr, 10);
@@ -168,7 +168,8 @@ export default async function CalendarPage({ searchParams }: PageProps) {
     reportCount: number;
   }[] = [];
 
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const jstNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  const todayStr = `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, "0")}-${String(jstNow.getDate()).padStart(2, "0")}`;
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(monthNum).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
