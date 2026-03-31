@@ -313,10 +313,12 @@ interface UploadModalProps {
   onClose: () => void;
 }
 
+type FileEntry = { file: File; documentType: DocumentType };
+
 function UploadModal({ siteId, onClose }: UploadModalProps) {
   const [isPending, startTransition] = useTransition();
-  const [files, setFiles] = useState<File[]>([]);
-  const [documentType, setDocumentType] = useState<DocumentType>("other");
+  const [entries, setEntries] = useState<FileEntry[]>([]);
+  const [defaultType, setDefaultType] = useState<DocumentType>("other");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -326,25 +328,29 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files ?? []);
     if (selectedFiles.length > 0) {
-      setFiles((prev) => [...prev, ...selectedFiles]);
-      if (!title && selectedFiles.length === 1) {
+      const newEntries = selectedFiles.map((file) => ({ file, documentType: defaultType }));
+      setEntries((prev) => [...prev, ...newEntries]);
+      if (!title && selectedFiles.length === 1 && entries.length === 0) {
         setTitle(selectedFiles[0].name.replace(/\.[^/.]+$/, ""));
       }
     }
     e.target.value = "";
   };
 
-  const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+  const removeEntry = (index: number) => {
+    setEntries((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateEntryType = (index: number, type: DocumentType) => {
+    setEntries((prev) => prev.map((e, i) => i === index ? { ...e, documentType: type } : e));
   };
 
   const handleUpload = () => {
-    if (files.length === 0) {
+    if (entries.length === 0) {
       setError("ファイルを選択してください");
       return;
     }
-    // 複数ファイルの場合はタイトル不要（ファイル名から自動生成）
-    if (files.length === 1 && !title.trim()) {
+    if (entries.length === 1 && !title.trim()) {
       setError("タイトルを入力してください");
       return;
     }
@@ -353,11 +359,11 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
     startTransition(async () => {
       try {
         let uploadedCount = 0;
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-          setUploadProgress(`${i + 1}/${files.length} アップロード中...`);
+        for (let i = 0; i < entries.length; i++) {
+          const { file, documentType } = entries[i];
+          setUploadProgress(`${i + 1}/${entries.length} アップロード中...`);
 
-          const fileTitle = files.length === 1
+          const fileTitle = entries.length === 1
             ? title.trim()
             : file.name.replace(/\.[^/.]+$/, "");
 
@@ -382,7 +388,7 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
             siteId,
             documentType,
             title: fileTitle,
-            description: files.length === 1 ? (description.trim() || undefined) : undefined,
+            description: entries.length === 1 ? (description.trim() || undefined) : undefined,
             storagePath: uploadResult.storagePath,
             fileName: file.name,
             fileSize: file.size,
@@ -438,40 +444,78 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
               onClick={() => fileInputRef.current?.click()}
               className={[
                 "w-full min-h-[48px] px-4 py-3 rounded-xl border transition-all duration-200 text-left text-[14px]",
-                files.length > 0
+                entries.length > 0
                   ? "border-emerald-300 bg-emerald-50 text-emerald-600"
                   : "border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300",
               ].join(" ")}
             >
-              {files.length > 0 ? `${files.length}件のファイルを選択中` : "ファイルを選択（複数可）"}
+              {entries.length > 0 ? `${entries.length}件のファイルを選択中` : "ファイルを選択（複数可）"}
             </button>
-            {files.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {files.map((f, i) => (
-                  <div key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1.5">
-                    <span className="flex-1 text-[12px] text-gray-600 truncate">{f.name}</span>
-                    <span className="text-[11px] text-gray-400 shrink-0">{formatFileSize(f.size)}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(i)}
-                      className="text-gray-300 hover:text-red-400 transition-colors"
-                    >
-                      <X size={12} />
-                    </button>
+            {entries.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {entries.map((entry, i) => (
+                  <div key={`${entry.file.name}-${i}`} className="rounded-lg bg-gray-50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 text-[12px] text-gray-600 truncate">{entry.file.name}</span>
+                      <span className="text-[11px] text-gray-400 shrink-0">{formatFileSize(entry.file.size)}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeEntry(i)}
+                        className="text-gray-300 hover:text-red-400 transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    {entries.length > 1 && (
+                      <select
+                        value={entry.documentType}
+                        onChange={(e) => updateEntryType(i, e.target.value as DocumentType)}
+                        className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600 focus:outline-none focus:border-[#0EA5E9]/50"
+                      >
+                        {DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <Select
-            label="種別"
-            options={DOCUMENT_TYPE_OPTIONS}
-            value={documentType}
-            onChange={(e) => setDocumentType(e.target.value as DocumentType)}
-          />
+          {entries.length <= 1 && (
+            <Select
+              label="種別"
+              options={DOCUMENT_TYPE_OPTIONS}
+              value={entries.length === 1 ? entries[0].documentType : defaultType}
+              onChange={(e) => {
+                const type = e.target.value as DocumentType;
+                if (entries.length === 1) {
+                  updateEntryType(0, type);
+                }
+                setDefaultType(type);
+              }}
+            />
+          )}
 
-          {files.length <= 1 && (
+          {entries.length > 1 && (
+            <div>
+              <label className="text-[11px] font-medium text-gray-400 mb-1 block">
+                次に追加するファイルのデフォルト種別
+              </label>
+              <select
+                value={defaultType}
+                onChange={(e) => setDefaultType(e.target.value as DocumentType)}
+                className="w-full min-h-[36px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-600 focus:outline-none focus:border-[#0EA5E9]/50"
+              >
+                {DOCUMENT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {entries.length <= 1 && (
             <>
               <Input
                 label="タイトル"
@@ -491,9 +535,9 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
             </>
           )}
 
-          {files.length > 1 && (
+          {entries.length > 1 && (
             <p className="text-[11px] text-gray-400">
-              複数ファイルの場合、タイトルはファイル名から自動設定されます
+              複数ファイルの場合、タイトルはファイル名から自動設定されます。種別は各ファイルごとに変更できます。
             </p>
           )}
 
@@ -526,9 +570,9 @@ function UploadModal({ siteId, onClose }: UploadModalProps) {
               className="flex-1"
               onClick={handleUpload}
               loading={isPending}
-              disabled={files.length === 0 || (files.length === 1 && !title.trim())}
+              disabled={entries.length === 0 || (entries.length === 1 && !title.trim())}
             >
-              {files.length > 1 ? `${files.length}件アップロード` : "アップロード"}
+              {entries.length > 1 ? `${entries.length}件アップロード` : "アップロード"}
             </Button>
           </div>
         </div>

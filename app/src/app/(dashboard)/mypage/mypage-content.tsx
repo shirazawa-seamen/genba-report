@@ -68,7 +68,7 @@ export function MyPageContent({
   reports: ReportItem[];
   photos: PhotoData[];
 }) {
-  const [activeTab, setActiveTab] = useState<"photos" | "reports">("photos");
+  const [activeTab, setActiveTab] = useState<"photos" | "reports">("reports");
 
   const tabs = [
     { key: "photos" as const, label: "写真", count: totalPhotos, Icon: Camera },
