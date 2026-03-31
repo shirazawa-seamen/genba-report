@@ -317,6 +317,8 @@ export default async function SiteDetailPage({
             has_specification: s.has_specification,
             has_purchase_order: s.has_purchase_order,
             has_schedule: s.has_schedule,
+            has_contract: s.has_contract ?? false,
+            has_site_survey_photo: s.has_site_survey_photo ?? false,
           }}
           initialProcesses={processList.map((process) => ({
             id: process.id,
@@ -360,6 +362,8 @@ export default async function SiteDetailPage({
                 has_specification: s.has_specification,
                 has_purchase_order: s.has_purchase_order,
                 has_schedule: s.has_schedule,
+                has_contract: s.has_contract ?? false,
+                has_site_survey_photo: s.has_site_survey_photo ?? false,
               }}
               canToggle={canManage}
             />

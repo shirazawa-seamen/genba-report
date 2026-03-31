@@ -73,6 +73,8 @@ export function SiteDetailEditSession({
         hasSpecification: checks.has_specification,
         hasPurchaseOrder: checks.has_purchase_order,
         hasSchedule: checks.has_schedule,
+        hasContract: checks.has_contract,
+        hasSiteSurveyPhoto: checks.has_site_survey_photo,
         isMonitor: false,
         processes: processes.map((process) => ({
           id: process.id.startsWith("draft-process-") ? undefined : process.id,

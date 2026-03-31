@@ -6,6 +6,7 @@ import {
   FileText,
   FileCheck,
   CalendarRange,
+  Camera,
   Check,
   Loader2,
 } from "lucide-react";
@@ -16,6 +17,8 @@ const SETUP_ITEMS = [
   { key: "has_specification", label: "仕様書", icon: FileText },
   { key: "has_purchase_order", label: "発注書", icon: FileCheck },
   { key: "has_schedule", label: "工程表", icon: CalendarRange },
+  { key: "has_contract", label: "契約書", icon: FileCheck },
+  { key: "has_site_survey_photo", label: "現調写真", icon: Camera },
 ] as const;
 
 export type SetupCheckField = (typeof SETUP_ITEMS)[number]["key"];
@@ -25,6 +28,8 @@ export interface SetupCheckDraft {
   has_specification: boolean;
   has_purchase_order: boolean;
   has_schedule: boolean;
+  has_contract: boolean;
+  has_site_survey_photo: boolean;
 }
 
 interface SetupCheckListProps {

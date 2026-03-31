@@ -196,6 +196,8 @@ export async function saveSiteEditDraft(input: {
   hasSpecification: boolean;
   hasPurchaseOrder: boolean;
   hasSchedule: boolean;
+  hasContract?: boolean;
+  hasSiteSurveyPhoto?: boolean;
   isMonitor: boolean;
   processes: {
     id?: string;
@@ -278,6 +280,8 @@ export async function saveSiteEditDraft(input: {
     has_specification: input.hasSpecification,
     has_purchase_order: input.hasPurchaseOrder,
     has_schedule: input.hasSchedule,
+    has_contract: input.hasContract ?? false,
+    has_site_survey_photo: input.hasSiteSurveyPhoto ?? false,
     is_monitor: input.isMonitor,
   };
 
@@ -540,7 +544,7 @@ export async function deleteSite(
 // ---------------------------------------------------------------------------
 export async function updateSetupCheck(
   siteId: string,
-  field: "has_blueprint" | "has_specification" | "has_purchase_order" | "has_schedule",
+  field: "has_blueprint" | "has_specification" | "has_purchase_order" | "has_schedule" | "has_contract" | "has_site_survey_photo",
   value: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();

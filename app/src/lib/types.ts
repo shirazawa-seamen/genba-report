@@ -59,6 +59,8 @@ export interface Site {
   has_specification: boolean;
   has_purchase_order: boolean;
   has_schedule: boolean;
+  has_contract?: boolean;
+  has_site_survey_photo?: boolean;
   is_monitor: boolean;
   created_at: string;
 }
