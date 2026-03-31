@@ -218,9 +218,14 @@ export default async function SiteDetailPage({
           <p className="text-[12px] text-[#0EA5E9]/60 font-mono mb-1">現場ID：{s.site_number}</p>
         )}
         {s.address && (
-          <p className="text-[13px] text-gray-400 flex items-center gap-1.5 mb-1">
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.address)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[13px] text-gray-400 hover:text-[#0EA5E9] flex items-center gap-1.5 mb-1 transition-colors"
+          >
             <MapPin size={13} /> {s.address}
-          </p>
+          </a>
         )}
         <div className="flex items-center gap-4 text-[13px] text-gray-400">
           <span className="flex items-center gap-1.5"><CalendarDays size={13} />{formatDate(s.start_date)} ~ {formatDate(s.end_date)}</span>

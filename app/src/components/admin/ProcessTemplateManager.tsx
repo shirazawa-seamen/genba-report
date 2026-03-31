@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -274,6 +274,8 @@ export function ProcessTemplateManager({
     });
   };
 
+  const addNameInputRef = useRef<HTMLInputElement>(null);
+
   const handleCreateChild = (parentId: string) => {
     // 親のフェーズとカテゴリを引き継いで追加フォームをセットアップ
     const parent = templates.find((t) => t.id === parentId);
@@ -283,8 +285,9 @@ export function ProcessTemplateManager({
     setAddParentTemplateId(parentId);
     setAddName("");
     setAddAsParallel(false);
-    // 追加フォームまでスクロール
+    // 追加フォームまでスクロールしてフォーカス
     window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => addNameInputRef.current?.focus(), 400);
   };
 
   const handleStartEdit = (template: ProcessTemplateRecord) => {
@@ -751,10 +754,13 @@ export function ProcessTemplateManager({
           <label className="space-y-1.5 md:col-span-2">
             <span className="text-[12px] font-medium text-gray-500">工程名</span>
             <input
+              ref={addNameInputRef}
               value={addName}
               onChange={(event) => setAddName(event.target.value)}
-              placeholder="工程名を入力"
-              className="min-h-[44px] w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-[14px] text-gray-700 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50"
+              placeholder={addParentTemplateId ? "子工程名を入力" : "工程名を入力"}
+              className={`min-h-[44px] w-full rounded-xl border px-4 text-[14px] text-gray-700 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 ${
+                addParentTemplateId ? "border-emerald-300 bg-emerald-50/50" : "border-gray-200 bg-gray-50"
+              }`}
             />
           </label>
           <label className="-mt-1 flex items-center gap-2 px-1 text-[13px] text-gray-700 md:col-span-2">

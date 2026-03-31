@@ -61,10 +61,25 @@ const PHASE_LABELS: Record<string, string> = {
 
 function reorderItems(items: SiteProcessDraftItem[], fromIndex: number, toIndex: number) {
   if (fromIndex === toIndex) return items;
-  const next = [...items];
-  const [moved] = next.splice(fromIndex, 1);
-  next.splice(toIndex, 0, moved);
-  return next.map((item, index) => ({ ...item, orderIndex: index + 1 }));
+  const movedItem = items[fromIndex];
+
+  // 親工程の場合、子工程も一緒に移動
+  const movedIds = new Set<string>([movedItem.id]);
+  const childItems = items.filter((item) => item.parentProcessId === movedItem.id);
+  for (const child of childItems) movedIds.add(child.id);
+  // 孫工程（子の子）も
+  const grandchildItems = items.filter((item) => item.parentProcessId && movedIds.has(item.parentProcessId) && !movedIds.has(item.id));
+  for (const gc of grandchildItems) movedIds.add(gc.id);
+
+  // 移動対象と残りを分離
+  const toMove = items.filter((item) => movedIds.has(item.id));
+  const remaining = items.filter((item) => !movedIds.has(item.id));
+
+  // 挿入位置を調整（remainingの中でのindex）
+  const adjustedTo = Math.min(Math.max(0, toIndex > fromIndex ? toIndex - toMove.length + 1 : toIndex), remaining.length);
+  remaining.splice(adjustedTo, 0, ...toMove);
+
+  return remaining.map((item, index) => ({ ...item, orderIndex: index + 1 }));
 }
 
 function ChecklistPanel({
