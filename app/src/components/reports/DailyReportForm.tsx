@@ -1517,6 +1517,44 @@ export function DailyReportForm({
             ) : (
               <CompletionScreen onReset={handleReset} warning={submitError} />
             )
+          ) : showPreview ? (
+            /* プレビュー確認画面（別画面） */
+            <div>
+              <Step4 data={formData} />
+
+              {submitError ? (
+                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                  <p className="whitespace-pre-line text-[13px] text-red-400">
+                    {submitError}
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="mt-8 flex flex-col gap-3">
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="lg"
+                  loading={isPending}
+                  className="w-full"
+                  onClick={handleSubmit}
+                >
+                  {isPending ? "送信中..." : "送信する"}
+                  {!isPending ? <CheckCircle2 size={20} /> : null}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  disabled={isPending}
+                  onClick={() => setShowPreview(false)}
+                >
+                  <ChevronLeft size={20} />
+                  修正する
+                </Button>
+              </div>
+            </div>
           ) : (
             <form onSubmit={handlePreSubmit} noValidate>
               <div className="space-y-8">
@@ -1562,96 +1600,16 @@ export function DailyReportForm({
                 />
               </div>
 
-              {submitError ? (
-                <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
-                  <p className="whitespace-pre-line text-[13px] text-red-400">
-                    {submitError}
-                  </p>
-                </div>
-              ) : null}
-
-              {/* 送信前プレビュー確認 */}
-              {showPreview && (
-                <div className="mt-6 rounded-2xl border-2 border-[#0EA5E9]/30 bg-[#0EA5E9]/5 p-5">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Eye size={16} className="text-[#0EA5E9]" />
-                    <h3 className="text-[15px] font-bold text-gray-900">送信内容の確認</h3>
-                  </div>
-                  <div className="space-y-3 text-[13px]">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">現場</span>
-                      <span className="font-medium text-gray-700">{formData.siteName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">報告日</span>
-                      <span className="font-medium text-gray-700">{formData.reportDate}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">工程</span>
-                      <span className="font-medium text-gray-700 text-right">{formData.selectedProcesses.map((p) => p.name).join("、")}</span>
-                    </div>
-                    {formData.weather && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">天候</span>
-                        <span className="font-medium text-gray-700">{formData.weather}</span>
-                      </div>
-                    )}
-                    {formData.workers && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">作業者</span>
-                        <span className="font-medium text-gray-700">{formData.workers}</span>
-                      </div>
-                    )}
-                    {formData.workDescription && (
-                      <div>
-                        <span className="text-gray-400 block mb-1">作業内容</span>
-                        <p className="text-gray-700 whitespace-pre-wrap bg-white rounded-xl p-3 border border-gray-100">{formData.workDescription}</p>
-                      </div>
-                    )}
-                    {formData.photos.length > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">添付写真</span>
-                        <span className="font-medium text-gray-700">{formData.photos.length}枚</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-5 flex gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="lg"
-                      className="flex-1"
-                      onClick={() => setShowPreview(false)}
-                    >
-                      戻って修正
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="lg"
-                      loading={isPending}
-                      className="flex-1"
-                      onClick={handleSubmit}
-                    >
-                      {isPending ? "送信中..." : "送信する"}
-                      {!isPending ? <CheckCircle2 size={20} /> : null}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {!showPreview && (
               <div className="mt-8 flex flex-col gap-3">
                 <Button
                   type="submit"
                   variant="primary"
                   size="lg"
-                  loading={isPending}
                   className="w-full"
                   disabled={isSavingDraft}
                 >
-                  {isPending ? "送信中..." : "報告を送信"}
-                  {!isPending ? <CheckCircle2 size={20} /> : null}
+                  確認する
+                  <Eye size={20} />
                 </Button>
                 <Button
                   type="button"
@@ -1666,7 +1624,6 @@ export function DailyReportForm({
                   {!isSavingDraft ? <Save size={20} /> : null}
                 </Button>
               </div>
-              )}
             </form>
           )}
         </div>
