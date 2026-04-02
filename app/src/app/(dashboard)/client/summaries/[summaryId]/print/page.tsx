@@ -76,7 +76,7 @@ export default async function SummaryPrintPage({ params }: PageProps) {
       </div>
 
       {/* Print content */}
-      <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black print:text-black text-[11px]">
+      <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black print:text-black text-[11px] print-page">
         {/* Header */}
         <div className="border-b-2 border-black pb-3 mb-4">
           <h1 className="text-lg font-bold text-center mb-0.5">施工報告書</h1>
@@ -203,24 +203,32 @@ export default async function SummaryPrintPage({ params }: PageProps) {
       {/* Print styles */}
       <style>{`
         @page {
-          size: A4;
-          margin: 12mm;
+          size: A4 portrait;
+          margin: 10mm;
         }
         @media print {
-          body {
+          html, body {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           .print-hidden {
             display: none !important;
           }
+          .print-page {
+            page-break-after: always;
+            break-after: page;
+            min-height: 100vh;
+            box-sizing: border-box;
+          }
+          .print-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
           img {
             break-inside: avoid;
           }
-        }
-        .page-break-before {
-          page-break-before: always !important;
-          break-before: page !important;
         }
       `}</style>
     </>
@@ -323,7 +331,7 @@ async function SummaryPhotosPage({
   });
 
   return (
-    <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black page-break-before">
+    <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black">
       <div className="border-b-2 border-black pb-3 mb-6">
         <h1 className="text-xl font-bold text-center">施工写真</h1>
         <p className="text-center text-sm text-gray-500 mt-1">
