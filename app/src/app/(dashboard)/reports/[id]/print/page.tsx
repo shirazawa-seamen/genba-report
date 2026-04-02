@@ -289,7 +289,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
         });
 
         return (
-          <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black print:break-before-page">
+          <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black" style={{ breakBefore: "page", pageBreakBefore: "always" }}>
             <div className="border-b-2 border-black pb-3 mb-6">
               <h1 className="text-xl font-bold text-center">施工写真</h1>
               <p className="text-center text-sm text-gray-500 mt-1">
