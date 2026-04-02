@@ -20,6 +20,7 @@ interface SiteItem {
   periodBg: string;
   progressRate: number | null;
   processCount: number;
+  processNames: string[];
   managers: string[];
   workers: string[];
   partners: string[];
@@ -41,7 +42,8 @@ export function SiteSearchList({ sites }: { sites: SiteItem[] }) {
           s.name.toLowerCase().includes(q) ||
           (s.siteNumber && s.siteNumber.toLowerCase().includes(q)) ||
           s.address.toLowerCase().includes(q) ||
-          (s.companyName && s.companyName.toLowerCase().includes(q))
+          (s.companyName && s.companyName.toLowerCase().includes(q)) ||
+          s.processNames.some((p) => p.toLowerCase().includes(q))
         );
       })
     : sites;
@@ -53,7 +55,7 @@ export function SiteSearchList({ sites }: { sites: SiteItem[] }) {
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
-          placeholder="現場名・番号・住所で検索..."
+          placeholder="現場名・番号・住所・工程名で検索..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full min-h-[44px] pl-10 pr-4 rounded-xl border border-gray-200 bg-white text-[14px] text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"

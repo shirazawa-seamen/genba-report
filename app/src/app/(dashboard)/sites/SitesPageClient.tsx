@@ -19,6 +19,7 @@ interface SiteItem {
   periodBg: string;
   progressRate: number | null;
   processCount: number;
+  processNames: string[];
   managers: string[];
   workers: string[];
   partners: string[];

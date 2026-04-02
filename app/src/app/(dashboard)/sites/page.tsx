@@ -136,26 +136,27 @@ export default async function SitesPage({
   const visibleSites = (siteResult.data as SiteRow[] | null) ?? [];
   const error = siteResult.error;
 
-  let processMap: Record<string, { total: number; avgProgress: number }> = {};
+  let processMap: Record<string, { total: number; avgProgress: number; names: string[] }> = {};
   if (visibleSites.length > 0) {
     const { data: processRows } = await supabase
       .from("processes")
-      .select("site_id, progress_rate")
+      .select("site_id, progress_rate, name")
       .in("site_id", visibleSites.map((site) => site.id));
 
     if (processRows) {
-      const grouped: Record<string, { total: number; sum: number }> = {};
-      for (const process of processRows as ProcessRow[]) {
-        const current = grouped[process.site_id] ?? { total: 0, sum: 0 };
+      const grouped: Record<string, { total: number; sum: number; names: string[] }> = {};
+      for (const process of processRows as (ProcessRow & { name?: string })[]) {
+        const current = grouped[process.site_id] ?? { total: 0, sum: 0, names: [] };
         current.total += 1;
         current.sum += process.progress_rate ?? 0;
+        if (process.name) current.names.push(process.name);
         grouped[process.site_id] = current;
       }
 
       processMap = Object.fromEntries(
         Object.entries(grouped).map(([siteId, stats]) => [
           siteId,
-          { total: stats.total, avgProgress: Math.round(stats.sum / stats.total) },
+          { total: stats.total, avgProgress: Math.round(stats.sum / stats.total), names: stats.names },
         ])
       );
     }
@@ -198,6 +199,7 @@ export default async function SitesPage({
       periodBg: period.bg,
       progressRate: progress?.avgProgress ?? null,
       processCount: progress?.total ?? 0,
+      processNames: progress?.names ?? [],
       managers: siteMembers.filter((m) => m.role === "manager").map((m) => m.name),
       workers: siteMembers.filter((m) => m.role === "worker_internal").map((m) => m.name),
       partners: siteMembers.filter((m) => m.role === "worker_external").map((m) => m.name),

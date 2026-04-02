@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useTransition, useCallback, useEffect } from "react";
+import React, { useState, useRef, useTransition, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   FolderOpen,
@@ -26,6 +26,7 @@ import {
   Trash,
   Pencil,
   MoreVertical,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,6 +144,7 @@ export function StoragePage({
   const [renameDoc, setRenameDoc] = useState<DocumentItem | null>(null);
   const [renameDocName, setRenameDocName] = useState("");
   const [docMenuId, setDocMenuId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const isRoot = !currentFolder;
   const isManager = userRole === "admin" || userRole === "manager";
@@ -150,6 +152,15 @@ export function StoragePage({
   const canDeleteAll = isManager; // マネージャー: 全ファイル削除可
   const isWorker = userRole === "worker_internal" || userRole === "worker_external";
   const isClient = userRole === "client";
+
+  // 検索フィルタ
+  const q = searchQuery.toLowerCase().trim();
+  const filteredFolders = useMemo(() =>
+    q ? folders.filter((f) => f.name.toLowerCase().includes(q) || (f.client_name ?? "").toLowerCase().includes(q)) : folders
+  , [folders, q]);
+  const filteredDocuments = useMemo(() =>
+    q ? documents.filter((d) => d.title.toLowerCase().includes(q) || d.file_name.toLowerCase().includes(q)) : documents
+  , [documents, q]);
 
   // ファイル削除可能判定: マネージャーは全て、ワーカーは自分のファイルのみ
   const canDeleteDoc = (doc: DocumentItem) => {
@@ -297,13 +308,27 @@ export function StoragePage({
         )}
       </nav>
 
+      {/* ── 検索バー ── */}
+      {(folders.length > 3 || documents.length > 0) && (
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="フォルダ・ファイルを検索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-[14px] text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
+          />
+        </div>
+      )}
+
       {/* ── ゴミ箱ビュー ── */}
       {showTrash && isRoot ? (
         <TrashView onRestore={() => { refresh(); }} />
       ) : (
       <>
       {/* ── フォルダ一覧 ── */}
-      {folders.length > 0 && (
+      {filteredFolders.length > 0 && (
         <section>
           {!isRoot && (
             <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
@@ -311,7 +336,7 @@ export function StoragePage({
             </h2>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {folders.map((folder) => (
+            {filteredFolders.map((folder) => (
               <div
                 key={folder.id}
                 className="flex items-center gap-3 p-4 bg-white rounded-xl border border-gray-200 hover:border-sky-300 hover:shadow-sm transition-all group"
@@ -418,13 +443,13 @@ export function StoragePage({
       )}
 
       {/* ── ファイル一覧 ── */}
-      {documents.length > 0 && (
+      {filteredDocuments.length > 0 && (
         <section>
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
             ファイル
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {documents.map((doc) => {
+            {filteredDocuments.map((doc) => {
               const FileIcon = getFileIcon(doc.file_name);
               const hasThumb = isImageFile(doc.file_name) && doc.thumbnail_url;
 
@@ -506,7 +531,7 @@ export function StoragePage({
       )}
 
       {/* ── 空状態 ── */}
-      {folders.length === 0 && documents.length === 0 && (
+      {filteredFolders.length === 0 && filteredDocuments.length === 0 && (
         <div className="text-center py-16">
           <FolderOpen size={48} className="mx-auto text-gray-300 mb-4" />
           <p className="text-gray-500">

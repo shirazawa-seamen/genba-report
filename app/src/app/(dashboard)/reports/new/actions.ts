@@ -776,14 +776,13 @@ export async function updateDraftReport(
 
     const createdReportIds = (createdReports ?? []).map((r) => r.id);
 
-    // ログ記録
-    const action = input.isDraft ? "created" : "submitted";
+    // ログ記録（下書き更新は edited）
     for (const rid of createdReportIds) {
       logActivity({
         entityType: "daily_report",
         entityId: rid,
         siteId: input.siteId,
-        action,
+        action: "edited",
         actorId: user.id,
       });
     }
