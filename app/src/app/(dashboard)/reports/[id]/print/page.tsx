@@ -44,12 +44,12 @@ export default async function ReportPrintPage({ params }: PageProps) {
   const siteAddress = (sites as { name?: string; address?: string } | null)?.address ?? "";
   const processLabel = (process as { name?: string } | null)?.name ?? WORK_PROCESS_LABELS[report.work_process] ?? report.work_process;
 
-  // Fetch photos
+  // Fetch photos（media_type が photo または null のもの。動画は除外）
   const { data: photos } = await supabase
     .from("report_photos")
     .select("id, storage_path, photo_type, caption, media_type")
     .eq("report_id", id)
-    .eq("media_type", "photo")
+    .or("media_type.eq.photo,media_type.is.null")
     .order("created_at", { ascending: true });
 
   const photosWithUrls = await Promise.all(
@@ -270,15 +270,6 @@ export default async function ReportPrintPage({ params }: PageProps) {
           <span>現場報告システム</span>
         </div>
 
-        {/* Signature area */}
-        <div className="mt-6 grid grid-cols-3 gap-6">
-          {["報告者", "管理者", "クライアント"].map((label) => (
-            <div key={label} className="text-center">
-              <div className="border border-gray-400 h-16 mb-1" />
-              <p className="text-sm text-gray-600">{label}</p>
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* Photos - 2ページ目 */}

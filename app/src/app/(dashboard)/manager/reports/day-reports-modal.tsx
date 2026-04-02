@@ -19,7 +19,10 @@ import {
   Trash2,
   ImagePlus,
   Video,
+  FolderOpen,
+  Printer,
 } from "lucide-react";
+import { StorageBrowserModal, type SelectedStoragePhoto } from "@/components/storage/StorageBrowserModal";
 import { approveReport, rejectReport, getReportPhotosForIds } from "@/app/(dashboard)/reports/[id]/actions";
 import {
   generateClientReportSummary,
@@ -133,6 +136,10 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   const [reportPhotos, setReportPhotos] = useState<ReportPhoto[]>([]);
   const [reportPhotosLoaded, setReportPhotosLoaded] = useState(false);
 
+  // ストレージブラウザ
+  const [showStorageBrowser, setShowStorageBrowser] = useState(false);
+  const [storagePhotos, setStoragePhotos] = useState<Array<{ id: string; url: string; documentId: string; storagePath: string; fileName: string }>>([]);
+
   // 写真プレビュー
   const [previewPhotos, setPreviewPhotos] = useState<PhotoItem[] | null>(null);
   const [previewInitialId, setPreviewInitialId] = useState<string | null>(null);
@@ -203,10 +210,32 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
     e.target.value = "";
   };
 
+  const handleStorageSelect = (selected: SelectedStoragePhoto[]) => {
+    const newPhotos = selected.map((p) => ({
+      id: `storage-${p.documentId}`,
+      url: p.url,
+      documentId: p.documentId,
+      storagePath: p.storagePath,
+      fileName: p.fileName,
+    }));
+    setStoragePhotos((prev) => {
+      const existingIds = new Set(prev.map((p) => p.documentId));
+      const unique = newPhotos.filter((p) => !existingIds.has(p.documentId));
+      return [...prev, ...unique];
+    });
+    setShowStorageBrowser(false);
+    setMessage(`${selected.length}枚の写真をストレージから追加しました`);
+  };
+
   const handlePhotoDelete = (photoId: string) => {
     // ペンディング写真の場合はローカルから削除
     if (photoId.startsWith("pending-")) {
       setPendingNewPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      return;
+    }
+    // ストレージ写真の場合はローカルから削除
+    if (photoId.startsWith("storage-")) {
+      setStoragePhotos((prev) => prev.filter((p) => p.id !== photoId));
       return;
     }
     // 既存写真の場合は削除フラグを設定
@@ -236,8 +265,32 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
         return false;
       }
     }
+    // ストレージから選択した写真を追加
+    for (const photo of storagePhotos) {
+      const formData = new FormData();
+      // ストレージの写真はstorage_pathを参照してfetchしてファイルとして送信
+      try {
+        const res = await fetch(photo.url);
+        const blob = await res.blob();
+        const file = new File([blob], photo.fileName, { type: blob.type });
+        formData.append("file", file);
+        formData.append("summaryId", summaryId!);
+        formData.append("siteId", day.siteId);
+        formData.append("caption", "");
+        formData.append("sourceDocumentId", photo.documentId);
+        const result = await uploadSummaryPhoto(formData);
+        if (!result.success) {
+          setMessage(result.error || "ストレージ写真の追加に失敗しました");
+          return false;
+        }
+      } catch {
+        setMessage("ストレージ写真の取得に失敗しました");
+        return false;
+      }
+    }
     setPendingNewPhotos([]);
     setPendingDeleteIds(new Set());
+    setStoragePhotos([]);
     return true;
   };
 
@@ -664,6 +717,7 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                   const allPhotos = [
                     ...photos.filter((p) => !pendingDeleteIds.has(p.id)).map((p) => ({ ...p, source: "summary" as const })),
                     ...pendingNewPhotos.map((p) => ({ id: p.id, url: p.url, caption: null, mediaType: p.mediaType, isFromReport: false, source: "summary" as const, isPending: true })),
+                    ...storagePhotos.map((p) => ({ id: p.id, url: p.url, caption: null, mediaType: "photo" as const, isFromReport: false, source: "summary" as const, isStorage: true })),
                     ...reportPhotos.map((p) => ({ id: p.id, url: p.url, caption: p.caption, mediaType: p.mediaType, isFromReport: true, source: "report" as const })),
                   ];
                   return (
@@ -673,10 +727,19 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                           <Camera size={11} /> 写真・動画（{allPhotos.length}件）
                         </span>
                         {canEdit && (
-                          <label className="inline-flex items-center gap-1 text-[11px] text-[#0EA5E9] font-medium cursor-pointer hover:underline">
-                            <ImagePlus size={11} /> 追加
-                            <input type="file" accept="image/*,video/*" onChange={handlePhotoUpload} className="hidden" />
-                          </label>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowStorageBrowser(true)}
+                              className="inline-flex items-center gap-1 text-[11px] text-[#0EA5E9] font-medium hover:underline"
+                            >
+                              <FolderOpen size={11} /> ストレージ
+                            </button>
+                            <label className="inline-flex items-center gap-1 text-[11px] text-[#0EA5E9] font-medium cursor-pointer hover:underline">
+                              <ImagePlus size={11} /> 追加
+                              <input type="file" accept="image/*,video/*" onChange={handlePhotoUpload} className="hidden" />
+                            </label>
+                          </div>
                         )}
                       </div>
                       {allPhotos.length > 0 ? (
@@ -777,7 +840,16 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-100 px-5 py-3 flex justify-end">
+        <div className="border-t border-gray-100 px-5 py-3 flex items-center justify-between">
+          {summaryId ? (
+            <Link
+              href={`/client/summaries/${summaryId}/print`}
+              target="_blank"
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-4 text-[12px] font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+            >
+              <Printer size={14} /> PDF / 印刷
+            </Link>
+          ) : <div />}
           <button type="button" onClick={onClose}
             className="inline-flex min-h-[36px] items-center rounded-xl border border-gray-200 bg-white px-4 text-[12px] font-medium text-gray-600 hover:bg-gray-100 transition-colors">
             閉じる
@@ -791,6 +863,14 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
         photos={previewPhotos}
         initialId={previewInitialId}
         onClose={() => { setPreviewPhotos(null); setPreviewInitialId(null); }}
+      />
+    )}
+
+    {showStorageBrowser && (
+      <StorageBrowserModal
+        siteId={day.siteId}
+        onSelect={handleStorageSelect}
+        onClose={() => setShowStorageBrowser(false)}
       />
     )}
     </>

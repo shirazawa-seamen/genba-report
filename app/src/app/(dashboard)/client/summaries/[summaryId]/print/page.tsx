@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { canAccessSite } from "@/lib/siteAccess";
 import { PrintButton } from "@/app/(dashboard)/reports/[id]/print/print-button";
+import { PHOTO_TYPE_LABELS } from "@/lib/constants";
 
 interface PageProps {
   params: Promise<{ summaryId: string }>;
@@ -190,28 +191,21 @@ export default async function SummaryPrintPage({ params }: PageProps) {
         </div>
 
         {/* Footer */}
-        <div className="mt-10 pt-4 border-t border-gray-300 flex justify-between text-xs text-gray-400">
+        <div className="mt-auto pt-4 border-t border-gray-300 flex justify-between text-xs text-gray-400">
           <span>報告日: {formatDate(summary.report_date)}</span>
           <span>現場報告システム</span>
         </div>
-
-        {/* Signature area */}
-        <div className="mt-8 grid grid-cols-3 gap-6">
-          {["施工管理者", "現場責任者", "クライアント"].map((label) => (
-            <div key={label} className="text-center">
-              <div className="border border-gray-400 h-20 mb-1" />
-              <p className="text-sm text-gray-600">{label}</p>
-            </div>
-          ))}
-        </div>
       </div>
+
+      {/* Photos - 2ページ目 */}
+      <SummaryPhotosPage summaryId={summaryId} siteName={siteName} reportDate={summary.report_date} formatDate={formatDate} />
 
       {/* Print styles */}
       <style>{`
         @media print {
           @page {
             size: A4;
-            margin: 15mm;
+            margin: 12mm;
           }
           body {
             -webkit-print-color-adjust: exact;
@@ -220,8 +214,154 @@ export default async function SummaryPrintPage({ params }: PageProps) {
           .print\\:hidden {
             display: none !important;
           }
+          .print\\:break-before-page {
+            break-before: page;
+          }
+          img {
+            break-inside: avoid;
+          }
         }
       `}</style>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 写真ギャラリー（2ページ目）
+// ---------------------------------------------------------------------------
+async function SummaryPhotosPage({
+  summaryId,
+  siteName,
+  reportDate,
+  formatDate,
+}: {
+  summaryId: string;
+  siteName: string;
+  reportDate: string;
+  formatDate: (d: string) => string;
+}) {
+  const supabase = await createClient();
+
+  // summary_photos から取得
+  const { data: summaryPhotos } = await supabase
+    .from("summary_photos")
+    .select("id, storage_path, caption, source_report_id")
+    .eq("summary_id", summaryId)
+    .order("created_at", { ascending: true });
+
+  // source_report_ids から元の1次報告写真も取得
+  const { data: summaryData } = await supabase
+    .from("client_report_summaries")
+    .select("source_report_ids")
+    .eq("id", summaryId)
+    .single();
+
+  const sourceReportIds = Array.isArray(summaryData?.source_report_ids)
+    ? (summaryData.source_report_ids as string[])
+    : [];
+
+  let reportPhotos: { id: string; storage_path: string; photo_type: string | null; caption: string | null }[] = [];
+  if (sourceReportIds.length > 0) {
+    const { data } = await supabase
+      .from("report_photos")
+      .select("id, storage_path, photo_type, caption, media_type")
+      .in("report_id", sourceReportIds)
+      .or("media_type.eq.photo,media_type.is.null")
+      .order("created_at", { ascending: true });
+    reportPhotos = (data ?? []).map((p) => ({
+      id: p.id,
+      storage_path: p.storage_path,
+      photo_type: p.photo_type,
+      caption: p.caption,
+    }));
+  }
+
+  // summary_photos のsigned URL
+  const summaryPhotoUrls = await Promise.all(
+    (summaryPhotos ?? []).map(async (p) => {
+      const { data } = await supabase.storage
+        .from("report-photos")
+        .createSignedUrl(p.storage_path, 3600);
+      return { ...p, url: data?.signedUrl ?? "", photo_type: null as string | null };
+    })
+  );
+
+  // report_photos のsigned URL
+  const reportPhotoUrls = await Promise.all(
+    reportPhotos.map(async (p) => {
+      const { data } = await supabase.storage
+        .from("report-photos")
+        .createSignedUrl(p.storage_path, 3600);
+      return { ...p, url: data?.signedUrl ?? "" };
+    })
+  );
+
+  // 統合（重複排除: storage_path ベース）
+  const seenPaths = new Set<string>();
+  const allPhotos: { id: string; url: string; photo_type: string | null; caption: string | null }[] = [];
+  for (const p of [...reportPhotoUrls, ...summaryPhotoUrls]) {
+    if (!p.url || seenPaths.has(p.storage_path)) continue;
+    seenPaths.add(p.storage_path);
+    allPhotos.push({ id: p.id, url: p.url, photo_type: p.photo_type, caption: p.caption });
+  }
+
+  if (allPhotos.length === 0) return null;
+
+  // photo_type でグループ化
+  const groups: Record<string, typeof allPhotos> = {};
+  const typeOrder = ["before", "during", "after"];
+  for (const p of allPhotos) {
+    const key = p.photo_type || "other";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  }
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    const ai = typeOrder.indexOf(a);
+    const bi = typeOrder.indexOf(b);
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+
+  return (
+    <div className="max-w-[210mm] mx-auto p-8 print:p-6 bg-white text-black print:break-before-page">
+      <div className="border-b-2 border-black pb-3 mb-6">
+        <h1 className="text-xl font-bold text-center">施工写真</h1>
+        <p className="text-center text-sm text-gray-500 mt-1">
+          {siteName} — {formatDate(reportDate)} （{allPhotos.length}枚）
+        </p>
+      </div>
+
+      {sortedKeys.map((key) => {
+        const label = PHOTO_TYPE_LABELS[key] ?? "その他";
+        const items = groups[key];
+        return (
+          <div key={key} className="mb-6">
+            <h2 className="text-sm font-bold text-gray-700 mb-2 px-1 border-l-4 border-gray-400 pl-2">
+              {label}（{items.length}枚）
+            </h2>
+            <div className="grid grid-cols-3 gap-2">
+              {items.map((p) => (
+                <div key={p.id} className="border border-gray-300">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={p.url}
+                    alt={p.caption || label}
+                    className="w-full aspect-[4/3] object-cover"
+                  />
+                  {p.caption && (
+                    <p className="text-[10px] px-1.5 py-1 bg-gray-50 text-gray-500 truncate">
+                      {p.caption}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="mt-auto pt-4 border-t border-gray-300 text-right text-xs text-gray-400">
+        現場報告システム
+      </div>
+    </div>
   );
 }

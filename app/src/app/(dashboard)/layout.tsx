@@ -71,7 +71,7 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-dvh bg-[#F5F6F8] text-gray-900 font-sans overflow-hidden">
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden md:flex flex-col w-60 border-r border-gray-200 bg-white shrink-0">
+      <aside className="hidden md:flex print:!hidden flex-col w-60 border-r border-gray-200 bg-white shrink-0">
         {/* Brand */}
         <div className="flex items-center gap-3 px-5 h-16 border-b border-gray-200">
           <div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center">
@@ -146,7 +146,7 @@ export default async function DashboardLayout({
       {/* ── Mobile + Main ── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile header */}
-        <div className="md:hidden flex items-center justify-between px-5 h-14 border-b border-gray-200 shrink-0 bg-white">
+        <div className="md:hidden print:!hidden flex items-center justify-between px-5 h-14 border-b border-gray-200 shrink-0 bg-white">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center">
               <Building2 size={14} className="text-[#0EA5E9]" />
