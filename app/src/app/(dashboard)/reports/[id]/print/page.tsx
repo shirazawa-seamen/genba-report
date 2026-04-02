@@ -262,38 +262,8 @@ export default async function ReportPrintPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Photos */}
-        {photosWithUrls.length > 0 && (
-          <div className="mb-6">
-            <h2 className="text-base font-bold border-b border-gray-300 pb-1 mb-3">
-              施工写真 ({photosWithUrls.length}枚)
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              {photosWithUrls.map((p) => {
-                const typeLabel = p.photo_type
-                  ? PHOTO_TYPE_LABELS[p.photo_type] ?? p.photo_type
-                  : "写真";
-                return (
-                  <div key={p.id} className="border border-gray-300">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={p.url}
-                      alt={p.caption || typeLabel}
-                      className="w-full aspect-[4/3] object-cover"
-                    />
-                    <p className="text-xs px-2 py-1 bg-gray-50 text-gray-600">
-                      {typeLabel}
-                      {p.caption && ` - ${p.caption}`}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Footer */}
-        <div className="mt-10 pt-4 border-t border-gray-300 flex justify-between text-xs text-gray-400">
+        <div className="mt-auto pt-4 border-t border-gray-300 flex justify-between text-xs text-gray-400">
           <span>
             作成日時: {new Date(report.created_at).toLocaleString("ja-JP")}
           </span>
@@ -301,22 +271,83 @@ export default async function ReportPrintPage({ params }: PageProps) {
         </div>
 
         {/* Signature area */}
-        <div className="mt-8 grid grid-cols-3 gap-6">
+        <div className="mt-6 grid grid-cols-3 gap-6">
           {["報告者", "管理者", "クライアント"].map((label) => (
             <div key={label} className="text-center">
-              <div className="border border-gray-400 h-20 mb-1" />
+              <div className="border border-gray-400 h-16 mb-1" />
               <p className="text-sm text-gray-600">{label}</p>
             </div>
           ))}
         </div>
       </div>
 
+      {/* Photos - 2ページ目 */}
+      {photosWithUrls.length > 0 && (() => {
+        // photo_type でグループ化
+        const groups: Record<string, typeof photosWithUrls> = {};
+        const typeOrder = ["before", "during", "after"];
+        for (const p of photosWithUrls) {
+          const key = p.photo_type || "other";
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(p);
+        }
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+          const ai = typeOrder.indexOf(a);
+          const bi = typeOrder.indexOf(b);
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+        });
+
+        return (
+          <div className="max-w-[210mm] mx-auto p-8 print:p-6 bg-white text-black print:break-before-page">
+            <div className="border-b-2 border-black pb-3 mb-6">
+              <h1 className="text-xl font-bold text-center">施工写真</h1>
+              <p className="text-center text-sm text-gray-500 mt-1">
+                {siteName} — {formatDate(report.report_date)} （{photosWithUrls.length}枚）
+              </p>
+            </div>
+
+            {sortedKeys.map((key) => {
+              const label = PHOTO_TYPE_LABELS[key] ?? "その他";
+              const items = groups[key];
+              return (
+                <div key={key} className="mb-6">
+                  <h2 className="text-sm font-bold text-gray-700 mb-2 px-1 border-l-4 border-gray-400 pl-2">
+                    {label}（{items.length}枚）
+                  </h2>
+                  <div className="grid grid-cols-3 gap-2">
+                    {items.map((p) => (
+                      <div key={p.id} className="border border-gray-300">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={p.url}
+                          alt={p.caption || label}
+                          className="w-full aspect-[4/3] object-cover"
+                        />
+                        {p.caption && (
+                          <p className="text-[10px] px-1.5 py-1 bg-gray-50 text-gray-500 truncate">
+                            {p.caption}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            <div className="mt-auto pt-4 border-t border-gray-300 text-right text-xs text-gray-400">
+              現場報告システム
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Print styles */}
       <style>{`
         @media print {
           @page {
             size: A4;
-            margin: 15mm;
+            margin: 12mm;
           }
           body {
             -webkit-print-color-adjust: exact;
@@ -324,6 +355,12 @@ export default async function ReportPrintPage({ params }: PageProps) {
           }
           .print\\:hidden {
             display: none !important;
+          }
+          .print\\:break-before-page {
+            break-before: page;
+          }
+          img {
+            break-inside: avoid;
           }
         }
       `}</style>

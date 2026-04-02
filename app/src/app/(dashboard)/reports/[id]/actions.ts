@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { notifyReportRejected } from "@/lib/email";
 import { canAccessReport } from "@/lib/siteAccess";
+import { logActivity } from "@/lib/activity-log";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -92,8 +93,19 @@ export async function approveReport(reportId: string): Promise<ApprovalResult> {
   revalidatePath("/manager/reports");
   revalidatePath("/sites", "layout");
 
-  // 注: 個別の職人報告承認時にはクライアントへ通知しない
-  // クライアントへはマネージャーが二次報告（サマリー）を提出した時点で通知する
+  // ログ記録
+  const { data: reportForLog } = await supabase
+    .from("daily_reports")
+    .select("site_id")
+    .eq("id", reportId)
+    .single();
+  logActivity({
+    entityType: "daily_report",
+    entityId: reportId,
+    siteId: reportForLog?.site_id,
+    action: "approved",
+    actorId: user.id,
+  });
 
   return { success: true };
 }
@@ -165,6 +177,21 @@ export async function rejectReport(
   revalidatePath("/manager/reports");
   revalidatePath("/manager/reports");
   revalidatePath("/sites", "layout");
+
+  // ログ記録
+  const { data: rejectedReport } = await supabase
+    .from("daily_reports")
+    .select("site_id")
+    .eq("id", reportId)
+    .single();
+  logActivity({
+    entityType: "daily_report",
+    entityId: reportId,
+    siteId: rejectedReport?.site_id,
+    action: "rejected",
+    actorId: user.id,
+    detail: reason ? { reason } : null,
+  });
 
   // 差戻し → 報告者へメール通知
   try {
@@ -282,6 +309,20 @@ export async function resubmitReport(reportId: string): Promise<ApprovalResult> 
   if (updateError) {
     return { success: false, error: `再提出エラー: ${updateError.message}` };
   }
+
+  // ログ記録
+  const { data: resubmittedReport } = await supabase
+    .from("daily_reports")
+    .select("site_id")
+    .eq("id", reportId)
+    .single();
+  logActivity({
+    entityType: "daily_report",
+    entityId: reportId,
+    siteId: resubmittedReport?.site_id,
+    action: "resubmitted",
+    actorId: user.id,
+  });
 
   revalidatePath("/");
   revalidatePath("/reports");

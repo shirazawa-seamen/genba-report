@@ -123,6 +123,29 @@ export interface StorageFolder {
 }
 
 // ---------------------------------------------------------------------------
+// アクティビティログ
+// ---------------------------------------------------------------------------
+export type ActivityEntityType = 'daily_report' | 'client_report_summary' | 'site_document' | 'storage_folder';
+export type ActivityAction =
+  | 'created' | 'submitted' | 'approved' | 'rejected' | 'resubmitted'
+  | 'revision_requested' | 'client_confirmed'
+  | 'edited' | 'deleted' | 'restored'
+  | 'uploaded' | 'renamed' | 'moved';
+
+export interface ActivityLog {
+  id: string;
+  entity_type: ActivityEntityType;
+  entity_id: string;
+  site_id: string | null;
+  action: ActivityAction;
+  actor_id: string;
+  detail: Record<string, unknown> | null;
+  created_at: string;
+  // UI用（JOINで取得）
+  actor_name?: string;
+}
+
+// ---------------------------------------------------------------------------
 // 検査フェーズ
 // ---------------------------------------------------------------------------
 export type InspectionPhase =

@@ -16,10 +16,13 @@ import {
   XCircle,
   Shield,
   Edit3,
+  Printer,
 } from "lucide-react";
 import { ApprovalButtons, ResubmitButton, SubmitDraftButton } from "./approval-buttons";
 import { canAccessReport } from "@/lib/siteAccess";
 import { PhotoGallery, type PhotoItem } from "@/components/ui/PhotoGallery";
+import { getActivityLogs } from "@/lib/activity-log";
+import type { ActivityAction } from "@/lib/types";
 
 interface SiteData { name: string; address: string | null }
 interface ProcessData { id: string; category: string; name: string; progress_rate: number; status: string }
@@ -170,9 +173,17 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
   return (
     <div className="flex-1 flex flex-col px-5 py-8 md:px-8 md:py-10 max-w-3xl w-full mx-auto">
-      <Link href="/reports" className="inline-flex items-center gap-1.5 text-[13px] text-[#0EA5E9]/60 hover:text-[#0EA5E9] transition-colors mb-6 w-fit min-h-[44px]">
-        <ArrowLeft size={14} /> 報告一覧
-      </Link>
+      <div className="flex items-center justify-between mb-6">
+        <Link href="/reports" className="inline-flex items-center gap-1.5 text-[13px] text-[#0EA5E9]/60 hover:text-[#0EA5E9] transition-colors w-fit min-h-[44px]">
+          <ArrowLeft size={14} /> 報告一覧
+        </Link>
+        <Link
+          href={`/reports/${raw.id}/print`}
+          className="inline-flex items-center gap-1.5 text-[13px] text-gray-400 hover:text-gray-600 transition-colors min-h-[44px]"
+        >
+          <Printer size={14} /> PDF / 印刷
+        </Link>
+      </div>
 
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
@@ -308,11 +319,84 @@ export default async function ReportDetailPage({ params }: PageProps) {
         </div>
       )}
 
+      {/* ── 操作履歴 ── */}
+      <ActivityTimeline reportId={raw.id} />
+
       <div className="text-[11px] text-gray-300 mt-4 space-y-0.5">
         <p>提出日時: {new Date(raw.created_at).toLocaleString("ja-JP")}</p>
         {raw.approved_at && (
           <p>{raw.approval_status === "rejected" ? "差戻し" : "承認"}日時: {new Date(raw.approved_at).toLocaleString("ja-JP")}</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 操作履歴タイムライン
+// ---------------------------------------------------------------------------
+const ACTION_LABELS: Record<ActivityAction, string> = {
+  created: "作成",
+  submitted: "提出",
+  approved: "承認",
+  rejected: "差し戻し",
+  resubmitted: "再提出",
+  revision_requested: "修正依頼",
+  client_confirmed: "クライアント確認",
+  edited: "編集",
+  deleted: "削除",
+  restored: "復元",
+  uploaded: "アップロード",
+  renamed: "リネーム",
+  moved: "移動",
+};
+
+const ACTION_COLORS: Record<string, string> = {
+  created: "bg-gray-400",
+  submitted: "bg-blue-400",
+  approved: "bg-emerald-400",
+  rejected: "bg-red-400",
+  resubmitted: "bg-amber-400",
+  revision_requested: "bg-orange-400",
+  client_confirmed: "bg-cyan-400",
+};
+
+async function ActivityTimeline({ reportId }: { reportId: string }) {
+  const result = await getActivityLogs({
+    entityType: "daily_report",
+    entityId: reportId,
+    limit: 20,
+  });
+
+  if (!result.success || !result.logs || result.logs.length === 0) return null;
+
+  return (
+    <div className="mt-8 p-5 rounded-2xl border border-gray-200 bg-white">
+      <h3 className="text-[13px] font-semibold text-gray-500 mb-4">操作履歴</h3>
+      <div className="space-y-3">
+        {result.logs.map((log) => (
+          <div key={log.id} className="flex items-start gap-3">
+            <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${ACTION_COLORS[log.action] ?? "bg-gray-300"}`} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="font-medium text-gray-700">
+                  {ACTION_LABELS[log.action] ?? log.action}
+                </span>
+                <span className="text-gray-400">
+                  {log.actor_name ?? "不明"}
+                </span>
+                <span className="text-gray-300 ml-auto shrink-0">
+                  {new Date(log.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+              {log.detail && (log.detail as Record<string, unknown>).reason && (
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  理由: {String((log.detail as Record<string, unknown>).reason)}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

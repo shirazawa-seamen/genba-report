@@ -7,6 +7,7 @@ import { getSecureSettingValue } from "@/lib/secureSettings";
 import { canAccessSite } from "@/lib/siteAccess";
 import { notifySummarySubmitted } from "@/lib/email";
 import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
+import { logActivity } from "@/lib/activity-log";
 
 async function requireManager() {
   const supabase = await createClient();
@@ -654,6 +655,15 @@ export async function submitClientReportSummary(summaryId: string, siteId: strin
     console.error("[Email] Failed to send summary notification:", err);
   }
 
+  // ログ記録
+  logActivity({
+    entityType: "client_report_summary",
+    entityId: summaryId,
+    siteId,
+    action: "submitted",
+    actorId: context.user.id,
+  });
+
   return { success: true, warning };
 }
 
@@ -845,6 +855,15 @@ export async function confirmClientReportSummary(summaryId: string) {
     return { success: false, error: `確認に失敗しました: ${error.message}` };
   }
 
+  // ログ記録
+  logActivity({
+    entityType: "client_report_summary",
+    entityId: summaryId,
+    siteId: summaryData.site_id,
+    action: "client_confirmed",
+    actorId: user.id,
+  });
+
   revalidatePath("/client");
   revalidatePath("/");
   revalidatePath("/manager/reports");
@@ -906,6 +925,16 @@ export async function rejectReportsFromSummary(
       updated_at: new Date().toISOString(),
     })
     .eq("id", summaryId);
+
+  // ログ記録
+  logActivity({
+    entityType: "client_report_summary",
+    entityId: summaryId,
+    siteId,
+    action: "rejected",
+    actorId: context.user.id,
+    detail: { reason, source_report_ids: sourceReportIds },
+  });
 
   revalidatePath(`/sites/${siteId}/reports`);
   revalidatePath("/reports");
@@ -970,6 +999,16 @@ export async function requestRevisionClientReportSummary(
   if (error) {
     return { success: false, error: `修正依頼に失敗しました: ${error.message}` };
   }
+
+  // ログ記録
+  logActivity({
+    entityType: "client_report_summary",
+    entityId: summaryId,
+    siteId: summaryData.site_id,
+    action: "revision_requested",
+    actorId: user.id,
+    detail: comment ? { comment } : null,
+  });
 
   revalidatePath("/client");
   revalidatePath("/manager/reports");

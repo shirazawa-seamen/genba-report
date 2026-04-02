@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { notifyReportSubmitted } from "@/lib/email";
 import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
+import { logActivity } from "@/lib/activity-log";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -774,6 +775,19 @@ export async function updateDraftReport(
     revalidatePath("/reports");
 
     const createdReportIds = (createdReports ?? []).map((r) => r.id);
+
+    // ログ記録
+    const action = input.isDraft ? "created" : "submitted";
+    for (const rid of createdReportIds) {
+      logActivity({
+        entityType: "daily_report",
+        entityId: rid,
+        siteId: input.siteId,
+        action,
+        actorId: user.id,
+      });
+    }
+
     return { success: true, reportId: createdReportIds[0], reportIds: createdReportIds };
   } catch (err) {
     return { success: false, error: `予期しないエラー: ${err instanceof Error ? err.message : String(err)}` };
@@ -844,6 +858,22 @@ export async function submitDraftReport(
       }
     } catch (err) {
       console.error("[Email] Failed to send notification:", err);
+    }
+
+    // ログ記録
+    const { data: reportForLog } = await supabase
+      .from("daily_reports")
+      .select("site_id")
+      .eq("id", reportIds[0])
+      .single();
+    for (const rid of reportIds) {
+      logActivity({
+        entityType: "daily_report",
+        entityId: rid,
+        siteId: reportForLog?.site_id,
+        action: "submitted",
+        actorId: user.id,
+      });
     }
 
     return { success: true };
