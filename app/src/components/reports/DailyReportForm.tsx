@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/TimeInput";
 import { Select, SelectOption } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { PHOTO_TYPE_OPTIONS, WORK_PROCESS_LABELS } from "@/lib/constants";
@@ -616,17 +617,15 @@ function Step1({
       />
 
       <div className="grid grid-cols-2 gap-3">
-        <Input
+        <TimeInput
           label="現場到着時間"
-          type="time"
           value={data.arrivalTime}
-          onChange={(event) => onChange("arrivalTime", event.target.value)}
+          onChange={(val) => onChange("arrivalTime", val)}
         />
-        <Input
+        <TimeInput
           label="現場退出時間"
-          type="time"
           value={data.departureTime}
-          onChange={(event) => onChange("departureTime", event.target.value)}
+          onChange={(val) => onChange("departureTime", val)}
         />
       </div>
 

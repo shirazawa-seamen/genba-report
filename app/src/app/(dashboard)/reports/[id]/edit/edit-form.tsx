@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateReport, deleteReportPhoto, updatePhotoCaption, updatePhotoType, addReportPhoto } from "./actions";
 import { submitDraftReport } from "@/app/(dashboard)/reports/new/actions";
+import { TimeInput } from "@/components/ui/TimeInput";
 import {
   Loader2, Save, Send, AlertTriangle, Camera, Trash2, ImagePlus, X, Video, Edit3, Check,
 } from "lucide-react";
@@ -79,6 +80,8 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
 
   const [editingCaptionId, setEditingCaptionId] = useState<string | null>(null);
   const [captionDraft, setCaptionDraft] = useState("");
+  const [arrivalTime, setArrivalTime] = useState(initialData.arrival_time ?? "");
+  const [departureTime, setDepartureTime] = useState(initialData.departure_time ?? "");
 
   // 表示する写真（削除フラグがないもの）
   const visiblePhotos = photos.filter((p) => !p.isDeleted);
@@ -266,14 +269,18 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
 
       {/* Arrival / Departure Time */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[13px] font-medium text-gray-500">現場到着時間</label>
-          <input name="arrival_time" type="time" defaultValue={initialData.arrival_time ?? ""} className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[13px] font-medium text-gray-500">現場退出時間</label>
-          <input name="departure_time" type="time" defaultValue={initialData.departure_time ?? ""} className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20" />
-        </div>
+        <TimeInput
+          label="現場到着時間"
+          value={arrivalTime}
+          onChange={(val) => setArrivalTime(val)}
+        />
+        <TimeInput
+          label="現場退出時間"
+          value={departureTime}
+          onChange={(val) => setDepartureTime(val)}
+        />
+        <input type="hidden" name="arrival_time" value={arrivalTime} />
+        <input type="hidden" name="departure_time" value={departureTime} />
       </div>
 
       {/* Issues */}

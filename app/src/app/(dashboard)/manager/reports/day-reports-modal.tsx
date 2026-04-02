@@ -23,6 +23,7 @@ import {
   Printer,
 } from "lucide-react";
 import { StorageBrowserModal, type SelectedStoragePhoto } from "@/components/storage/StorageBrowserModal";
+import { TimeInput } from "@/components/ui/TimeInput";
 import { approveReport, rejectReport, getReportPhotosForIds } from "@/app/(dashboard)/reports/[id]/actions";
 import {
   generateClientReportSummary,
@@ -668,16 +669,16 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
                           <option value="雪">雪</option>
                         </select>
                       </div>
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">入場</label>
-                        <input type="time" value={officialArrival} onChange={(e) => setOfficialArrival(e.target.value)}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] focus:outline-none focus:border-[#0EA5E9]/50" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">退場</label>
-                        <input type="time" value={officialDeparture} onChange={(e) => setOfficialDeparture(e.target.value)}
-                          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] focus:outline-none focus:border-[#0EA5E9]/50" />
-                      </div>
+                      <TimeInput
+                        label="入場"
+                        value={officialArrival}
+                        onChange={setOfficialArrival}
+                      />
+                      <TimeInput
+                        label="退場"
+                        value={officialDeparture}
+                        onChange={setOfficialDeparture}
+                      />
                     </div>
                   </div>
                 ) : (
