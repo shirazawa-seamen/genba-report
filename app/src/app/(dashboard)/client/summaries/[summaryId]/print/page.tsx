@@ -76,17 +76,17 @@ export default async function SummaryPrintPage({ params }: PageProps) {
       </div>
 
       {/* Print content */}
-      <div className="max-w-[210mm] mx-auto p-8 print:p-6 bg-white text-black print:text-black">
+      <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black print:text-black text-[11px]">
         {/* Header */}
-        <div className="border-b-2 border-black pb-4 mb-6">
-          <h1 className="text-2xl font-bold text-center mb-1">施工報告書</h1>
-          <p className="text-center text-sm text-gray-500">
+        <div className="border-b-2 border-black pb-3 mb-4">
+          <h1 className="text-lg font-bold text-center mb-0.5">施工報告書</h1>
+          <p className="text-center text-[10px] text-gray-500">
             Construction Report Summary
           </p>
         </div>
 
         {/* Basic Info Table */}
-        <table className="w-full border-collapse border border-gray-400 mb-6 text-sm">
+        <table className="w-full border-collapse border border-gray-400 mb-4 text-[11px]">
           <tbody>
             <tr>
               <td className="border border-gray-400 bg-gray-100 px-3 py-2 font-semibold w-[120px]">
@@ -154,10 +154,10 @@ export default async function SummaryPrintPage({ params }: PageProps) {
         {/* Progress Table */}
         {officialProgress.length > 0 && (
           <div className="mb-6">
-            <h2 className="text-base font-bold border-b border-gray-300 pb-1 mb-3">
+            <h2 className="text-[12px] font-bold border-b border-gray-300 pb-1 mb-2">
               工程進捗
             </h2>
-            <table className="w-full border-collapse border border-gray-400 text-sm">
+            <table className="w-full border-collapse border border-gray-400 text-[11px]">
               <thead>
                 <tr className="bg-gray-100">
                   <th className="border border-gray-400 px-3 py-2 text-left">工程名</th>
@@ -185,7 +185,7 @@ export default async function SummaryPrintPage({ params }: PageProps) {
           <h2 className="text-base font-bold border-b border-gray-300 pb-1 mb-3">
             報告内容
           </h2>
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">
+          <p className="text-[11px] whitespace-pre-wrap leading-relaxed">
             {summary.summary_text || "—"}
           </p>
         </div>
@@ -322,7 +322,7 @@ async function SummaryPhotosPage({
   });
 
   return (
-    <div className="max-w-[210mm] mx-auto p-8 print:p-6 bg-white text-black print:break-before-page">
+    <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black print:break-before-page">
       <div className="border-b-2 border-black pb-3 mb-6">
         <h1 className="text-xl font-bold text-center">施工写真</h1>
         <p className="text-center text-sm text-gray-500 mt-1">
