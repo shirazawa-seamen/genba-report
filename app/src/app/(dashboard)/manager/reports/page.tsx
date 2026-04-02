@@ -82,6 +82,13 @@ export default async function ManagerReportsPage({ searchParams }: PageProps) {
 
   if (!profile || !["admin", "manager"].includes(profile.role)) redirect("/");
 
+  // マネージャーの担当現場IDを取得
+  const { data: memberSites } = await supabase
+    .from("site_members")
+    .select("site_id")
+    .eq("user_id", user.id);
+  const mySiteIds = new Set((memberSites ?? []).map((m) => m.site_id));
+
   // 全現場の報告を取得（提出済み以上）
   const { data: reports } = await supabase
     .from("daily_reports")
@@ -193,7 +200,7 @@ export default async function ManagerReportsPage({ searchParams }: PageProps) {
           </p>
         </div>
 
-        <ReportWorkflowDashboard days={allDays} initialFilter={initialFilter} initialSiteId={siteFilter} />
+        <ReportWorkflowDashboard days={allDays} initialFilter={initialFilter} initialSiteId={siteFilter} mySiteIds={[...mySiteIds]} />
       </div>
     </div>
   );

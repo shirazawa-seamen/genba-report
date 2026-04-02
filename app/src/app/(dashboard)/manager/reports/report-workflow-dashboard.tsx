@@ -36,7 +36,7 @@ function formatDate(d: string) {
 
 type FilterType = "all" | "actionRequired" | "submitted";
 
-export function ReportWorkflowDashboard({ days, initialFilter, initialSiteId }: { days: SiteReportDay[]; initialFilter?: string; initialSiteId?: string }) {
+export function ReportWorkflowDashboard({ days, initialFilter, initialSiteId, mySiteIds }: { days: SiteReportDay[]; initialFilter?: string; initialSiteId?: string; mySiteIds?: string[] }) {
   const [filter, setFilter] = useState<FilterType>(
     (initialFilter === "all" || initialFilter === "actionRequired" || initialFilter === "submitted")
       ? initialFilter : "actionRequired"
@@ -45,9 +45,14 @@ export function ReportWorkflowDashboard({ days, initialFilter, initialSiteId }: 
   const [siteIdFilter, setSiteIdFilter] = useState<string | null>(initialSiteId ?? null);
   const [expandedSites, setExpandedSites] = useState<Set<string>>(() => initialSiteId ? new Set([initialSiteId]) : new Set());
   const [modalDay, setModalDay] = useState<SiteReportDay | null>(null);
+  const [scopeFilter, setScopeFilter] = useState<"all" | "mine">("all");
 
-  // まずサイトIDフィルタとキーワード検索を適用
-  let baseDays = days;
+  const mySiteIdSet = new Set(mySiteIds ?? []);
+
+  // まずスコープフィルタ、サイトIDフィルタとキーワード検索を適用
+  let baseDays = scopeFilter === "mine" && mySiteIdSet.size > 0
+    ? days.filter((d) => mySiteIdSet.has(d.siteId))
+    : days;
 
   if (siteIdFilter) {
     baseDays = baseDays.filter((d) => d.siteId === siteIdFilter);
@@ -109,6 +114,26 @@ export function ReportWorkflowDashboard({ days, initialFilter, initialSiteId }: 
 
   return (
     <>
+      {/* スコープフィルタ（自分の現場 / すべて） */}
+      {mySiteIds && mySiteIds.length > 0 && (
+        <div className="flex gap-2 mb-3">
+          {([["mine", "自分の現場"], ["all", "すべて"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setScopeFilter(key)}
+              className={`inline-flex min-h-[32px] items-center rounded-lg px-3 text-[12px] font-medium transition-colors ${
+                scopeFilter === key
+                  ? "bg-gray-900 text-white"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 検索バー */}
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
