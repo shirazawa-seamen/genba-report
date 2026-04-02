@@ -64,7 +64,7 @@ export default async function SummaryPrintPage({ params }: PageProps) {
   return (
     <>
       {/* Screen-only controls */}
-      <div className="print:hidden bg-gray-50 p-5 flex items-center gap-4 border-b border-gray-200">
+      <div className="print:hidden print-hidden bg-gray-50 p-5 flex items-center gap-4 border-b border-gray-200">
         <Link
           href={backHref}
           className="inline-flex items-center gap-1.5 text-[13px] text-[#0EA5E9]/60 hover:text-[#0EA5E9] transition-colors min-h-[44px]"
@@ -202,24 +202,25 @@ export default async function SummaryPrintPage({ params }: PageProps) {
 
       {/* Print styles */}
       <style>{`
+        @page {
+          size: A4;
+          margin: 12mm;
+        }
         @media print {
-          @page {
-            size: A4;
-            margin: 12mm;
-          }
           body {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .print\\:hidden {
+          .print-hidden {
             display: none !important;
-          }
-          .print\\:break-before-page {
-            break-before: page;
           }
           img {
             break-inside: avoid;
           }
+        }
+        .page-break-before {
+          page-break-before: always !important;
+          break-before: page !important;
         }
       `}</style>
     </>
@@ -322,7 +323,7 @@ async function SummaryPhotosPage({
   });
 
   return (
-    <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black" style={{ breakBefore: "page", pageBreakBefore: "always" }}>
+    <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black page-break-before">
       <div className="border-b-2 border-black pb-3 mb-6">
         <h1 className="text-xl font-bold text-center">施工写真</h1>
         <p className="text-center text-sm text-gray-500 mt-1">

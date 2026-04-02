@@ -289,7 +289,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
         });
 
         return (
-          <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black" style={{ breakBefore: "page", pageBreakBefore: "always" }}>
+          <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black page-break-before">
             <div className="border-b-2 border-black pb-3 mb-6">
               <h1 className="text-xl font-bold text-center">施工写真</h1>
               <p className="text-center text-sm text-gray-500 mt-1">
@@ -335,24 +335,25 @@ export default async function ReportPrintPage({ params }: PageProps) {
 
       {/* Print styles */}
       <style>{`
+        @page {
+          size: A4;
+          margin: 12mm;
+        }
         @media print {
-          @page {
-            size: A4;
-            margin: 12mm;
-          }
           body {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .print\\:hidden {
+          .print-hidden, .print\\:hidden {
             display: none !important;
-          }
-          .print\\:break-before-page {
-            break-before: page;
           }
           img {
             break-inside: avoid;
           }
+        }
+        .page-break-before {
+          page-break-before: always !important;
+          break-before: page !important;
         }
       `}</style>
     </>
