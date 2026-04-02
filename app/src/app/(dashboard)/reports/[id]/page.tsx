@@ -389,11 +389,11 @@ async function ActivityTimeline({ reportId }: { reportId: string }) {
                   {new Date(log.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
-              {log.detail && (log.detail as Record<string, unknown>).reason && (
+              {log.detail && typeof (log.detail as Record<string, unknown>).reason === "string" ? (
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  理由: {String((log.detail as Record<string, unknown>).reason)}
+                  理由: {(log.detail as Record<string, string>).reason}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
         ))}
