@@ -65,6 +65,12 @@ input[type="time"] {
   position: relative;
 }
 
+@media print {
+  html, body, div {
+    background: white !important;
+  }
+}
+
 @media (max-width: 767px) {
   .dashboard-main::after {
     content: "";

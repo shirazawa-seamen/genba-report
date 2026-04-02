@@ -90,7 +90,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
       </div>
 
       {/* Print content */}
-      <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black print:text-black text-[11px] print-page">
+      <div className="max-w-[210mm] mx-auto p-6 bg-white text-black text-[11px] print-section print-page-break">
         {/* Header */}
         <div className="border-b-2 border-black pb-3 mb-4">
           <h1 className="text-lg font-bold text-center mb-0.5">日次施工報告書</h1>
@@ -289,7 +289,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
         });
 
         return (
-          <div className="max-w-[210mm] mx-auto p-6 print:p-4 bg-white text-black">
+          <div className="max-w-[210mm] mx-auto p-6 bg-white text-black print-section">
             <div className="border-b-2 border-black pb-3 mb-6">
               <h1 className="text-xl font-bold text-center">施工写真</h1>
               <p className="text-center text-sm text-gray-500 mt-1">
@@ -337,27 +337,26 @@ export default async function ReportPrintPage({ params }: PageProps) {
       <style>{`
         @page {
           size: A4 portrait;
-          margin: 10mm;
+          margin: 8mm;
         }
         @media print {
           html, body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            margin: 0 !important;
-            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background: white !important;
           }
-          .print-hidden, .print\\:hidden {
+          .print\\:hidden, .print-hidden {
             display: none !important;
           }
-          .print-page {
-            page-break-after: always;
-            break-after: page;
-            min-height: 100vh;
-            box-sizing: border-box;
+          .print-section {
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 6mm !important;
+            box-shadow: none !important;
           }
-          .print-page:last-child {
-            page-break-after: auto;
-            break-after: auto;
+          .print-page-break {
+            page-break-after: always !important;
+            break-after: page !important;
           }
           img {
             break-inside: avoid;
