@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { canAccessReport } from "@/lib/siteAccess";
+import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
 
 interface UpdateReportResult {
   success: boolean;
@@ -271,6 +272,23 @@ export async function addReportPhoto(
   if (dbError) {
     await supabase.storage.from("report-photos").remove([storagePath]);
     return { success: false, error: `DB保存エラー: ${dbError.message}` };
+  }
+
+  // ストレージフォルダに自動反映
+  const { data: reportForSync } = await supabase
+    .from("daily_reports")
+    .select("site_id")
+    .eq("id", reportId)
+    .single();
+  if (reportForSync?.site_id) {
+    syncReportPhotoToStorage({
+      siteId: reportForSync.site_id,
+      userId: user.id,
+      photoType: validPhotoType,
+      storagePath,
+      fileName: file.name,
+      fileSize: file.size,
+    }).catch((err) => console.error("[StorageSync] Error:", err));
   }
 
   revalidatePath(`/reports/${reportId}`);

@@ -80,9 +80,11 @@ export type DocumentType =
 // ---------------------------------------------------------------------------
 // 現場ドキュメント
 // ---------------------------------------------------------------------------
+export type PhotoType = 'before' | 'during' | 'after';
+
 export interface SiteDocument {
   id: string;
-  site_id: string;
+  site_id: string | null;
   document_type: DocumentType;
   title: string;
   description: string | null;
@@ -92,6 +94,32 @@ export interface SiteDocument {
   version: number;
   uploaded_by: string;
   created_at: string;
+  folder_path: string | null;
+  process_id: string | null;
+  photo_type: PhotoType | null;
+  uploader_name?: string | null;
+  folder_id?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// ストレージフォルダ
+// ---------------------------------------------------------------------------
+export type FolderVisibility = 'internal' | 'all';
+export type FolderType = 'company' | 'site_root' | 'document' | 'process' | 'phase' | 'custom';
+
+export interface StorageFolder {
+  id: string;
+  workspace_id: string | null;
+  site_id: string | null;
+  parent_folder_id: string | null;
+  name: string;
+  path: string;
+  visibility: FolderVisibility;
+  folder_type: FolderType;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
 }
 
 // ---------------------------------------------------------------------------

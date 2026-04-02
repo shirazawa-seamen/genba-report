@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { DocumentType } from "@/lib/types";
+import { createSiteStorageFolders } from "@/app/(dashboard)/storage/actions";
 
 async function insertSiteWithFallback(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,6 +117,9 @@ export async function createSite(input: {
     user_id: user.id,
     invited_by: user.id,
   });
+
+  // ストレージフォルダを自動生成（site_root + ドキュメント）
+  await createSiteStorageFolders(data.id, input.name.trim(), input.companyId);
 
   revalidatePath("/sites");
   return { success: true, siteId: data.id };
@@ -754,6 +758,11 @@ export async function getSiteDocuments(siteId: string): Promise<{
     version: number;
     created_at: string;
     thumbnail_url: string | null;
+    folder_path: string | null;
+    process_id: string | null;
+    photo_type: string | null;
+    uploaded_by: string;
+    uploader_name: string | null;
   }[];
   error?: string;
 }> {
@@ -768,12 +777,27 @@ export async function getSiteDocuments(siteId: string): Promise<{
 
   const { data, error } = await supabase
     .from("site_documents")
-    .select("id, document_type, title, description, storage_path, file_name, file_size, version, created_at")
+    .select("id, document_type, title, description, storage_path, file_name, file_size, version, created_at, uploaded_by, folder_path, process_id, photo_type")
     .eq("site_id", siteId)
     .order("created_at", { ascending: false });
 
   if (error) {
     return { success: false, error: "ドキュメントの取得に失敗しました" };
+  }
+
+  // アップロード者名を一括取得
+  const uploaderIds = [...new Set(data.map((d) => d.uploaded_by))];
+  const nameMap = new Map<string, string>();
+  if (uploaderIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", uploaderIds);
+    if (profiles) {
+      for (const p of profiles) {
+        if (p.full_name) nameMap.set(p.id, p.full_name);
+      }
+    }
   }
 
   // 画像ファイルのサムネイル用signed URLを一括取得
@@ -795,7 +819,20 @@ export async function getSiteDocuments(siteId: string): Promise<{
   }
 
   const documents = data.map((d) => ({
-    ...d,
+    id: d.id,
+    document_type: d.document_type,
+    title: d.title,
+    description: d.description,
+    storage_path: d.storage_path,
+    file_name: d.file_name,
+    file_size: d.file_size,
+    version: d.version,
+    created_at: d.created_at,
+    uploaded_by: d.uploaded_by,
+    folder_path: d.folder_path,
+    process_id: d.process_id,
+    photo_type: d.photo_type,
+    uploader_name: nameMap.get(d.uploaded_by) ?? null,
     thumbnail_url: urlMap.get(d.storage_path) ?? null,
   }));
 
@@ -808,7 +845,8 @@ export async function getSiteDocuments(siteId: string): Promise<{
 export async function getUploadUrl(
   siteId: string,
   fileName: string,
-  documentType: DocumentType
+  documentType: DocumentType,
+  options?: { processId?: string; photoType?: string }
 ): Promise<{
   success: boolean;
   uploadUrl?: string;
@@ -826,7 +864,14 @@ export async function getUploadUrl(
 
   const timestamp = Date.now();
   const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const storagePath = `site-documents/${siteId}/${documentType}/${timestamp}-${sanitizedFileName}`;
+
+  // 工程写真の場合はprocesses/配下に格納、それ以外は従来通り
+  const subPath = options?.processId
+    ? `processes/${options.processId}/${options.photoType ?? "other"}/${timestamp}-${sanitizedFileName}`
+    : `${documentType}/${timestamp}-${sanitizedFileName}`;
+  // siteId が空の場合は workspace パスを使用（会社フォルダ直下のアップロード）
+  const pathPrefix = siteId ? `site-documents/${siteId}` : `workspace/${user.id}`;
+  const storagePath = `${pathPrefix}/${subPath}`;
 
   const { data, error } = await supabase.storage
     .from("site-documents")
@@ -854,6 +899,10 @@ export async function createSiteDocument(input: {
   storagePath: string;
   fileName: string;
   fileSize: number;
+  folderPath?: string;
+  processId?: string;
+  photoType?: string;
+  folderId?: string;
 }): Promise<{ success: boolean; documentId?: string; error?: string }> {
   const supabase = await createClient();
   const {
@@ -867,7 +916,7 @@ export async function createSiteDocument(input: {
   const { data, error } = await supabase
     .from("site_documents")
     .insert({
-      site_id: input.siteId,
+      site_id: input.siteId || null,
       document_type: input.documentType,
       title: input.title.trim(),
       description: input.description?.trim() || null,
@@ -875,11 +924,16 @@ export async function createSiteDocument(input: {
       file_name: input.fileName,
       file_size: input.fileSize,
       uploaded_by: user.id,
+      folder_path: input.folderPath || null,
+      process_id: input.processId || null,
+      photo_type: input.photoType || null,
+      folder_id: input.folderId || null,
     })
     .select("id")
     .single();
 
   if (error) {
+    console.error("[createSiteDocument] insert error:", error);
     return { success: false, error: "ドキュメントの登録に失敗しました" };
   }
 
@@ -894,15 +948,18 @@ export async function createSiteDocument(input: {
     other: "",
   };
 
-  const field = fieldMap[input.documentType];
-  if (field) {
-    await supabase
-      .from("sites")
-      .update({ [field]: true })
-      .eq("id", input.siteId);
+  // site_id がある場合のみセットアップチェックを更新
+  if (input.siteId) {
+    const field = fieldMap[input.documentType];
+    if (field) {
+      await supabase
+        .from("sites")
+        .update({ [field]: true })
+        .eq("id", input.siteId);
+    }
+    revalidatePath(`/sites/${input.siteId}`);
   }
 
-  revalidatePath(`/sites/${input.siteId}`);
   return { success: true, documentId: data.id };
 }
 

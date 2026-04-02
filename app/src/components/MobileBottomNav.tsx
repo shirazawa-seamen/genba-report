@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Send,
   Package,
+  FolderClosed,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -29,6 +30,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ClipboardList,
   Send,
   Package,
+  FolderClosed,
 };
 
 export interface NavItemDef {

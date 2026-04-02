@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getSecureSettingValue } from "@/lib/secureSettings";
 import { canAccessSite } from "@/lib/siteAccess";
 import { notifySummarySubmitted } from "@/lib/email";
+import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
 
 async function requireManager() {
   const supabase = await createClient();
@@ -707,6 +708,15 @@ export async function uploadSummaryPhoto(formData: FormData) {
     await context.supabase.storage.from("report-photos").remove([storagePath]);
     return { success: false as const, error: `写真情報の保存に失敗しました: ${dbError.message}` };
   }
+
+  // ストレージフォルダに自動反映（非同期、失敗しても報告アップロード自体は成功）
+  syncReportPhotoToStorage({
+    siteId,
+    userId: context.user.id,
+    storagePath,
+    fileName: file.name,
+    fileSize: file.size,
+  }).catch((err) => console.error("[StorageSync] Error:", err));
 
   revalidatePath(`/sites/${siteId}/reports`);
   revalidatePath("/manager/reports");

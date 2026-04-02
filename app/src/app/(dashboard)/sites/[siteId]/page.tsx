@@ -196,6 +196,7 @@ export default async function SiteDetailPage({
   const isCompleted = siteStatus === "completed";
   const period = getPeriodLabel(s.start_date, s.end_date, siteStatus);
   const canManage = userRole === "admin" || userRole === "manager";
+  const canEditStorage = canManage || userRole === "worker_internal" || userRole === "worker_external";
   const isEditMode = canManage && edit === "1";
 
   return (
@@ -375,7 +376,7 @@ export default async function SiteDetailPage({
           </div>
 
           <div className="mb-6"><MaterialManager siteId={siteId} canManage={canManage} /></div>
-          <div className="mb-6"><DocumentManager siteId={siteId} canManage={canManage} /></div>
+          <div className="mb-6"><DocumentManager siteId={siteId} canManage={canEditStorage} canDelete={canManage} processes={processList.map((p) => ({ id: p.id, name: p.name, parent_process_id: p.parent_process_id ?? null, category: p.category }))} /></div>
         </>
       )}
 

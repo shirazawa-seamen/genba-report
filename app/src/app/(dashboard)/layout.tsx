@@ -13,6 +13,7 @@ import {
   Users,
   ClipboardList,
   User,
+  FolderClosed,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/constants'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
@@ -40,6 +41,7 @@ export default async function DashboardLayout({
   const allNavItems = [
     { label: 'ホーム', shortLabel: 'ホーム', href: '/', icon: Home, iconName: 'Home', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '現場一覧', shortLabel: '現場', href: '/sites', icon: Building2, iconName: 'Building2', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
+    { label: 'ストレージ', shortLabel: 'ストレージ', href: '/storage', icon: FolderClosed, iconName: 'FolderClosed', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },
     { label: '現場カレンダー', shortLabel: '予定', href: '/calendar', icon: Calendar, iconName: 'Calendar', roles: ['admin', 'manager', 'worker_internal', 'worker_external', 'client'] },
     { label: '1次報告', shortLabel: '1次', href: '/manager/reports', icon: Send, iconName: 'Send', roles: ['admin', 'manager'] },
     { label: '2次報告', shortLabel: '2次', href: '/reports', icon: FileText, iconName: 'FileText', roles: ['admin', 'manager', 'worker_internal', 'worker_external'] },

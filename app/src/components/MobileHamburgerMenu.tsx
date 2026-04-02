@@ -20,6 +20,7 @@ import {
   Calendar,
   Send,
   CheckSquare,
+  FolderClosed,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -36,6 +37,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Calendar,
   Send,
   CheckSquare,
+  FolderClosed,
 };
 
 interface NavItem {

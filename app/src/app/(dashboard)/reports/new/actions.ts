@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { notifyReportSubmitted } from "@/lib/email";
+import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -470,6 +471,14 @@ export async function uploadReportPhotos(
     return { success: true, uploadedCount: 0 };
   }
 
+  // ストレージ同期のため report から site_id を取得
+  const { data: report } = await supabase
+    .from("daily_reports")
+    .select("site_id")
+    .eq("id", input.reportId)
+    .single();
+  const siteId = report?.site_id;
+
   const uploadedPaths: string[] = [];
   const errors: string[] = [];
 
@@ -527,6 +536,24 @@ export async function uploadReportPhotos(
     }
 
     uploadedPaths.push(storagePath);
+
+    // ストレージフォルダに自動反映（非同期、失敗しても報告アップロード自体は成功）
+    if (siteId) {
+      console.log("[StorageSync] Calling sync:", { siteId, processId, photoType, storagePath });
+      syncReportPhotoToStorage({
+        siteId,
+        userId: user.id,
+        processId: processId || undefined,
+        photoType: photoType,
+        storagePath,
+        fileName: file.name,
+        fileSize: file.size,
+      }).then((res) => {
+        console.log("[StorageSync] Result:", JSON.stringify(res));
+      }).catch((err) => console.error("[StorageSync] Error:", err));
+    } else {
+      console.log("[StorageSync] Skipped: no siteId. reportId:", input.reportId);
+    }
   }
 
   if (errors.length > 0 && uploadedPaths.length === 0) {

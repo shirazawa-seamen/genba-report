@@ -8,6 +8,7 @@ import {
   fetchProcesses,
   fetchProcessChecklistItems,
 } from "@/app/(dashboard)/reports/new/actions";
+import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import {
   AlertTriangle,
@@ -1481,6 +1482,18 @@ export function DailyReportForm({
               await deleteCreatedReports(targetReportIds);
               setSubmitError(`写真の保存に失敗しました: ${dbError.message}`);
               return;
+            }
+
+            // ストレージフォルダに自動反映
+            if (formData.siteId) {
+              syncReportPhotoToStorage({
+                siteId: formData.siteId,
+                processId: item.processId || undefined,
+                photoType: photoType,
+                storagePath,
+                fileName: file.name,
+                fileSize: file.size,
+              }).catch((err) => console.error("[StorageSync] Error:", err));
             }
           }
         }
