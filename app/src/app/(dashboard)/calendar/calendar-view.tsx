@@ -521,7 +521,7 @@ export function CalendarView({
                     if (result.success) {
                       const staffName = dayOffStaffList.find((s) => s.id === dayOffUserId)?.name ?? "自分";
                       setLocalDaysOff((prev) => [...prev, {
-                        id: crypto.randomUUID(),
+                        id: `temp-${Date.now()}`,
                         user_id: dayOffUserId,
                         user_name: staffName,
                         date: dayOffDate,
