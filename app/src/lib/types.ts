@@ -146,6 +146,20 @@ export interface ActivityLog {
 }
 
 // ---------------------------------------------------------------------------
+// スタッフ休み
+// ---------------------------------------------------------------------------
+export interface StaffDayOff {
+  id: string;
+  user_id: string;
+  date: string;
+  reason: string | null;
+  registered_by: string | null;
+  created_at: string;
+  // UI用
+  user_name?: string;
+}
+
+// ---------------------------------------------------------------------------
 // 検査フェーズ
 // ---------------------------------------------------------------------------
 export type InspectionPhase =

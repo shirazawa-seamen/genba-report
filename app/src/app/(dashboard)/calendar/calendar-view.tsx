@@ -23,6 +23,11 @@ import {
   addSiteWorkPeriod,
   deleteSiteWorkPeriod,
 } from "@/app/(dashboard)/sites/actions";
+import {
+  registerDayOff,
+  removeDayOff,
+  getStaffList,
+} from "./day-off-actions";
 
 interface CalendarDay {
   date: string;
@@ -48,6 +53,14 @@ interface WorkPeriod {
   endDate: string;
 }
 
+interface DayOffItem {
+  id: string;
+  user_id: string;
+  user_name: string;
+  date: string;
+  reason: string | null;
+}
+
 interface CalendarViewProps {
   monthLabel: string;
   prevMonth: string;
@@ -60,6 +73,8 @@ interface CalendarViewProps {
   monthLastDate: string;
   userRole: string;
   periodsBySite: Record<string, WorkPeriod[]>;
+  daysOff?: DayOffItem[];
+  currentUserId?: string;
 }
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -85,9 +100,18 @@ export function CalendarView({
   monthLastDate,
   userRole,
   periodsBySite,
+  daysOff = [],
+  currentUserId,
 }: CalendarViewProps) {
   const [selectedDay, setSelectedDay] = useState<CalendarDay | null>(null);
   const [viewMode, setViewMode] = useState<"calendar" | "gantt">("calendar");
+  const [showDayOffModal, setShowDayOffModal] = useState(false);
+  const [dayOffDate, setDayOffDate] = useState<string>("");
+  const [dayOffStaffList, setDayOffStaffList] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [dayOffUserId, setDayOffUserId] = useState<string>("");
+  const [dayOffReason, setDayOffReason] = useState<string>("");
+  const [localDaysOff, setLocalDaysOff] = useState(daysOff);
+  const isManager = userRole === "admin" || userRole === "manager";
   const activeSiteMap = Object.fromEntries(
     activeSites.map((site) => [site.id, site])
   ) as Record<string, ActiveSite>;
@@ -268,6 +292,24 @@ export function CalendarView({
                     )}
                   </div>
 
+                  {/* 休みスタッフ表示 */}
+                  {(() => {
+                    const dayOff = localDaysOff.filter((d) => d.date === day.date);
+                    if (dayOff.length === 0) return null;
+                    return (
+                      <div className="mt-0.5">
+                        {dayOff.slice(0, 2).map((d) => (
+                          <div key={d.id} className="truncate rounded px-1 py-0.5 text-[8px] md:text-[9px] leading-tight bg-orange-100 text-orange-600">
+                            休 {d.user_name}
+                          </div>
+                        ))}
+                        {dayOff.length > 2 && (
+                          <span className="text-[8px] text-orange-400 px-1">+{dayOff.length - 2}</span>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Today indicator */}
                   {day.isToday && (
                     <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#0EA5E9]" />
@@ -371,6 +413,129 @@ export function CalendarView({
                 })}
               </div>
             )}
+
+            {/* 休みスタッフ */}
+            {(() => {
+              const dayOff = localDaysOff.filter((d) => d.date === selectedDay.date);
+              return (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-[12px] font-semibold text-orange-500">休みスタッフ</h4>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setDayOffDate(selectedDay.date);
+                        setDayOffUserId(currentUserId ?? "");
+                        setDayOffReason("");
+                        if (isManager) {
+                          const result = await getStaffList();
+                          if (result.success) setDayOffStaffList(result.staff ?? []);
+                        }
+                        setShowDayOffModal(true);
+                      }}
+                      className="text-[11px] text-orange-500 hover:text-orange-600 font-medium"
+                    >
+                      + 休み登録
+                    </button>
+                  </div>
+                  {dayOff.length === 0 ? (
+                    <p className="text-[11px] text-gray-300">休みの登録はありません</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {dayOff.map((d) => (
+                        <div key={d.id} className="flex items-center justify-between rounded-lg bg-orange-50 px-3 py-2">
+                          <div>
+                            <span className="text-[12px] font-medium text-orange-700">{d.user_name}</span>
+                            {d.reason && <span className="text-[10px] text-orange-400 ml-2">{d.reason}</span>}
+                          </div>
+                          {(isManager || d.user_id === currentUserId) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await removeDayOff({ userId: d.user_id, date: d.date });
+                                setLocalDaysOff((prev) => prev.filter((x) => x.id !== d.id));
+                              }}
+                              className="text-orange-300 hover:text-orange-500 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* 休み登録モーダル */}
+        {showDayOffModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowDayOffModal(false)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-gray-900">休み登録</h3>
+              <p className="text-[13px] text-gray-500">
+                {new Date(dayOffDate).toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}
+              </p>
+              {isManager && dayOffStaffList.length > 0 && (
+                <div>
+                  <label className="text-[13px] font-medium text-gray-500 block mb-1.5">スタッフ</label>
+                  <select
+                    value={dayOffUserId}
+                    onChange={(e) => setDayOffUserId(e.target.value)}
+                    className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-[14px]"
+                  >
+                    <option value="">選択してください</option>
+                    {dayOffStaffList.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="text-[13px] font-medium text-gray-500 block mb-1.5">理由（任意）</label>
+                <input
+                  type="text"
+                  value={dayOffReason}
+                  onChange={(e) => setDayOffReason(e.target.value)}
+                  placeholder="有給、私用、体調不良など"
+                  className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-[14px] placeholder-gray-400 focus:outline-none focus:border-[#0EA5E9]/50"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowDayOffModal(false)}
+                  className="inline-flex min-h-[36px] items-center rounded-xl border border-gray-200 bg-white px-4 text-[12px] font-medium text-gray-600 hover:bg-gray-100">
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  disabled={!dayOffUserId}
+                  onClick={async () => {
+                    if (!dayOffUserId) return;
+                    const result = await registerDayOff({
+                      userId: dayOffUserId,
+                      date: dayOffDate,
+                      reason: dayOffReason || undefined,
+                    });
+                    if (result.success) {
+                      const staffName = dayOffStaffList.find((s) => s.id === dayOffUserId)?.name ?? "自分";
+                      setLocalDaysOff((prev) => [...prev, {
+                        id: crypto.randomUUID(),
+                        user_id: dayOffUserId,
+                        user_name: staffName,
+                        date: dayOffDate,
+                        reason: dayOffReason || null,
+                      }]);
+                      setShowDayOffModal(false);
+                    }
+                  }}
+                  className="inline-flex min-h-[36px] items-center rounded-xl bg-orange-500 px-4 text-[12px] font-medium text-white hover:bg-orange-600 disabled:opacity-40"
+                >
+                  登録
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

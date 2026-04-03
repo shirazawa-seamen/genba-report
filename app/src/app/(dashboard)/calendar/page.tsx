@@ -18,6 +18,7 @@ const CalendarView = dynamic(
 );
 import { requireUserContext } from "@/lib/auth/getCurrentUserContext";
 import { getAccessibleSiteContext } from "@/lib/siteAccess";
+import { getDaysOff } from "./day-off-actions";
 
 interface PageProps {
   searchParams: Promise<{ month?: string; status?: string }>;
@@ -201,6 +202,10 @@ export default async function CalendarPage({ searchParams }: PageProps) {
 
   const monthLabel = `${year}年${monthNum}月`;
 
+  // スタッフ休みデータ取得
+  const daysOffResult = await getDaysOff(year, monthNum);
+  const daysOff = daysOffResult.success ? (daysOffResult.daysOff ?? []) : [];
+
   return (
     <CalendarView
       monthLabel={monthLabel}
@@ -222,6 +227,8 @@ export default async function CalendarPage({ searchParams }: PageProps) {
       monthLastDate={lastDateStr}
       userRole={userRole}
       periodsBySite={periodsBySite}
+      daysOff={daysOff}
+      currentUserId={user.id}
     />
   );
 }
