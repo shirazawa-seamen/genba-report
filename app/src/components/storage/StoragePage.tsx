@@ -43,6 +43,7 @@ import {
   getTrashItems,
   renameFolder,
   trashFolder,
+  searchStorage,
 } from "@/app/(dashboard)/storage/actions";
 import {
   getUploadUrl,
@@ -145,6 +146,12 @@ export function StoragePage({
   const [renameDocName, setRenameDocName] = useState("");
   const [docMenuId, setDocMenuId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [globalSearchResults, setGlobalSearchResults] = useState<{
+    folders: { id: string; name: string; path: string; site_name: string | null }[];
+    documents: { id: string; title: string; file_name: string; storage_path: string; file_size: number | null; folder_id: string | null; site_name: string | null; created_at: string }[];
+  } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isRoot = !currentFolder;
   const isManager = userRole === "admin" || userRole === "manager";
@@ -153,14 +160,31 @@ export function StoragePage({
   const isWorker = userRole === "worker_internal" || userRole === "worker_external";
   const isClient = userRole === "client";
 
-  // 検索フィルタ
-  const q = searchQuery.toLowerCase().trim();
-  const filteredFolders = useMemo(() =>
-    q ? folders.filter((f) => f.name.toLowerCase().includes(q) || (f.client_name ?? "").toLowerCase().includes(q)) : folders
-  , [folders, q]);
-  const filteredDocuments = useMemo(() =>
-    q ? documents.filter((d) => d.title.toLowerCase().includes(q) || d.file_name.toLowerCase().includes(q)) : documents
-  , [documents, q]);
+  // グローバル検索（デバウンス）
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (value.trim().length < 2) {
+      setGlobalSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    searchTimerRef.current = setTimeout(async () => {
+      const results = await searchStorage(value.trim());
+      setGlobalSearchResults(results);
+      setIsSearching(false);
+    }, 400);
+  }, []);
+
+  // グローバル検索モード: 2文字以上で発動（ローカルフィルタは廃止しガタつきを防止）
+  const q = searchQuery.trim();
+  const filteredFolders = folders;
+  const filteredDocuments = documents;
+
+  const isGlobalSearch = q.length >= 2 && (globalSearchResults !== null || isSearching);
 
   // ファイル削除可能判定: マネージャーは全て、ワーカーは自分のファイルのみ
   const canDeleteDoc = (doc: DocumentItem) => {
@@ -237,7 +261,7 @@ export function StoragePage({
   }, [docMenuId, folderMenuId]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+    <div className="px-4 sm:px-6 py-6 space-y-6">
       {/* ── ヘッダー ── */}
       <div>
         <div className="flex flex-wrap items-center gap-3">
@@ -309,21 +333,90 @@ export function StoragePage({
       </nav>
 
       {/* ── 検索バー ── */}
-      {(folders.length > 3 || documents.length > 0) && (
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="フォルダ・ファイルを検索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-[14px] text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
-          />
-        </div>
-      )}
+      <div className="relative w-full">
+        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          placeholder="フォルダ・ファイルを全体検索..."
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-[14px] text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20"
+        />
+        {isSearching && (
+          <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+        )}
+      </div>
 
-      {/* ── ゴミ箱ビュー ── */}
-      {showTrash && isRoot ? (
+      {/* ── グローバル検索結果 ── */}
+      {isGlobalSearch ? (
+        <div className="space-y-4 min-h-[200px] w-full">
+          {isSearching ? (
+            <div className="flex items-center gap-2 py-8 justify-center">
+              <Loader2 size={16} className="text-gray-400 animate-spin" />
+              <span className="text-[13px] text-gray-400">検索中...</span>
+            </div>
+          ) : !globalSearchResults ? null : (<>
+          <p className="text-[13px] text-gray-400">
+            「{searchQuery.trim()}」の検索結果 — フォルダ {globalSearchResults.folders.length}件 / ファイル {globalSearchResults.documents.length}件
+          </p>
+
+          {globalSearchResults.folders.length > 0 && (
+            <section>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">フォルダ</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {globalSearchResults.folders.map((f) => (
+                  <Link
+                    key={f.id}
+                    href={`/storage/${f.id}`}
+                    className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:border-[#0EA5E9]/30 hover:bg-sky-50/50 transition-all"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                      <Folder size={18} className="text-amber-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium text-gray-900 truncate">{f.name}</p>
+                      {f.site_name && <p className="text-[11px] text-gray-400 truncate">{f.site_name}</p>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {globalSearchResults.documents.length > 0 && (
+            <section>
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">ファイル</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {globalSearchResults.documents.map((d) => {
+                  const ext = d.file_name.split(".").pop()?.toLowerCase() ?? "";
+                  const isImage = ["jpg", "jpeg", "png", "gif", "webp", "heic"].includes(ext);
+                  return (
+                    <div key={d.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+                      <div className="aspect-square bg-gray-50 flex items-center justify-center">
+                        {isImage ? (
+                          <ImageIcon size={32} className="text-gray-300" />
+                        ) : (
+                          <File size={32} className="text-gray-300" />
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <p className="text-[12px] font-medium text-gray-900 truncate">{d.title || d.file_name}</p>
+                        {d.site_name && <p className="text-[10px] text-gray-400 truncate">{d.site_name}</p>}
+                        {d.file_size && <p className="text-[10px] text-gray-300">{(d.file_size / 1024).toFixed(0)} KB</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {globalSearchResults.folders.length === 0 && globalSearchResults.documents.length === 0 && (
+            <p className="text-[13px] text-gray-400 text-center py-8">該当する結果がありません</p>
+          )}
+          </>)}
+        </div>
+      ) : showTrash && isRoot ? (
         <TrashView onRestore={() => { refresh(); }} />
       ) : (
       <>

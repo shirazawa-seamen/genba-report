@@ -1,6 +1,6 @@
 # 現場報告システム - 引き継ぎプロンプト
 
-更新日: 2026-04-01
+更新日: 2026-04-01（セッション2）
 
 ---
 
@@ -56,130 +56,103 @@
 - src/components/ - UIコンポーネント
   - reports/DailyReportForm.tsx - 2次報告フォーム（1画面化済み）
   - sites/ProcessManager.tsx - 工程管理（チェックリスト付き）
-  - sites/DocumentManager.tsx - ドキュメント管理
+  - sites/DocumentManager.tsx - ストレージUI（フォルダナビ付き）
+  - storage/StorageBrowserModal.tsx - ストレージ写真選択モーダル
   - admin/ProcessTemplateManager.tsx - 工程マスタ管理
 - src/lib/ - 共通ロジック
 - src/app/(dashboard)/sites/actions.ts - 現場関連サーバーアクション
 - supabase/ - マイグレーションSQL
 
-## 直近の開発状況（ver 0.01〜）
+---
 
-### 既存機能
-- 1次/2次報告の名称統一、全UI反映済み
-- 1次報告ページに統合モーダル（承認・1次報告生成・テキスト編集・写真管理・提出を1画面で完結）
-- 工程の親子階層表示 + チェックリスト（孫工程）機能
-- 報告フォームにチェックリスト方式の進捗入力 + 工程別写真添付
-- 画像自動圧縮（最大1920px、JPEG品質80%）
-- 写真アップロード失敗時は報告を自動削除してロールバック
-- 承認時にprocesses.progress_rateを更新（翌日の報告に引き継ぎ）
-- 1次報告でマネージャーが進捗率・天気・時間を編集可能
-- クライアント確認ページ・印刷ページに天気・時間・作業者を表示
-- 検索・サイトフィルター機能
-- ローディング画面を中央スピナーに統一
+## 現在進行中のタスク: TSK-19 ストレージ機能
 
-### 前回セッションで完了した修正
-- **TSK-49**: RLSポリシー無限再帰エラー(42P17) → `get_user_role()` SECURITY DEFINER関数で解決
-- **TSK-36**: 2次報告の進捗率・写真入力制限（親工程のみ選択不可）
-- **TSK-52**: 画像添付上限を20→50枚に変更
-- **TSK-51**: 1次報告モーダルで2次報告写真の統合表示
+### ブランチ: `feature/storage`
 
-### 今回のセッション（2026-04-01）で完了した修正
-- **TSK-54**: 送信前プレビュー・確認機能
-  - 2次報告送信前に入力内容のプレビュー確認画面を表示
-  - 1次報告のクライアント提出前に確認ダイアログ表示
-  - 下書き提出前に確認ダイアログ表示
-- **TSK-57**: 現場住所タップでGoogleMapを開くリンクに変更
-- **TSK-60**: 工程管理改善
-  - 親工程の並び替え時に子工程・孫工程も一緒に移動
-  - 工程マスタの子工程追加時にフォームへ自動フォーカス
-- **TSK-61**: ドキュメント複数アップロード時に各ファイルごとに種別を選択可能に
+**重要: このブランチには暫定実装が入っているが、要件定義書と大きく乖離しているため、ほぼ作り直しが必要。**
+
+### 要件定義書
+- ファイル: `/Volumes/wataru-mm/プロジェクト/現場報告システム/storage_requirements.md`
+- Google Drive/Dropbox的なワークスペースレベルのクラウドストレージ
+- 現場作成・報告写真アップロードをトリガーにフォルダ自動生成
+
+### 影響範囲分析
+- ファイル: `/Users/rego/.claude/plans/joyful-doodling-sprout.md`
+- 全9項目の影響範囲を詳細分析済み
+
+### 現在の暫定実装（feature/storageブランチ）の状態
+
+以下はmainにマージ前の暫定コード。要件定義書に合わせて作り直す必要がある:
+
+1. **migration_v33_storage_folders.sql** — site_documentsにfolder_path/process_id/photo_type追加、RLS更新（**適用済み**）
+2. **DocumentManager.tsx** — 「ドキュメント管理」→「ストレージ」に名称変更、フォルダナビ追加、書類/工程写真2モードアップロード、アップロード者タグ表示
+3. **StorageBrowserModal.tsx** — 1次報告からストレージ写真を選択するモーダル
+4. **sites/actions.ts** — getSiteDocumentsにprofiles JOIN（アップロード者名取得）、getUploadUrlに工程写真パス対応、createSiteDocumentにfolderPath等追加
+5. **types.ts** — SiteDocumentにfolder_path/process_id/photo_type/uploader_name追加
+6. **day-reports-modal.tsx** — 「ストレージから選択」ボタン追加、StorageBrowserModal連携
+7. **sites/[siteId]/page.tsx** — canEditStorage（worker含む）とcanDelete（admin/managerのみ）の分離
+
+### 作り直しで必要なこと（要件定義書ベース）
+
+**Phase A（MVP）: ストレージ基盤 + フォルダUI**
+- 新テーブル: `storage_folders`（実体フォルダ、公開設定・メタデータ対応）
+- `site_documents` → `storage_files` への拡張 or 新テーブル
+- フォルダCRUD + `/storage` ページ（ワークスペースルート）
+- 現場作成時の自動フォルダ生成（createSiteアクション内）
+- サイドバーに「ストレージ」ナビ追加
+
+**Phase B: 報告連携 + 自動格納**
+- 報告写真アップ時にストレージへ自動反映
+- 工程フォルダ自動生成
+- 二重管理問題の解決（report_photosとの関係）
+
+**Phase C: 権限 + 公開設定**
+- フォルダ単位の公開設定（社内のみ / 現場関係者全員）
+- ロール別アクセス制御（マネージャー全権限、ワーカー担当現場のみ、クライアント/パートナー公開フォルダのみ閲覧）
+
+**Phase D: ゴミ箱 + バージョン管理**
+- soft delete + 30日自動消去
+- バージョン履歴 + 復元
+
+### 注意事項
+- migration_v33はSupabaseに適用済み（folder_path, process_id, photo_typeカラムが存在する）
+- 新設計では`storage_folders`テーブルが必要。バーチャルフォルダ（folder_pathカラム）では公開設定やメタデータに対応できない
+- `site_documents`を`storage_files`に置き換えるか拡張するか未決定
+
+---
+
+## 直近の開発状況（ver 0.02）
+
+### mainブランチ（デプロイ済み）
+- **TSK-54**: 送信前プレビュー・確認機能（2次報告・1次報告・下書き）
+- **TSK-57**: 現場住所タップでGoogleMapを開く
+- **TSK-60**: 工程管理改善（親子一括移動・マスタUI改善）
+- **TSK-61**: ドキュメント複数アップロード時に個別種別選択
 - **TSK-62**: マイページのデフォルトタブを報告一覧に変更
-- **カレンダー**: 月表示をJST基準に修正（UTC→JST）
-- **セットアップチェック**: 「契約書」「現調写真」を追加
+- **カレンダー**: 月表示をJST基準に修正
+- **セットアップチェック**: 契約書・現調写真を追加
+- 2次報告プレビューを別画面方式に変更
 
-### 前回セッション（2026-03-31）で完了した修正
-- **TSK-50**: 2次報告の下書き保存機能
-- **TSK-31**: 報告編集時の画像追加削除・リネーム
-- **TSK-48**: 職人さんマイページ
-- **TSK-39/40**: 工程管理（カスタム工程追加 + 一括保存UX）
-- **TSK-37/38/45**: ドキュメント管理改善（種別追加 + 複数一括アップロード）
-- **写真管理UX修正**: 編集ページ・1次報告モーダルの写真操作をローカルステート方式に変更（保存ボタンで確定）
-
-### それ以前のセッションで完了した修正
-- **TSK-47（一部）**: 写真プレビュー・ドキュメントプレビュー修正
-- **TSK-49**: RLSポリシー無限再帰エラー修正
-- **TSK-36**: 2次報告の進捗率・写真入力制限（親工程のみ選択不可）
-- **TSK-52**: 画像添付上限を20→50枚に変更
-- **TSK-51**: 1次報告モーダルで2次報告写真の統合表示
+### 更新履歴
+- Notionの更新履歴DBにver 0.02（2026-04-01）を登録済み
 
 ## 適用済みDBマイグレーション
 
-- v26: チェックリストテーブル（process_checklist_items, process_checklist_templates）
-- v28: Storage RLSポリシー（report-photos, site-documents バケット）
-- v29: トリガーバグ修正 + report_photos.process_id追加
-- v30: client_report_summariesに天気・時間カラム追加
-- v31: RLSパフォーマンス最適化 + get_user_role()関数（修正版適用済み）
+- v26〜v31: 既存（チェックリスト、Storage RLS、トリガー修正、RLS最適化等）
+- **v32**: ドキュメント種別追加（契約書・現調写真）+ sites.has_contract/has_site_survey_photo
+- **v33**: ストレージフォルダ対応（site_documents.folder_path/process_id/photo_type追加、worker INSERT権限追加、summary_photos.source_document_id追加）
 
-## 未適用DBマイグレーション（要Supabase実行）
+## テストアカウント
 
-- **v32**: ドキュメント種別追加（契約書・現調写真） + sitesテーブルにhas_contract/has_site_survey_photoカラム追加
-  - ファイル: `app/supabase/migration_v32_document_types.sql`
-
-## 動作確認チェックリスト（本番: https://genba-report.vercel.app）
-
-### テストアカウント
-- manager@seamen.co.jp / manager2@seamen.co.jp
-- worker@seamen.co.jp / worker2@seamen.co.jp
-- client@seamen.jp / client2@seamen.jp
-- partner@seamen.co.jp / partner2@seamen.co.jp
+- manager@seamen.co.jp / worker@seamen.co.jp / client@seamen.co.jp / partner@seamen.co.jp
 - PW: wataru1219
-
-### manager でログイン
-- [ ] カレンダー: 4月が表示されるか（3月ではなく）
-- [ ] 1次報告: 提出ボタン → 確認ダイアログが出るか
-- [ ] 1次報告: 写真追加 → キャンセルしても写真が残らないか
-- [ ] 現場詳細: 住所タップ → GoogleMapが開くか
-- [ ] 現場詳細 > 工程管理: 「追加する」→「カスタム工程」タブが表示されるか
-- [ ] 現場詳細 > 工程管理: 複数キューに追加 → 一括保存が動くか
-- [ ] 現場詳細 > 工程管理: 親工程のドラッグ → 子工程も一緒に動くか
-- [ ] 現場詳細 > ドキュメント: 複数ファイルアップロード → 個別に種別選択できるか
-- [ ] 現場詳細 > セットアップチェック: 「契約書」「現調写真」が表示されるか（v32マイグレーション適用後）
-
-### worker でログイン
-- [ ] 新規報告: 送信ボタン → プレビュー確認画面が出るか
-- [ ] 新規報告: 「下書き保存」ボタンが表示されるか
-- [ ] 報告一覧: 「下書き」タブが表示されるか
-- [ ] マイページ: ナビに「マイページ」が表示され、デフォルトが報告一覧タブか
-- [ ] 報告詳細（下書き）: 「提出する」→ 確認ダイアログが出るか
-- [ ] 報告編集: 写真の追加・削除 → 保存ボタンを押すまで確定しないか
-
-### client でログイン
-- [ ] 確認ページが正常に表示されるか
-
-## 残りの未着手タスク
-
-Notionタスクボードを参照: https://www.notion.so/seameninc/32bf9a30024d80b2af11c84917d9cbe2?v=32bf9a30024d813bb008000c6a0a244f
-
-主要な未着手:
-- TSK-19: ストレージ機能（フォルダ分け・名称変更） - 大規模
-- TSK-20: PDF出力
-- TSK-17: グループチャット
+- worker@seamen.co.jpは「現場テスト：1」に招待済み
 
 ## 重要な設計原則
 
 ### 保存ボタン確定方式
 写真やデータの変更は「保存」ボタンを押すまでサーバーに反映しない。
 ローカルステートで変更を管理し、フォーム全体の保存/提出時にまとめてコミットする。
-（詳細: memory/feedback_save_on_submit.md）
-
-## TSK-47 残課題
-
-- スマホで写真プレビューが拡大されすぎる問題 → 実機テストで確認が必要
-- 報告フォーム（DailyReportForm.tsx）のプレビューは未対応（ローカルファイル表示のため別対応が必要）
-
-## TSK-49 残課題
-
-42P17（無限再帰）は解決済み。workerアカウントでのINSERTエラーは要再テスト。
 
 ## 開発フロー
 

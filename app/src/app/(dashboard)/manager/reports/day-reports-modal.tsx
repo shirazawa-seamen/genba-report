@@ -122,7 +122,7 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   const [officialDeparture, setOfficialDeparture] = useState<string>(firstReport?.departureTime ?? "");
 
   // 1次報告写真状態
-  const [photos, setPhotos] = useState<Array<{ id: string; url: string; caption: string | null; mediaType: string; isFromReport: boolean }>>([]);
+  const [photos, setPhotos] = useState<Array<{ id: string; url: string; caption: string | null; mediaType: string; isFromReport: boolean; storagePath?: string }>>([]);
   const [photosLoaded, setPhotosLoaded] = useState(false);
   // 写真のローカル変更管理
   const [pendingNewPhotos, setPendingNewPhotos] = useState<Array<{ id: string; file: File; url: string; mediaType: string }>>([]);
@@ -133,7 +133,7 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
   const [checklistLoaded, setChecklistLoaded] = useState(false);
 
   // 2次報告写真状態
-  type ReportPhoto = { id: string; reportId: string; url: string; caption: string | null; mediaType: string; photoType: string | null; processName: string | null };
+  type ReportPhoto = { id: string; reportId: string; url: string; caption: string | null; mediaType: string; photoType: string | null; processName: string | null; storagePath?: string };
   const [reportPhotos, setReportPhotos] = useState<ReportPhoto[]>([]);
   const [reportPhotosLoaded, setReportPhotosLoaded] = useState(false);
 
@@ -715,11 +715,14 @@ export function DayReportsModal({ day, onClose }: { day: SiteReportDay; onClose:
 
                 {/* 写真（1次報告写真 + 2次報告写真を統合表示） */}
                 {(photosLoaded || reportPhotosLoaded) && (() => {
+                  // summary_photosに既にコピーされた写真のstoragePathセットを作成（重複排除用）
+                  const summaryStoragePaths = new Set(photos.filter((p) => p.storagePath).map((p) => p.storagePath));
                   const allPhotos = [
                     ...photos.filter((p) => !pendingDeleteIds.has(p.id)).map((p) => ({ ...p, source: "summary" as const })),
                     ...pendingNewPhotos.map((p) => ({ id: p.id, url: p.url, caption: null, mediaType: p.mediaType, isFromReport: false, source: "summary" as const, isPending: true })),
                     ...storagePhotos.map((p) => ({ id: p.id, url: p.url, caption: null, mediaType: "photo" as const, isFromReport: false, source: "summary" as const, isStorage: true })),
-                    ...reportPhotos.map((p) => ({ id: p.id, url: p.url, caption: p.caption, mediaType: p.mediaType, isFromReport: true, source: "report" as const })),
+                    // 2次報告写真のうち、summaryに既にコピーされたものは除外
+                    ...reportPhotos.filter((p) => !p.storagePath || !summaryStoragePaths.has(p.storagePath)).map((p) => ({ id: p.id, url: p.url, caption: p.caption, mediaType: p.mediaType, isFromReport: true, source: "report" as const })),
                   ];
                   return (
                     <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">

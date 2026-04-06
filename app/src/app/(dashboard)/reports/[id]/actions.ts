@@ -378,6 +378,7 @@ export async function getReportPhotosForIds(reportIds: string[]) {
         mediaType: (p.media_type ?? "photo") as string,
         photoType: p.photo_type as string | null,
         processName,
+        storagePath: p.storage_path as string,
       };
     })
   );

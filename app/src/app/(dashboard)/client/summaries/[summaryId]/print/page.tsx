@@ -204,21 +204,24 @@ export default async function SummaryPrintPage({ params }: PageProps) {
       <style>{`
         @page {
           size: A4 portrait;
-          margin: 8mm;
+          margin: 10mm;
         }
         @media print {
-          html, body {
+          html, body, div, main {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             background: white !important;
+            overflow: visible !important;
+            height: auto !important;
           }
           .print\\:hidden, .print-hidden {
             display: none !important;
           }
           .print-section {
             max-width: 100% !important;
+            width: 100% !important;
             margin: 0 !important;
-            padding: 6mm !important;
+            padding: 0 !important;
             box-shadow: none !important;
           }
           .print-page-break {
@@ -226,6 +229,9 @@ export default async function SummaryPrintPage({ params }: PageProps) {
             break-after: page !important;
           }
           img {
+            break-inside: avoid;
+          }
+          table {
             break-inside: avoid;
           }
         }

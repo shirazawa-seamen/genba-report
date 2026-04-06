@@ -803,6 +803,7 @@ export async function getSummaryPhotos(summaryId: string) {
         caption: p.caption,
         mediaType: p.media_type ?? "photo",
         isFromReport: !!p.source_report_id,
+        storagePath: p.storage_path,
       };
     })
   );

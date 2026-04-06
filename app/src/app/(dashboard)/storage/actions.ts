@@ -1095,3 +1095,75 @@ export async function syncReportPhotoToStorage(input: {
 
   return { success: true };
 }
+
+// ---------------------------------------------------------------------------
+// グローバル検索: フォルダ・ファイルを横断検索
+// ---------------------------------------------------------------------------
+export async function searchStorage(query: string): Promise<{
+  folders: { id: string; name: string; path: string; site_name: string | null }[];
+  documents: { id: string; title: string; file_name: string; storage_path: string; file_size: number | null; folder_id: string | null; site_name: string | null; created_at: string }[];
+}> {
+  const ctx = await getAuthContext();
+  if (!ctx) return { folders: [], documents: [] };
+  const { supabase, user, profile } = ctx;
+
+  const q = query.trim();
+  if (!q || q.length < 2) return { folders: [], documents: [] };
+
+  const pattern = `%${q}%`;
+
+  // フォルダ検索
+  let folderQuery = supabase
+    .from("storage_folders")
+    .select("id, name, path, site_id, sites(name)")
+    .ilike("name", pattern)
+    .is("deleted_at", null)
+    .limit(20);
+
+  // ファイル検索（タイトルまたはファイル名）
+  let docQuery = supabase
+    .from("site_documents")
+    .select("id, title, file_name, storage_path, file_size, folder_id, created_at, site_id, sites(name)")
+    .is("deleted_at", null)
+    .or(`title.ilike.${pattern},file_name.ilike.${pattern}`)
+    .limit(30);
+
+  // ロールベースのフィルタ
+  if (profile.role === "worker_internal" || profile.role === "worker_external" || profile.role === "client") {
+    const { data: memberships } = await supabase
+      .from("site_members")
+      .select("site_id")
+      .eq("user_id", user.id);
+    const siteIds = (memberships ?? []).map((m) => m.site_id);
+    if (siteIds.length === 0) return { folders: [], documents: [] };
+
+    folderQuery = folderQuery.in("site_id", siteIds);
+    docQuery = docQuery.in("site_id", siteIds);
+
+    if (profile.role === "client") {
+      folderQuery = folderQuery.eq("visibility", "all");
+    }
+  }
+
+  const [foldersResult, docsResult] = await Promise.all([folderQuery, docQuery]);
+
+  const folders = (foldersResult.data ?? []).map((f) => ({
+    id: f.id,
+    name: f.name,
+    path: f.path,
+    site_name: (f.sites as unknown as { name: string } | null)?.name ?? null,
+  }));
+
+  const documents = (docsResult.data ?? []).map((d) => ({
+    id: d.id,
+    title: d.title,
+    file_name: d.file_name,
+    storage_path: d.storage_path,
+    file_size: d.file_size,
+    folder_id: d.folder_id ?? null,
+    site_name: (d.sites as unknown as { name: string } | null)?.name ?? null,
+    created_at: d.created_at,
+  }));
+
+  return { folders, documents };
+}

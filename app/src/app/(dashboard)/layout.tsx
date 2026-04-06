@@ -69,7 +69,7 @@ export default async function DashboardLayout({
   ] : []
 
   return (
-    <div className="flex h-dvh bg-[#F5F6F8] text-gray-900 font-sans overflow-hidden">
+    <div className="flex h-dvh bg-[#F5F6F8] text-gray-900 font-sans overflow-hidden print:!h-auto print:!overflow-visible print:!bg-white">
       {/* ── Desktop Sidebar ── */}
       <aside className="hidden md:flex print:!hidden flex-col w-60 border-r border-gray-200 bg-white shrink-0">
         {/* Brand */}
@@ -168,7 +168,7 @@ export default async function DashboardLayout({
         </div>
 
         {/* Main content */}
-        <main className="dashboard-main flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden">
+        <main className="dashboard-main flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden print:!overflow-visible">
           {children}
         </main>
 

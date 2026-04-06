@@ -96,7 +96,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
   const isWorker = userRole === "worker_internal" || userRole === "worker_external";
   if (isWorker && raw.reporter_id !== user.id) notFound();
 
-  const canApprove = userRole === "admin" || userRole === "manager" || userRole === "client";
+  const canApprove = userRole === "admin" || userRole === "manager";
 
   let reporterName: string | null = null;
   if (raw.reporter_id) {

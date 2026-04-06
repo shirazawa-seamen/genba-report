@@ -11,6 +11,15 @@ function getResend() {
 const FROM_EMAIL = process.env.EMAIL_FROM ?? "noreply@example.com";
 const APP_NAME = "現場報告システム";
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 interface SendEmailParams {
   to: string | string[];
   subject: string;
@@ -65,6 +74,9 @@ export async function notifyReportSubmitted({
   adminEmails: string[];
 }) {
   if (adminEmails.length === 0) return;
+  reporterName = escapeHtml(reporterName);
+  siteName = escapeHtml(siteName);
+  reportDate = escapeHtml(reportDate);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
@@ -116,6 +128,8 @@ export async function notifyReportApproved({
   clientEmails: string[];
 }) {
   if (clientEmails.length === 0) return;
+  siteName = escapeHtml(siteName);
+  reportDate = escapeHtml(reportDate);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
@@ -165,6 +179,8 @@ export async function notifySummarySubmitted({
   clientEmails: string[];
 }) {
   if (clientEmails.length === 0) return;
+  siteName = escapeHtml(siteName);
+  reportDate = escapeHtml(reportDate);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
@@ -213,6 +229,10 @@ export async function notifyReportRejected({
   reporterEmail: string;
   rejectionReason?: string;
 }) {
+  siteName = escapeHtml(siteName);
+  reportDate = escapeHtml(reportDate);
+  if (rejectionReason) rejectionReason = escapeHtml(rejectionReason);
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
   return sendEmail({
