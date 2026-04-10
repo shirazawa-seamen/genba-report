@@ -33,6 +33,11 @@ interface PhotoState {
   originalCaption?: string;    // 変更検出用
 }
 
+interface MaterialMeterInput {
+  material_name: string;
+  quantity: string;
+}
+
 const PHOTO_TYPE_OPTIONS = [
   { value: "before", label: "施工前" },
   { value: "during", label: "施工中" },
@@ -53,6 +58,7 @@ interface ReportEditFormProps {
     departure_time?: string;
     issues: string;
     admin_notes: string;
+    material_meters: MaterialMeterInput[];
   };
 }
 
@@ -82,6 +88,11 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
   const [captionDraft, setCaptionDraft] = useState("");
   const [arrivalTime, setArrivalTime] = useState(initialData.arrival_time ?? "");
   const [departureTime, setDepartureTime] = useState(initialData.departure_time ?? "");
+  const [materials, setMaterials] = useState<MaterialMeterInput[]>(
+    initialData.material_meters.length > 0
+      ? initialData.material_meters
+      : [{ material_name: "", quantity: "" }]
+  );
 
   // 表示する写真（削除フラグがないもの）
   const visiblePhotos = photos.filter((p) => !p.isDeleted);
@@ -232,6 +243,8 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
 
   return (
     <form action={handleSubmit} className="space-y-6">
+      <input type="hidden" name="materials_json" value={JSON.stringify(materials)} />
+      <input type="hidden" name="sibling_ids" value={JSON.stringify(siblingIds && siblingIds.length > 0 ? siblingIds : [reportId])} />
       {error && (
         <div className="rounded-xl bg-red-50 border border-red-200 p-4">
           <p className="text-[13px] text-red-400 flex items-center gap-2">
@@ -287,6 +300,70 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
       <div className="flex flex-col gap-1.5">
         <label className="text-[13px] font-medium text-gray-500">課題・懸念事項</label>
         <textarea name="issues" defaultValue={initialData.issues} rows={3} className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-[16px] text-gray-900 placeholder-gray-300 focus:outline-none focus:border-[#0EA5E9]/50 focus:ring-1 focus:ring-[#0EA5E9]/20 resize-none" />
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between">
+          <label className="text-[13px] font-medium text-gray-500">材料・メーター数</label>
+          <button
+            type="button"
+            onClick={() => setMaterials((prev) => [...prev, { material_name: "", quantity: "" }])}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 min-h-[36px] text-[13px] font-medium text-[#0EA5E9] hover:bg-cyan-50 transition-colors"
+          >
+            <ImagePlus size={14} />
+            行を追加
+          </button>
+        </div>
+        <div className="space-y-3">
+          {materials.map((material, index) => (
+            <div key={`edit-material-${index}`} className="grid grid-cols-[1fr_120px_auto] gap-2">
+              <input
+                type="text"
+                value={material.material_name}
+                onChange={(e) =>
+                  setMaterials((prev) =>
+                    prev.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, material_name: e.target.value } : item
+                    )
+                  )
+                }
+                placeholder="材料名"
+                className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[14px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50"
+              />
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.1"
+                  value={material.quantity}
+                  onChange={(e) =>
+                    setMaterials((prev) =>
+                      prev.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, quantity: e.target.value } : item
+                      )
+                    )
+                  }
+                  placeholder="0"
+                  className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 pr-8 text-[14px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-gray-400">m</span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setMaterials((prev) => {
+                    const next = prev.filter((_, itemIndex) => itemIndex !== index);
+                    return next.length > 0 ? next : [{ material_name: "", quantity: "" }];
+                  })
+                }
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-200 px-3 text-gray-400 hover:bg-gray-50 hover:text-red-400"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Photos Section */}

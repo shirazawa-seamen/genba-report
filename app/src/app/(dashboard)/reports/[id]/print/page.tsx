@@ -64,7 +64,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
   // Fetch materials
   const { data: materials } = await supabase
     .from("report_materials")
-    .select("material_name, product_number, quantity, unit, supplier")
+    .select("material_name, quantity, unit")
     .eq("report_id", id);
 
   const formatDate = (d: string) =>
@@ -223,17 +223,8 @@ export default async function ReportPrintPage({ params }: PageProps) {
                   <th className="border border-gray-400 px-3 py-2 text-left">
                     材料名
                   </th>
-                  <th className="border border-gray-400 px-3 py-2 text-left">
-                    品番
-                  </th>
                   <th className="border border-gray-400 px-3 py-2 text-right">
-                    数量
-                  </th>
-                  <th className="border border-gray-400 px-3 py-2 text-left">
-                    単位
-                  </th>
-                  <th className="border border-gray-400 px-3 py-2 text-left">
-                    仕入先
+                    メーター数
                   </th>
                 </tr>
               </thead>
@@ -243,17 +234,8 @@ export default async function ReportPrintPage({ params }: PageProps) {
                     <td className="border border-gray-400 px-3 py-1.5">
                       {m.material_name}
                     </td>
-                    <td className="border border-gray-400 px-3 py-1.5">
-                      {m.product_number ?? "—"}
-                    </td>
                     <td className="border border-gray-400 px-3 py-1.5 text-right">
-                      {m.quantity ?? "—"}
-                    </td>
-                    <td className="border border-gray-400 px-3 py-1.5">
-                      {m.unit ?? "—"}
-                    </td>
-                    <td className="border border-gray-400 px-3 py-1.5">
-                      {m.supplier ?? "—"}
+                      {m.quantity ?? "—"}{m.unit ?? "m"}
                     </td>
                   </tr>
                 ))}

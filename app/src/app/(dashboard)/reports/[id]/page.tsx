@@ -111,7 +111,6 @@ export default async function ReportDetailPage({ params }: PageProps) {
   const sites = Array.isArray(raw.sites) ? raw.sites[0] ?? null : raw.sites;
 
   // 同じ報告者・同じ日・同じ現場の兄弟レポートを取得（複数工程対応）
-  const siteId = (sites as SiteData & { id?: string } | null) ? undefined : undefined;
   let siblingReports: Array<{ id: string; progress_rate: number; processes: { id: string; name: string; category: string } | null }> = [];
   {
     // 現在のレポートのsite_idを取得
@@ -157,6 +156,11 @@ export default async function ReportDetailPage({ params }: PageProps) {
       }];
 
   const { data: photos } = await supabase.from("report_photos").select("id, storage_path, photo_type, caption, media_type").eq("report_id", id).order("created_at", { ascending: true });
+  const { data: materials } = await supabase
+    .from("report_materials")
+    .select("material_name, quantity, unit")
+    .eq("report_id", id)
+    .order("created_at", { ascending: true });
 
   const photosWithUrls = await Promise.all(
     ((photos as ReportPhoto[] | null) ?? []).map(async (p) => {
@@ -269,6 +273,22 @@ export default async function ReportDetailPage({ params }: PageProps) {
           <div className="p-4 rounded-2xl bg-red-50 border border-red-200">
             <div className="flex items-center gap-1.5 mb-2.5"><AlertTriangle size={14} className="text-red-400" /><span className="text-[12px] font-semibold text-red-400">報告記入欄</span></div>
             <p className="text-[14px] text-gray-600 whitespace-pre-wrap leading-relaxed">{raw.issues}</p>
+          </div>
+        </div>
+      )}
+
+      {materials && materials.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider mb-3">材料・メーター数</h3>
+          <div className="space-y-2">
+            {materials.map((material, index) => (
+              <div key={`material-${index}`} className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <span className="text-[14px] font-medium text-gray-700">{material.material_name}</span>
+                <span className="text-[14px] font-semibold text-[#0EA5E9]">
+                  {material.quantity ?? "—"}{material.unit ?? "m"}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -579,11 +579,7 @@ export async function uploadReportPhotos(
 // ---------------------------------------------------------------------------
 interface MaterialInput {
   material_name: string;
-  product_number: string;
   quantity: string;
-  unit: string;
-  supplier: string;
-  note: string;
 }
 
 interface SaveMaterialsResult {
@@ -616,12 +612,71 @@ export async function saveReportMaterials(
   const rows = validMaterials.map((m) => ({
     report_id: reportId,
     material_name: m.material_name.trim(),
-    product_number: m.product_number.trim() || null,
     quantity: m.quantity ? parseFloat(m.quantity) : null,
-    unit: m.unit.trim() || null,
-    supplier: m.supplier.trim() || null,
-    note: m.note.trim() || null,
+    unit: "m",
+    product_number: null,
+    supplier: null,
+    note: null,
   }));
+
+  const { error: insertError } = await supabase
+    .from("report_materials")
+    .insert(rows);
+
+  if (insertError) {
+    return { success: false, error: `材料保存エラー: ${insertError.message}` };
+  }
+
+  return { success: true, savedCount: rows.length };
+}
+
+export async function replaceReportMaterials(
+  reportIds: string[],
+  materials: MaterialInput[]
+): Promise<SaveMaterialsResult> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { success: false, error: "ログインが必要です" };
+  }
+
+  if (reportIds.length === 0) {
+    return { success: true, savedCount: 0 };
+  }
+
+  const validMaterials = materials.filter(
+    (m) => m.material_name.trim() && m.quantity.trim()
+  );
+
+  const { error: deleteError } = await supabase
+    .from("report_materials")
+    .delete()
+    .in("report_id", reportIds);
+
+  if (deleteError) {
+    return { success: false, error: `材料削除エラー: ${deleteError.message}` };
+  }
+
+  if (validMaterials.length === 0) {
+    return { success: true, savedCount: 0 };
+  }
+
+  const rows = reportIds.flatMap((reportId) =>
+    validMaterials.map((m) => ({
+      report_id: reportId,
+      material_name: m.material_name.trim(),
+      quantity: parseFloat(m.quantity),
+      unit: "m",
+      product_number: null,
+      supplier: null,
+      note: null,
+    }))
+  );
 
   const { error: insertError } = await supabase
     .from("report_materials")

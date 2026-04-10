@@ -7,6 +7,7 @@ import {
   deleteCreatedReports,
   fetchProcesses,
   fetchProcessChecklistItems,
+  replaceReportMaterials,
 } from "@/app/(dashboard)/reports/new/actions";
 import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
@@ -51,6 +52,7 @@ type ProcessOption = {
 type WorkerOption = { id: string; name: string; role: string };
 type PhotoItem = { file: File; photoType: string; caption: string; processId?: string; processName?: string };
 type ChecklistItem = { id: string; processId: string; name: string; isCompleted: boolean };
+type MaterialMeterItem = { material_name: string; quantity: string };
 type SelectedProcessItem = {
   processId: string;
   category: string;
@@ -71,6 +73,7 @@ interface FormData {
   arrivalTime: string;
   departureTime: string;
   issues: string;
+  materialMeters: MaterialMeterItem[];
   photos: PhotoItem[];
 }
 
@@ -150,6 +153,7 @@ const INITIAL_FORM_DATA: FormData = {
   arrivalTime: "",
   departureTime: "",
   issues: "",
+  materialMeters: [{ material_name: "", quantity: "" }],
   photos: [],
 };
 
@@ -717,6 +721,84 @@ function Step2({
         required
       />
 
+      <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-[14px] font-semibold text-gray-800">材料・メーター数</h3>
+            <p className="text-[12px] text-gray-400">材料名は自由入力、メーター数は数字で追加できます</p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              onChange(
+                "materialMeters",
+                JSON.stringify([...data.materialMeters, { material_name: "", quantity: "" }])
+              )
+            }
+          >
+            <Plus size={16} />
+            追加
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          {data.materialMeters.map((item, index) => (
+            <div key={`material-${index}`} className="grid grid-cols-[1fr_120px_auto] gap-2">
+              <input
+                type="text"
+                value={item.material_name}
+                onChange={(event) => {
+                  const next = data.materialMeters.map((material, materialIndex) =>
+                    materialIndex === index
+                      ? { ...material, material_name: event.target.value }
+                      : material
+                  );
+                  onChange("materialMeters", JSON.stringify(next));
+                }}
+                placeholder="材料名"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[14px] text-gray-700 focus:border-[#0EA5E9]/50 focus:outline-none"
+              />
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.1"
+                  value={item.quantity}
+                  onChange={(event) => {
+                    const next = data.materialMeters.map((material, materialIndex) =>
+                      materialIndex === index
+                        ? { ...material, quantity: event.target.value }
+                        : material
+                    );
+                    onChange("materialMeters", JSON.stringify(next));
+                  }}
+                  placeholder="0"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 pr-8 text-[14px] text-gray-700 focus:border-[#0EA5E9]/50 focus:outline-none"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-gray-400">m</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = data.materialMeters.filter((_, materialIndex) => materialIndex !== index);
+                  onChange(
+                    "materialMeters",
+                    JSON.stringify(next.length > 0 ? next : [{ material_name: "", quantity: "" }])
+                  );
+                }}
+                className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-200 px-3 text-gray-400 hover:bg-gray-50 hover:text-red-400"
+                aria-label="材料行を削除"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -1080,6 +1162,24 @@ function Step4({ data }: { data: FormData }) {
         </p>
       </div>
 
+      {data.materialMeters.some((item) => item.material_name.trim() || item.quantity.trim()) ? (
+        <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="text-[12px] font-semibold uppercase tracking-wider text-gray-400">
+            材料・メーター数
+          </h3>
+          <div className="space-y-2">
+            {data.materialMeters
+              .filter((item) => item.material_name.trim() || item.quantity.trim())
+              .map((item, index) => (
+                <div key={`preview-material-${index}`} className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2">
+                  <span className="text-[13px] font-medium text-gray-700">{item.material_name || "未入力"}</span>
+                  <span className="text-[13px] font-semibold text-[#0EA5E9]">{item.quantity || "0"}m</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      ) : null}
+
       {data.issues ? (
         <div className="space-y-2 rounded-xl border border-red-200 bg-red-50 p-4">
           <div className="flex items-center gap-1.5">
@@ -1211,7 +1311,13 @@ export function DailyReportForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleChange = useCallback((field: keyof FormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [field]:
+        field === "materialMeters"
+          ? (JSON.parse(value) as MaterialMeterItem[])
+          : value,
+    }));
     setErrors((prev) => {
       if (prev[field as keyof FormErrors]) {
         return { ...prev, [field]: undefined };
@@ -1347,6 +1453,16 @@ export function DailyReportForm({
 
       const targetReportIds = result.reportIds ?? (result.reportId ? [result.reportId] : []);
 
+      const materialsResult = await replaceReportMaterials(
+        targetReportIds,
+        formData.materialMeters
+      );
+      if (!materialsResult.success) {
+        await deleteCreatedReports(targetReportIds);
+        setSubmitError(materialsResult.error || "材料の保存に失敗しました");
+        return;
+      }
+
       // 写真をクライアントから直接アップロード
       if (formData.photos.length > 0 && targetReportIds.length > 0) {
         const supabase = createBrowserClient();
@@ -1435,6 +1551,16 @@ export function DailyReportForm({
         }
 
         const targetReportIds = result.reportIds ?? (result.reportId ? [result.reportId] : []);
+
+        const materialsResult = await replaceReportMaterials(
+          targetReportIds,
+          formData.materialMeters
+        );
+        if (!materialsResult.success) {
+          await deleteCreatedReports(targetReportIds);
+          setSubmitError(materialsResult.error || "材料の保存に失敗しました");
+          return;
+        }
 
         // 写真をクライアントから直接Supabase Storageにアップロード
         if (formData.photos.length > 0 && targetReportIds.length > 0) {

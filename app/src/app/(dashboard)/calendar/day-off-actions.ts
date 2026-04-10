@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
 // ---------------------------------------------------------------------------
@@ -41,7 +42,8 @@ export async function getDaysOff(year: number, month: number): Promise<{
   const userIds = [...new Set((data ?? []).map((d) => d.user_id))];
   const nameMap = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    const adminClient = createAdminClient();
+    const { data: profiles } = await adminClient
       .from("profiles")
       .select("id, full_name")
       .in("id", userIds);

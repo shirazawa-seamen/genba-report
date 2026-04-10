@@ -1,10 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { canAccessReport } from "@/lib/siteAccess";
 import { syncReportPhotoToStorage } from "@/app/(dashboard)/storage/actions";
+import { replaceReportMaterials } from "@/app/(dashboard)/reports/new/actions";
 
 interface UpdateReportResult {
   success: boolean;
@@ -31,7 +31,6 @@ export async function updateReport(
     .select("role")
     .eq("id", user.id)
     .single();
-
   const isAdminOrManager = profile?.role === "admin" || profile?.role === "manager";
 
   // 報告の reporter_id を確認
@@ -62,6 +61,8 @@ export async function updateReport(
   const departureTime = formData.get("departure_time") as string;
   const issues = formData.get("issues") as string;
   const adminNotes = formData.get("admin_notes") as string;
+  const materialsJson = formData.get("materials_json") as string | null;
+  const siblingIdsJson = formData.get("sibling_ids") as string | null;
 
   const workersArray = workers
     ? workers
@@ -90,6 +91,41 @@ export async function updateReport(
 
   if (updateError) {
     return { success: false, error: `更新エラー: ${updateError.message}` };
+  }
+
+  const targetReportIds = (() => {
+    if (!siblingIdsJson) return [reportId];
+    try {
+      const parsed = JSON.parse(siblingIdsJson);
+      if (Array.isArray(parsed) && parsed.every((id) => typeof id === "string")) {
+        return parsed.length > 0 ? parsed : [reportId];
+      }
+    } catch {
+      // ignore invalid payload and fall back to current report
+    }
+    return [reportId];
+  })();
+
+  if (materialsJson !== null) {
+    try {
+      const parsed = JSON.parse(materialsJson);
+      if (Array.isArray(parsed)) {
+        const materialsResult = await replaceReportMaterials(
+          targetReportIds,
+          parsed
+            .filter((item) => item && typeof item === "object")
+            .map((item) => ({
+              material_name: String((item as Record<string, unknown>).material_name ?? ""),
+              quantity: String((item as Record<string, unknown>).quantity ?? ""),
+            }))
+        );
+        if (!materialsResult.success) {
+          return { success: false, error: materialsResult.error ?? "材料の更新に失敗しました" };
+        }
+      }
+    } catch {
+      return { success: false, error: "材料データの形式が不正です" };
+    }
   }
 
   revalidatePath("/reports");
