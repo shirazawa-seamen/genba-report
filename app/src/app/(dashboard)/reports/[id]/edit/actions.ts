@@ -117,6 +117,7 @@ export async function updateReport(
             .map((item) => ({
               material_name: String((item as Record<string, unknown>).material_name ?? ""),
               quantity: String((item as Record<string, unknown>).quantity ?? ""),
+              unit: String((item as Record<string, unknown>).unit ?? ""),
             }))
         );
         if (!materialsResult.success) {

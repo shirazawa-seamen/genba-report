@@ -88,7 +88,7 @@ export default async function ReportEditPage({ params }: PageProps) {
 
   const { data: materials } = await supabase
     .from("report_materials")
-    .select("material_name, quantity")
+    .select("material_name, quantity, unit")
     .eq("report_id", id)
     .order("created_at", { ascending: true });
 
@@ -155,6 +155,7 @@ export default async function ReportEditPage({ params }: PageProps) {
             material_meters: (materials ?? []).map((material) => ({
               material_name: material.material_name ?? "",
               quantity: material.quantity != null ? String(material.quantity) : "",
+              unit: material.unit ?? "",
             })),
           }}
         />

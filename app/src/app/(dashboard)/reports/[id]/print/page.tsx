@@ -224,7 +224,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
                     材料名
                   </th>
                   <th className="border border-gray-400 px-3 py-2 text-right">
-                    メーター数
+                    数量
                   </th>
                 </tr>
               </thead>
@@ -235,7 +235,7 @@ export default async function ReportPrintPage({ params }: PageProps) {
                       {m.material_name}
                     </td>
                     <td className="border border-gray-400 px-3 py-1.5 text-right">
-                      {m.quantity ?? "—"}{m.unit ?? "m"}
+                      {m.quantity ?? "—"}{m.unit ?? ""}
                     </td>
                   </tr>
                 ))}

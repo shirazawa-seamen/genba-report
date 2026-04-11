@@ -279,13 +279,13 @@ export default async function ReportDetailPage({ params }: PageProps) {
 
       {materials && materials.length > 0 && (
         <div className="mb-8">
-          <h3 className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider mb-3">材料・メーター数</h3>
+          <h3 className="text-[12px] font-semibold text-gray-400 uppercase tracking-wider mb-3">材料・数量</h3>
           <div className="space-y-2">
             {materials.map((material, index) => (
               <div key={`material-${index}`} className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3">
                 <span className="text-[14px] font-medium text-gray-700">{material.material_name}</span>
                 <span className="text-[14px] font-semibold text-[#0EA5E9]">
-                  {material.quantity ?? "—"}{material.unit ?? "m"}
+                  {material.quantity ?? "—"}{material.unit ?? ""}
                 </span>
               </div>
             ))}

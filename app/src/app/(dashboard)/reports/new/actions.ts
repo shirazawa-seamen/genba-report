@@ -580,6 +580,7 @@ export async function uploadReportPhotos(
 interface MaterialInput {
   material_name: string;
   quantity: string;
+  unit?: string;
 }
 
 interface SaveMaterialsResult {
@@ -613,7 +614,7 @@ export async function saveReportMaterials(
     report_id: reportId,
     material_name: m.material_name.trim(),
     quantity: m.quantity ? parseFloat(m.quantity) : null,
-    unit: "m",
+    unit: m.unit?.trim() || null,
     product_number: null,
     supplier: null,
     note: null,
@@ -671,7 +672,7 @@ export async function replaceReportMaterials(
       report_id: reportId,
       material_name: m.material_name.trim(),
       quantity: parseFloat(m.quantity),
-      unit: "m",
+      unit: m.unit?.trim() || null,
       product_number: null,
       supplier: null,
       note: null,

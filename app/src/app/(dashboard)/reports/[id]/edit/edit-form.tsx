@@ -36,6 +36,7 @@ interface PhotoState {
 interface MaterialMeterInput {
   material_name: string;
   quantity: string;
+  unit: string;
 }
 
 const PHOTO_TYPE_OPTIONS = [
@@ -91,7 +92,7 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
   const [materials, setMaterials] = useState<MaterialMeterInput[]>(
     initialData.material_meters.length > 0
       ? initialData.material_meters
-      : [{ material_name: "", quantity: "" }]
+      : [{ material_name: "", quantity: "", unit: "" }]
   );
 
   // 表示する写真（削除フラグがないもの）
@@ -304,10 +305,10 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
 
       <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4">
         <div className="flex items-center justify-between">
-          <label className="text-[13px] font-medium text-gray-500">材料・メーター数</label>
+          <label className="text-[13px] font-medium text-gray-500">材料・数量</label>
           <button
             type="button"
-            onClick={() => setMaterials((prev) => [...prev, { material_name: "", quantity: "" }])}
+            onClick={() => setMaterials((prev) => [...prev, { material_name: "", quantity: "", unit: "" }])}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 min-h-[36px] text-[13px] font-medium text-[#0EA5E9] hover:bg-cyan-50 transition-colors"
           >
             <ImagePlus size={14} />
@@ -316,7 +317,7 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
         </div>
         <div className="space-y-3">
           {materials.map((material, index) => (
-            <div key={`edit-material-${index}`} className="grid grid-cols-[1fr_120px_auto] gap-2">
+            <div key={`edit-material-${index}`} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_100px_88px_auto]">
               <input
                 type="text"
                 value={material.material_name}
@@ -330,31 +331,41 @@ export function ReportEditForm({ reportId, isDraft, siblingIds, existingPhotos =
                 placeholder="材料名"
                 className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[14px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50"
               />
-              <div className="relative">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.1"
-                  value={material.quantity}
-                  onChange={(e) =>
-                    setMaterials((prev) =>
-                      prev.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, quantity: e.target.value } : item
-                      )
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                value={material.quantity}
+                onChange={(e) =>
+                  setMaterials((prev) =>
+                    prev.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, quantity: e.target.value } : item
                     )
-                  }
-                  placeholder="0"
-                  className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 pr-8 text-[14px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50"
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-gray-400">m</span>
-              </div>
+                  )
+                }
+                placeholder="数量"
+                className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-[14px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50"
+              />
+              <input
+                type="text"
+                value={material.unit}
+                onChange={(e) =>
+                  setMaterials((prev) =>
+                    prev.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, unit: e.target.value } : item
+                    )
+                  )
+                }
+                placeholder="単位"
+                className="w-full min-h-[44px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-[14px] text-gray-900 focus:outline-none focus:border-[#0EA5E9]/50"
+              />
               <button
                 type="button"
                 onClick={() =>
                   setMaterials((prev) => {
                     const next = prev.filter((_, itemIndex) => itemIndex !== index);
-                    return next.length > 0 ? next : [{ material_name: "", quantity: "" }];
+                    return next.length > 0 ? next : [{ material_name: "", quantity: "", unit: "" }];
                   })
                 }
                 className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-200 px-3 text-gray-400 hover:bg-gray-50 hover:text-red-400"
