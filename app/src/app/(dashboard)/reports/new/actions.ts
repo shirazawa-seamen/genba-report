@@ -421,6 +421,59 @@ export async function createDailyReport(
 }
 
 // ---------------------------------------------------------------------------
+// 下書き報告の任意削除（報告者本人のみ・下書き状態のみ）
+// ---------------------------------------------------------------------------
+export async function deleteDraftReport(
+  reportIds: string[]
+): Promise<{ success: boolean; error?: string }> {
+  if (reportIds.length === 0) return { success: false, error: "対象がありません" };
+
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) return { success: false, error: "ログインが必要です" };
+
+  // 対象レポートの状態・所有者を検証
+  const { data: reports, error: fetchError } = await supabase
+    .from("daily_reports")
+    .select("id, reporter_id, approval_status")
+    .in("id", reportIds);
+
+  if (fetchError) return { success: false, error: `取得エラー: ${fetchError.message}` };
+  if (!reports || reports.length === 0) return { success: false, error: "報告が見つかりません" };
+
+  const invalid = reports.find(
+    (r) => r.reporter_id !== user.id || (r.approval_status ?? "draft") !== "draft"
+  );
+  if (invalid) {
+    return { success: false, error: "下書き状態の自分の報告のみ削除できます" };
+  }
+
+  // 添付写真をストレージから削除
+  const { data: photos } = await supabase
+    .from("report_photos")
+    .select("storage_path")
+    .in("report_id", reportIds);
+  const paths = (photos ?? []).map((p) => p.storage_path).filter(Boolean);
+  if (paths.length > 0) {
+    await supabase.storage.from("report-photos").remove(paths);
+  }
+
+  const { error: deleteError } = await supabase
+    .from("daily_reports")
+    .delete()
+    .in("id", reportIds)
+    .eq("reporter_id", user.id)
+    .eq("approval_status", "draft");
+
+  if (deleteError) {
+    return { success: false, error: `削除エラー: ${deleteError.message}` };
+  }
+
+  revalidatePath("/reports");
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
 // 報告の削除（写真アップロード失敗時のロールバック用）
 // ---------------------------------------------------------------------------
 export async function deleteCreatedReports(reportIds: string[]) {

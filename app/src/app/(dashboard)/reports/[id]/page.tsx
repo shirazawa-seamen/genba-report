@@ -18,7 +18,7 @@ import {
   Edit3,
   Printer,
 } from "lucide-react";
-import { ApprovalButtons, ResubmitButton, SubmitDraftButton } from "./approval-buttons";
+import { ApprovalButtons, ResubmitButton, SubmitDraftButton, DeleteDraftButton } from "./approval-buttons";
 import { canAccessReport } from "@/lib/siteAccess";
 import { PhotoGallery, type PhotoItem } from "@/components/ui/PhotoGallery";
 import { getActivityLogs } from "@/lib/activity-log";
@@ -317,6 +317,7 @@ export default async function ReportDetailPage({ params }: PageProps) {
           <div className="flex flex-wrap gap-3">
             <Link href={`/reports/${raw.id}/edit`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white min-h-[44px] px-4 text-[14px] font-medium text-amber-500 hover:bg-amber-50 transition-colors"><Edit3 size={16} />編集する</Link>
             <SubmitDraftButton reportId={raw.id} siblingIds={siblingReports.map((s) => s.id)} />
+            <DeleteDraftButton reportId={raw.id} siblingIds={siblingReports.map((s) => s.id)} />
           </div>
         </div>
       )}

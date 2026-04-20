@@ -777,6 +777,62 @@ export async function deleteSummaryPhoto(photoId: string, siteId: string) {
 }
 
 // ---------------------------------------------------------------------------
+// 2次報告の下書きを削除（下書き状態のみ削除可能）
+// ---------------------------------------------------------------------------
+export async function deleteClientReportSummaryDraft(summaryId: string, siteId: string) {
+  const context = await requireManager();
+  if (!context.supabase || !context.user) {
+    return { success: false, error: context.error };
+  }
+
+  if (!(await canAccessSite(context.user.id, siteId))) {
+    return { success: false, error: "この現場にアクセスする権限がありません" };
+  }
+
+  const { data: summary, error: fetchError } = await context.supabase
+    .from("client_report_summaries")
+    .select("id, status")
+    .eq("id", summaryId)
+    .maybeSingle();
+
+  if (fetchError || !summary) {
+    return { success: false, error: "下書きが見つかりません" };
+  }
+  if (summary.status !== "draft") {
+    return { success: false, error: "下書き状態の報告のみ削除できます" };
+  }
+
+  // 直接アップロードされた写真（summaries/配下）はストレージから削除
+  const { data: ownPhotos } = await context.supabase
+    .from("summary_photos")
+    .select("storage_path, source_report_id")
+    .eq("summary_id", summaryId);
+  const pathsToRemove = (ownPhotos ?? [])
+    .filter((p) => !p.source_report_id && p.storage_path?.startsWith("summaries/"))
+    .map((p) => p.storage_path);
+  if (pathsToRemove.length > 0) {
+    await context.supabase.storage.from("report-photos").remove(pathsToRemove);
+  }
+
+  // summary_photos は FK カスケード想定。念のため明示削除。
+  await context.supabase.from("summary_photos").delete().eq("summary_id", summaryId);
+
+  const { error } = await context.supabase
+    .from("client_report_summaries")
+    .delete()
+    .eq("id", summaryId)
+    .eq("status", "draft");
+
+  if (error) {
+    return { success: false, error: `削除に失敗しました: ${error.message}` };
+  }
+
+  revalidatePath(`/sites/${siteId}/reports`);
+  revalidatePath("/manager/summaries");
+  return { success: true as const };
+}
+
+// ---------------------------------------------------------------------------
 // 2次報告の写真一覧を取得（signed URL付き）
 // ---------------------------------------------------------------------------
 export async function getSummaryPhotos(summaryId: string) {

@@ -4,8 +4,8 @@ import React, { useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { approveReport, rejectReport, resubmitReport } from "./actions";
-import { submitDraftReport } from "@/app/(dashboard)/reports/new/actions";
-import { CheckCircle2, XCircle, Loader2, AlertTriangle, Shield, ArrowRight, RotateCcw, Send } from "lucide-react";
+import { submitDraftReport, deleteDraftReport } from "@/app/(dashboard)/reports/new/actions";
+import { CheckCircle2, XCircle, Loader2, AlertTriangle, Shield, ArrowRight, RotateCcw, Send, Trash2 } from "lucide-react";
 
 interface ApprovalButtonsProps {
   reportId: string;
@@ -341,6 +341,76 @@ export function SubmitDraftButton({ reportId, siblingIds }: { reportId: string; 
             </button>
             <button onClick={handleSubmit} disabled={isPending} className="flex-1 min-h-[40px] rounded-xl bg-[#0EA5E9] text-[13px] font-bold text-white hover:bg-[#0284C7] disabled:opacity-50 transition-colors">
               {isPending ? "提出中..." : "提出する"}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="w-full mt-2 rounded-xl bg-red-50 border border-red-200 p-3">
+          <p className="text-[13px] text-red-400 flex items-center gap-2">
+            <AlertTriangle size={14} />
+            {error}
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 下書きを削除するボタン
+// ---------------------------------------------------------------------------
+export function DeleteDraftButton({ reportId, siblingIds }: { reportId: string; siblingIds: string[] }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleDelete = () => {
+    setError(null);
+    setShowConfirm(false);
+    startTransition(async () => {
+      const ids = siblingIds.length > 0 ? siblingIds : [reportId];
+      const result = await deleteDraftReport(ids);
+      if (result.success) {
+        router.push("/reports");
+        router.refresh();
+      } else {
+        setError(result.error ?? "削除に失敗しました");
+      }
+    });
+  };
+
+  return (
+    <>
+      {!showConfirm ? (
+        <button
+          onClick={() => setShowConfirm(true)}
+          disabled={isPending}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white min-h-[44px] px-4 text-[14px] font-medium text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+        >
+          <Trash2 size={16} />
+          削除する
+        </button>
+      ) : (
+        <div className="w-full rounded-xl border border-red-200 bg-red-50/50 p-4">
+          <p className="text-[13px] font-medium text-gray-700 mb-2">この下書きを削除しますか？</p>
+          <p className="text-[12px] text-gray-400 mb-3">
+            関連する写真も含めて完全に削除され、元に戻せません。
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowConfirm(false)}
+              className="flex-1 min-h-[40px] rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-100 transition-colors"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isPending}
+              className="flex-1 min-h-[40px] rounded-xl bg-red-500 text-[13px] font-bold text-white hover:bg-red-600 disabled:opacity-50 transition-colors"
+            >
+              {isPending ? "削除中..." : "削除する"}
             </button>
           </div>
         </div>

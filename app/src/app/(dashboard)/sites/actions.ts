@@ -816,6 +816,18 @@ export async function getSiteDocuments(siteId: string): Promise<{
         if (s.signedUrl && s.path) urlMap.set(s.path, s.signedUrl);
       }
     }
+    // site-documents で取得できなかったパスは report-photos を試す
+    const missing = imagePaths.filter((p) => !urlMap.has(p));
+    if (missing.length > 0) {
+      const { data: signed2 } = await supabase.storage
+        .from("report-photos")
+        .createSignedUrls(missing, 3600);
+      if (signed2) {
+        for (const s of signed2) {
+          if (s.signedUrl && s.path) urlMap.set(s.path, s.signedUrl);
+        }
+      }
+    }
   }
 
   const documents = data.map((d) => ({
@@ -1020,15 +1032,28 @@ export async function getDownloadUrl(
     return { success: false, error: "認証エラー" };
   }
 
+  // site-documents バケットを優先して試行、失敗したら report-photos も試す
+  // （過去に報告写真として report-photos バケットへアップロードされたファイルがあるため）
   const { data, error } = await supabase.storage
     .from("site-documents")
-    .createSignedUrl(storagePath, 3600, { download: false }); // 1時間有効、インライン表示
+    .createSignedUrl(storagePath, 3600, { download: false });
 
-  if (error || !data) {
-    return { success: false, error: "ダウンロードURLの生成に失敗しました" };
+  if (!error && data?.signedUrl) {
+    return { success: true, url: data.signedUrl };
   }
 
-  return { success: true, url: data.signedUrl };
+  const { data: fallback, error: fallbackError } = await supabase.storage
+    .from("report-photos")
+    .createSignedUrl(storagePath, 3600, { download: false });
+
+  if (!fallbackError && fallback?.signedUrl) {
+    return { success: true, url: fallback.signedUrl };
+  }
+
+  return {
+    success: false,
+    error: `ダウンロードURLの生成に失敗しました: ${error?.message ?? fallbackError?.message ?? "不明なエラー"}`,
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -28,7 +28,9 @@ import {
   getSummaryPhotos,
   uploadSummaryPhoto,
   deleteSummaryPhoto,
+  deleteClientReportSummaryDraft,
 } from "@/app/(dashboard)/sites/[siteId]/reports/actions";
+import { Trash2 } from "lucide-react";
 
 export interface SummaryItem {
   id: string | null; // null = 未生成
@@ -667,6 +669,31 @@ function SummaryEditModal({
         {/* フッターアクション */}
         {isEditable && (
           <div className="flex items-center gap-2 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-4 border-t border-gray-100 shrink-0 bg-gray-50/50">
+            {summaryId && status === "draft" && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!summaryId) return;
+                  if (!confirm("この下書きを削除しますか？この操作は取り消せません。")) return;
+                  setMessage(null);
+                  startTransition(async () => {
+                    const result = await deleteClientReportSummaryDraft(summaryId, item.siteId);
+                    if (!result.success) {
+                      setMessage(result.error || "削除に失敗しました");
+                      return;
+                    }
+                    router.refresh();
+                    onClose();
+                  });
+                }}
+                disabled={isPending}
+                className="inline-flex min-h-[40px] items-center gap-1 rounded-xl border border-red-200 bg-white px-3 text-[12px] font-medium text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                aria-label="下書きを削除"
+              >
+                <Trash2 size={14} />
+                削除
+              </button>
+            )}
             <button
               type="button"
               onClick={handleSaveDraft}

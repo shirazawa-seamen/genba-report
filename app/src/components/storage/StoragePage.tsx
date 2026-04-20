@@ -52,6 +52,7 @@ import {
   getDownloadUrl,
   getSiteMembers,
 } from "@/app/(dashboard)/sites/actions";
+import { ZoomablePreview } from "./ZoomablePreview";
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPE_OPTIONS, ROLE_LABELS } from "@/lib/constants";
 import type { StorageFolder, UserRole, DocumentType } from "@/lib/types";
 
@@ -215,6 +216,8 @@ export function StoragePage({
     if (result.success && result.url) {
       setPreviewUrl(result.url);
       setPreviewFileName(doc.file_name);
+    } else {
+      alert(result.error ?? "プレビューURLの生成に失敗しました");
     }
   };
 
@@ -679,21 +682,12 @@ export function StoragePage({
                 <X size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-50">
-              {isImageFile(previewFileName) ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewUrl}
-                  alt={previewFileName}
-                  className="max-w-full max-h-[70vh] object-contain rounded-lg"
-                />
-              ) : (
-                <iframe
-                  src={previewUrl}
-                  className="w-full h-[70vh] rounded-lg"
-                  title={previewFileName}
-                />
-              )}
+            <div className="flex-1 overflow-hidden p-4 bg-gray-50">
+              <ZoomablePreview
+                src={previewUrl}
+                alt={previewFileName}
+                kind={isImageFile(previewFileName) ? "image" : "pdf"}
+              />
             </div>
           </div>
         </div>

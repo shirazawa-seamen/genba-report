@@ -388,6 +388,17 @@ export async function getFolderContents(folderId: string): Promise<{
         if (s.signedUrl && s.path) urlMap.set(s.path, s.signedUrl);
       }
     }
+    const missing = imagePaths.filter((p) => !urlMap.has(p));
+    if (missing.length > 0) {
+      const { data: signed2 } = await supabase.storage
+        .from("report-photos")
+        .createSignedUrls(missing, 3600);
+      if (signed2) {
+        for (const s of signed2) {
+          if (s.signedUrl && s.path) urlMap.set(s.path, s.signedUrl);
+        }
+      }
+    }
   }
 
   const documents = (docsData ?? []).map((d) => ({
