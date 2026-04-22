@@ -22,10 +22,6 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
   const txRef = useRef(0);
   const tyRef = useRef(0);
 
-  const touches = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const pinchStart = useRef<{ dist: number; scale: number } | null>(null);
-  const panStart = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
-
   const reset = useCallback(() => {
     scaleRef.current = 1;
     txRef.current = 0;
@@ -61,73 +57,88 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
     []
   );
 
-  // ── ネイティブタッチ/ポインターイベント (passive:false で preventDefault 可) ──
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const onTouchStart = (e: TouchEvent) => {
-      e.preventDefault();
-      Array.from(e.changedTouches).forEach((t) => {
-        touches.current.set(t.identifier, { x: t.clientX, y: t.clientY });
-      });
-      if (touches.current.size === 2) {
-        const [a, b] = Array.from(touches.current.values());
-        const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        pinchStart.current = { dist, scale: scaleRef.current };
-        panStart.current = null;
-      } else if (touches.current.size === 1 && scaleRef.current > 1) {
-        const t = e.changedTouches[0];
-        panStart.current = { x: t.clientX, y: t.clientY, tx: txRef.current, ty: tyRef.current };
+    // ── PointerEvent + setPointerCapture (iOS PWA / WKWebView 対応) ──
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinchInitDist = 0;
+    let pinchInitScale = 1;
+    let pinchCX = 0;
+    let pinchCY = 0;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panStartTx = 0;
+    let panStartTy = 0;
+
+    const onPointerDown = (e: PointerEvent) => {
+      try { el.setPointerCapture(e.pointerId); } catch {}
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 2) {
+        const pts = Array.from(pointers.values());
+        pinchInitDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        pinchInitScale = scaleRef.current;
+        const rect = el.getBoundingClientRect();
+        pinchCX = (pts[0].x + pts[1].x) / 2 - rect.left;
+        pinchCY = (pts[0].y + pts[1].y) / 2 - rect.top;
+        panStartX = 0;
+      } else if (pointers.size === 1 && scaleRef.current > 1) {
+        panStartX = e.clientX;
+        panStartY = e.clientY;
+        panStartTx = txRef.current;
+        panStartTy = tyRef.current;
+        pinchInitDist = 0;
       }
     };
 
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      Array.from(e.changedTouches).forEach((t) => {
-        touches.current.set(t.identifier, { x: t.clientX, y: t.clientY });
-      });
-      if (touches.current.size === 2 && pinchStart.current) {
-        const [a, b] = Array.from(touches.current.values());
-        const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        const next = pinchStart.current.scale * (dist / pinchStart.current.dist);
-        const rect = el.getBoundingClientRect();
-        const cx = (a.x + b.x) / 2 - rect.left;
-        const cy = (a.y + b.y) / 2 - rect.top;
-        applyScale(next, cx, cy);
-      } else if (touches.current.size === 1 && panStart.current) {
-        const t = e.changedTouches[0];
-        txRef.current = panStart.current.tx + (t.clientX - panStart.current.x);
-        tyRef.current = panStart.current.ty + (t.clientY - panStart.current.y);
+    const onPointerMove = (e: PointerEvent) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pointers.size === 2 && pinchInitDist > 0) {
+        const pts = Array.from(pointers.values());
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        applyScale(pinchInitScale * (dist / pinchInitDist), pinchCX, pinchCY);
+      } else if (pointers.size === 1 && panStartX !== 0) {
+        txRef.current = panStartTx + (e.clientX - panStartX);
+        tyRef.current = panStartTy + (e.clientY - panStartY);
         setTx(txRef.current);
         setTy(tyRef.current);
       }
     };
 
-    const onTouchEnd = (e: TouchEvent) => {
-      Array.from(e.changedTouches).forEach((t) => {
-        touches.current.delete(t.identifier);
-      });
-      if (touches.current.size < 2) pinchStart.current = null;
-      if (touches.current.size === 0) panStart.current = null;
+    const onPointerUp = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinchInitDist = 0;
+      if (pointers.size === 0) { panStartX = 0; }
+      if (pointers.size === 1 && scaleRef.current > 1) {
+        const remaining = Array.from(pointers.values())[0];
+        panStartX = remaining.x;
+        panStartY = remaining.y;
+        panStartTx = txRef.current;
+        panStartTy = tyRef.current;
+      }
     };
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = el.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      applyScale(scaleRef.current * (1 + -e.deltaY * 0.01), x, y);
+      applyScale(scaleRef.current * (1 + -e.deltaY * 0.01), e.clientX - rect.left, e.clientY - rect.top);
     };
 
-    el.addEventListener("touchstart", onTouchStart, { passive: false });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("touchend", onTouchEnd, { passive: false });
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerUp);
     el.addEventListener("wheel", onWheel, { passive: false });
+
     return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerUp);
       el.removeEventListener("wheel", onWheel);
     };
   }, [applyScale]);
@@ -144,10 +155,7 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
       <div
         ref={containerRef}
         className="w-full h-full flex items-center justify-center select-none"
-        style={{
-          touchAction: "none",
-          cursor: scale > 1 ? "grab" : "default",
-        }}
+        style={{ touchAction: "none", cursor: scale > 1 ? "grab" : "default" }}
         onDoubleClick={onDoubleClick}
       >
         {kind === "image" ? (
@@ -163,7 +171,7 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
             }}
           />
         ) : (
-          // PDF: iframeの上に透明オーバーレイを重ねてタッチを捕捉
+          // PDF: iframeの上に透明オーバーレイを重ねてポインターを捕捉
           <div className="relative w-full h-full">
             <iframe
               src={src}
@@ -172,14 +180,11 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
               style={{
                 transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
                 transformOrigin: "center center",
-                pointerEvents: scale > 1 ? "none" : "auto",
+                pointerEvents: "none",
               }}
             />
-            {/* タッチ捕捉用オーバーレイ (scale>1 or ピンチ操作中) */}
-            <div
-              className="absolute inset-0"
-              style={{ pointerEvents: scale > 1 ? "auto" : "none" }}
-            />
+            {/* ポインター捕捉用オーバーレイ */}
+            <div className="absolute inset-0" style={{ touchAction: "none" }} />
           </div>
         )}
       </div>
