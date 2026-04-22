@@ -108,6 +108,8 @@ export default async function ReportDetailPage({ params }: PageProps) {
     (user && raw.reporter_id === user.id) || userRole === "admin" || userRole === "manager"
   );
 
+  const canDelete = (user && raw.reporter_id === user.id) || userRole === "admin" || userRole === "manager";
+
   const sites = Array.isArray(raw.sites) ? raw.sites[0] ?? null : raw.sites;
 
   // 同じ報告者・同じ日・同じ現場の兄弟レポートを取得（複数工程対応）
@@ -349,6 +351,13 @@ export default async function ReportDetailPage({ params }: PageProps) {
           <p>{raw.approval_status === "rejected" ? "差戻し" : "承認"}日時: {new Date(raw.approved_at).toLocaleString("ja-JP")}</p>
         )}
       </div>
+
+      {/* ── 削除（全ステータス・報告者本人またはマネージャー） ── */}
+      {canDelete && status !== "draft" && (
+        <div className="mt-8 pt-6 border-t border-gray-100">
+          <DeleteDraftButton reportId={raw.id} siblingIds={siblingReports.map((s) => s.id)} />
+        </div>
+      )}
     </div>
   );
 }

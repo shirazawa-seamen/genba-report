@@ -18,19 +18,24 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
 
-  const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const scaleRef = useRef(1);
+  const txRef = useRef(0);
+  const tyRef = useRef(0);
+
+  const touches = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchStart = useRef<{ dist: number; scale: number } | null>(null);
   const panStart = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
 
   const reset = useCallback(() => {
+    scaleRef.current = 1;
+    txRef.current = 0;
+    tyRef.current = 0;
     setScale(1);
     setTx(0);
     setTy(0);
   }, []);
 
-  useEffect(() => {
-    reset();
-  }, [src, reset]);
+  useEffect(() => { reset(); }, [src, reset]);
 
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -41,75 +46,97 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
       const rect = el.getBoundingClientRect();
       const ox = (originX ?? rect.width / 2) - rect.width / 2;
       const oy = (originY ?? rect.height / 2) - rect.height / 2;
-      setScale((prev) => {
-        const clamped = clamp(next, MIN_SCALE, MAX_SCALE);
-        const ratio = clamped / prev;
-        setTx((t) => (t - ox) * ratio + ox);
-        setTy((t) => (t - oy) * ratio + oy);
-        if (clamped === 1) {
-          setTx(0);
-          setTy(0);
-        }
-        return clamped;
-      });
+      const prev = scaleRef.current;
+      const clamped = clamp(next, MIN_SCALE, MAX_SCALE);
+      const ratio = clamped / prev;
+      const newTx = clamped === 1 ? 0 : (txRef.current - ox) * ratio + ox;
+      const newTy = clamped === 1 ? 0 : (tyRef.current - oy) * ratio + oy;
+      scaleRef.current = clamped;
+      txRef.current = newTx;
+      tyRef.current = newTy;
+      setScale(clamped);
+      setTx(newTx);
+      setTy(newTy);
     },
     []
   );
 
-  const onWheel = (e: React.WheelEvent) => {
-    if (kind !== "image") return;
-    e.preventDefault();
-    const delta = -e.deltaY * 0.01;
-    const rect = containerRef.current?.getBoundingClientRect();
-    const x = rect ? e.clientX - rect.left : undefined;
-    const y = rect ? e.clientY - rect.top : undefined;
-    applyScale(scale * (1 + delta), x, y);
-  };
+  // ── ネイティブタッチ/ポインターイベント (passive:false で preventDefault 可) ──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
 
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (kind !== "image") return;
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.current.size === 2) {
-      const [a, b] = Array.from(pointers.current.values());
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      pinchStart.current = { dist, scale };
-      panStart.current = null;
-    } else if (pointers.current.size === 1 && scale > 1) {
-      panStart.current = { x: e.clientX, y: e.clientY, tx, ty };
-    }
-  };
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      Array.from(e.changedTouches).forEach((t) => {
+        touches.current.set(t.identifier, { x: t.clientX, y: t.clientY });
+      });
+      if (touches.current.size === 2) {
+        const [a, b] = Array.from(touches.current.values());
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        pinchStart.current = { dist, scale: scaleRef.current };
+        panStart.current = null;
+      } else if (touches.current.size === 1 && scaleRef.current > 1) {
+        const t = e.changedTouches[0];
+        panStart.current = { x: t.clientX, y: t.clientY, tx: txRef.current, ty: tyRef.current };
+      }
+    };
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (kind !== "image") return;
-    if (!pointers.current.has(e.pointerId)) return;
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.current.size === 2 && pinchStart.current) {
-      const [a, b] = Array.from(pointers.current.values());
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const next = pinchStart.current.scale * (dist / pinchStart.current.dist);
-      const rect = containerRef.current?.getBoundingClientRect();
-      const cx = rect ? (a.x + b.x) / 2 - rect.left : undefined;
-      const cy = rect ? (a.y + b.y) / 2 - rect.top : undefined;
-      applyScale(next, cx, cy);
-    } else if (pointers.current.size === 1 && panStart.current) {
-      setTx(panStart.current.tx + (e.clientX - panStart.current.x));
-      setTy(panStart.current.ty + (e.clientY - panStart.current.y));
-    }
-  };
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      Array.from(e.changedTouches).forEach((t) => {
+        touches.current.set(t.identifier, { x: t.clientX, y: t.clientY });
+      });
+      if (touches.current.size === 2 && pinchStart.current) {
+        const [a, b] = Array.from(touches.current.values());
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const next = pinchStart.current.scale * (dist / pinchStart.current.dist);
+        const rect = el.getBoundingClientRect();
+        const cx = (a.x + b.x) / 2 - rect.left;
+        const cy = (a.y + b.y) / 2 - rect.top;
+        applyScale(next, cx, cy);
+      } else if (touches.current.size === 1 && panStart.current) {
+        const t = e.changedTouches[0];
+        txRef.current = panStart.current.tx + (t.clientX - panStart.current.x);
+        tyRef.current = panStart.current.ty + (t.clientY - panStart.current.y);
+        setTx(txRef.current);
+        setTy(tyRef.current);
+      }
+    };
 
-  const onPointerUp = (e: React.PointerEvent) => {
-    pointers.current.delete(e.pointerId);
-    if (pointers.current.size < 2) pinchStart.current = null;
-    if (pointers.current.size === 0) panStart.current = null;
-  };
+    const onTouchEnd = (e: TouchEvent) => {
+      Array.from(e.changedTouches).forEach((t) => {
+        touches.current.delete(t.identifier);
+      });
+      if (touches.current.size < 2) pinchStart.current = null;
+      if (touches.current.size === 0) panStart.current = null;
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      applyScale(scaleRef.current * (1 + -e.deltaY * 0.01), x, y);
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: false });
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, [applyScale]);
 
   const onDoubleClick = (e: React.MouseEvent) => {
-    if (kind !== "image") return;
     const rect = containerRef.current?.getBoundingClientRect();
     const x = rect ? e.clientX - rect.left : undefined;
     const y = rect ? e.clientY - rect.top : undefined;
-    applyScale(scale > 1 ? 1 : 2, x, y);
+    applyScale(scaleRef.current > 1 ? 1 : 2, x, y);
   };
 
   return (
@@ -118,14 +145,9 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
         ref={containerRef}
         className="w-full h-full flex items-center justify-center select-none"
         style={{
-          touchAction: kind === "image" ? "none" : "auto",
-          cursor: kind === "image" && scale > 1 ? "grab" : "default",
+          touchAction: "none",
+          cursor: scale > 1 ? "grab" : "default",
         }}
-        onWheel={onWheel}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}
       >
         {kind === "image" ? (
@@ -138,26 +160,34 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
             style={{
               transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
               transformOrigin: "center center",
-              transition: pointers.current.size === 0 ? "transform 0.1s" : "none",
             }}
           />
         ) : (
-          <iframe
-            src={src}
-            title={alt}
-            className="w-full h-full rounded-lg border-0"
-            style={{
-              transform: `scale(${scale})`,
-              transformOrigin: "center center",
-            }}
-          />
+          // PDF: iframeの上に透明オーバーレイを重ねてタッチを捕捉
+          <div className="relative w-full h-full">
+            <iframe
+              src={src}
+              title={alt}
+              className="w-full h-full rounded-lg border-0"
+              style={{
+                transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
+                transformOrigin: "center center",
+                pointerEvents: scale > 1 ? "none" : "auto",
+              }}
+            />
+            {/* タッチ捕捉用オーバーレイ (scale>1 or ピンチ操作中) */}
+            <div
+              className="absolute inset-0"
+              style={{ pointerEvents: scale > 1 ? "auto" : "none" }}
+            />
+          </div>
         )}
       </div>
 
       <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur rounded-lg shadow px-1 py-1">
         <button
           type="button"
-          onClick={() => applyScale(scale - 0.25)}
+          onClick={() => applyScale(scaleRef.current - 0.25)}
           className="p-1.5 hover:bg-gray-100 rounded-md"
           aria-label="縮小"
         >
@@ -168,7 +198,7 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
         </span>
         <button
           type="button"
-          onClick={() => applyScale(scale + 0.25)}
+          onClick={() => applyScale(scaleRef.current + 0.25)}
           className="p-1.5 hover:bg-gray-100 rounded-md"
           aria-label="拡大"
         >

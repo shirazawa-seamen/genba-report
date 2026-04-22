@@ -421,7 +421,7 @@ export async function createDailyReport(
 }
 
 // ---------------------------------------------------------------------------
-// 下書き報告の任意削除（報告者本人のみ・下書き状態のみ）
+// 報告の任意削除（報告者本人 or マネージャー/管理者・全ステータス対応）
 // ---------------------------------------------------------------------------
 export async function deleteDraftReport(
   reportIds: string[]
@@ -432,20 +432,22 @@ export async function deleteDraftReport(
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return { success: false, error: "ログインが必要です" };
 
-  // 対象レポートの状態・所有者を検証
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  const role = profile?.role ?? "";
+  const isManager = role === "admin" || role === "manager";
+
+  // 対象レポートの所有者を検証
   const { data: reports, error: fetchError } = await supabase
     .from("daily_reports")
-    .select("id, reporter_id, approval_status")
+    .select("id, reporter_id")
     .in("id", reportIds);
 
   if (fetchError) return { success: false, error: `取得エラー: ${fetchError.message}` };
   if (!reports || reports.length === 0) return { success: false, error: "報告が見つかりません" };
 
-  const invalid = reports.find(
-    (r) => r.reporter_id !== user.id || (r.approval_status ?? "draft") !== "draft"
-  );
-  if (invalid) {
-    return { success: false, error: "下書き状態の自分の報告のみ削除できます" };
+  if (!isManager) {
+    const invalid = reports.find((r) => r.reporter_id !== user.id);
+    if (invalid) return { success: false, error: "自分の報告のみ削除できます" };
   }
 
   // 添付写真をストレージから削除
@@ -458,12 +460,8 @@ export async function deleteDraftReport(
     await supabase.storage.from("report-photos").remove(paths);
   }
 
-  const { error: deleteError } = await supabase
-    .from("daily_reports")
-    .delete()
-    .in("id", reportIds)
-    .eq("reporter_id", user.id)
-    .eq("approval_status", "draft");
+  const query = supabase.from("daily_reports").delete().in("id", reportIds);
+  const { error: deleteError } = isManager ? await query : await query.eq("reporter_id", user.id);
 
   if (deleteError) {
     return { success: false, error: `削除エラー: ${deleteError.message}` };

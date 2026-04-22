@@ -394,7 +394,7 @@ export function DeleteDraftButton({ reportId, siblingIds }: { reportId: string; 
         </button>
       ) : (
         <div className="w-full rounded-xl border border-red-200 bg-red-50/50 p-4">
-          <p className="text-[13px] font-medium text-gray-700 mb-2">この下書きを削除しますか？</p>
+          <p className="text-[13px] font-medium text-gray-700 mb-2">この報告を削除しますか？</p>
           <p className="text-[12px] text-gray-400 mb-3">
             関連する写真も含めて完全に削除され、元に戻せません。
           </p>
