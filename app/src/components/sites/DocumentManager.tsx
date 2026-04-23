@@ -33,7 +33,8 @@ import {
   deleteSiteDocument,
   getDownloadUrl,
 } from "@/app/(dashboard)/sites/actions";
-import { getSiteRootFolderId } from "@/app/(dashboard)/storage/actions";
+import { getSiteRootFolderId, getSiteDocumentFolderId } from "@/app/(dashboard)/storage/actions";
+import { ZoomablePreview } from "@/components/storage/ZoomablePreview";
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_TYPE_OPTIONS, PHOTO_TYPE_LABELS } from "@/lib/constants";
 import type { DocumentType } from "@/lib/types";
 
@@ -170,6 +171,7 @@ export function DocumentManager({
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [rootFolderId, setRootFolderId] = useState<string | null>(null);
+  const [documentFolderId, setDocumentFolderId] = useState<string | undefined>(undefined);
 
   const fetchDocuments = useCallback(async () => {
     setFetchError(null);
@@ -212,6 +214,9 @@ export function DocumentManager({
     void fetchDocuments();
     void getSiteRootFolderId(siteId).then((res) => {
       if (res.success && res.folderId) setRootFolderId(res.folderId);
+    });
+    void getSiteDocumentFolderId(siteId).then((res) => {
+      if (res.success && res.folderId) setDocumentFolderId(res.folderId);
     });
   }, [fetchDocuments, siteId]);
 
@@ -415,6 +420,7 @@ export function DocumentManager({
           siteId={siteId}
           currentPath={currentPath}
           processes={processes}
+          documentFolderId={documentFolderId}
           onClose={async () => {
             setIsLoading(true);
             setShowUploadModal(false);
@@ -449,6 +455,7 @@ interface UploadModalProps {
   siteId: string;
   currentPath: string;
   processes: ProcessInfo[];
+  documentFolderId?: string;
   onClose: () => void;
 }
 
@@ -461,7 +468,7 @@ type FileEntry = {
   photoType?: string;
 };
 
-function UploadModal({ siteId, currentPath, processes, onClose }: UploadModalProps) {
+function UploadModal({ siteId, currentPath, processes, documentFolderId, onClose }: UploadModalProps) {
   const [isPending, startTransition] = useTransition();
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [defaultType, setDefaultType] = useState<DocumentType>("other");
@@ -599,6 +606,7 @@ function UploadModal({ siteId, currentPath, processes, onClose }: UploadModalPro
             folderPath,
             processId: entry.processId,
             photoType: entry.photoType,
+            folderId: documentFolderId,
           });
 
           if (!createResult.success) {
@@ -914,84 +922,47 @@ interface FilePreviewModalProps {
 function FilePreviewModal({ url, title, fileName, onClose, onDownload }: FilePreviewModalProps) {
   const isPdf = isPdfFile(fileName);
   const isImage = isImageFile(fileName);
+  const kind = isPdf ? "pdf" : isImage ? "image" : "pdf";
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[9999] flex flex-col bg-black/60"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4"
       style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0 }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {isImage ? (
-        <>
-          <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+      <div
+        className="bg-white rounded-2xl max-w-4xl max-h-[90vh] w-full flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText size={16} className="text-[#0EA5E9] shrink-0" />
+            <span className="text-sm font-semibold text-gray-900 truncate">
+              {title}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={onDownload}
-              className="flex h-9 items-center gap-1.5 rounded-full bg-black/50 px-3 text-[12px] font-medium text-white hover:bg-black/70 transition-colors backdrop-blur-sm"
+              className="flex h-8 items-center gap-1.5 rounded-lg bg-gray-100 px-3 text-[12px] font-medium text-gray-600 hover:bg-gray-200 transition-colors"
             >
               <Download size={14} />
-              保存
+              ダウンロード
             </button>
             <button
               onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors backdrop-blur-sm"
+              className="p-1.5 hover:bg-gray-100 rounded-lg"
             >
               <X size={18} />
             </button>
           </div>
-          <div className="flex items-center justify-center w-full h-full p-4 overflow-auto">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={url}
-              alt={title}
-              className="object-contain rounded-lg"
-              style={{ maxWidth: "90vw", maxHeight: "calc(100dvh - 60px)" }}
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="flex items-center justify-between px-4 py-3 bg-white/95 backdrop-blur-sm border-b border-gray-200">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText size={16} className="text-[#0EA5E9] shrink-0" />
-              <span className="text-[14px] font-semibold text-gray-800 truncate">
-                {title}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={onDownload}
-                className="flex h-9 items-center gap-1.5 rounded-lg bg-gray-100 px-3 text-[12px] font-medium text-gray-600 hover:bg-gray-200 transition-colors"
-              >
-                <Download size={14} />
-                ダウンロード
-              </button>
-              <button
-                onClick={onClose}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0">
-            {isPdf ? (
-              <iframe
-                src={`${url}#toolbar=1&navpanes=0`}
-                className="w-full h-full border-0"
-                title={`プレビュー: ${title}`}
-              />
-            ) : (
-              <iframe
-                src={url}
-                className="w-full h-full border-0 bg-white"
-                title={`プレビュー: ${title}`}
-              />
-            )}
-          </div>
-        </>
-      )}
+        </div>
+        <div className="flex-1 overflow-hidden p-4 bg-gray-50">
+          <ZoomablePreview src={url} alt={title} kind={kind} />
+        </div>
+      </div>
     </div>
   );
 

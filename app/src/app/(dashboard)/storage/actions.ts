@@ -906,6 +906,46 @@ export async function createSiteStorageFolders(
 }
 
 // ---------------------------------------------------------------------------
+// サイトの「ドキュメント」フォルダID取得（なければ site_root を返す）
+// DocumentManager からのアップロード時に folder_id を設定するために使用
+// ---------------------------------------------------------------------------
+export async function getSiteDocumentFolderId(siteId: string): Promise<{
+  success: boolean;
+  folderId?: string;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "認証エラー" };
+
+  // まず「ドキュメント」フォルダを探す
+  const { data: docFolder } = await supabase
+    .from("storage_folders")
+    .select("id")
+    .eq("site_id", siteId)
+    .eq("folder_type", "document")
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (docFolder) {
+    return { success: true, folderId: docFolder.id };
+  }
+
+  // なければ site_root を返す
+  const { data: rootFolder } = await supabase
+    .from("storage_folders")
+    .select("id")
+    .eq("site_id", siteId)
+    .eq("folder_type", "site_root")
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  return { success: true, folderId: rootFolder?.id ?? undefined };
+}
+
+// ---------------------------------------------------------------------------
 // サイトのルートフォルダID取得（サイト詳細→ストレージリンク用）
 // ---------------------------------------------------------------------------
 export async function getSiteRootFolderId(siteId: string): Promise<{
