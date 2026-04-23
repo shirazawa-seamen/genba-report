@@ -33,19 +33,6 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
 
   useEffect(() => { reset(); }, [src, reset]);
 
-  // ── iOS PWA 対応: user-scalable=no はピンチイベントをOSレベルでブロックするため
-  //    プレビュー表示中だけ viewport meta を切り替えてイベントをJSに届ける ──
-  useEffect(() => {
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
-    const original = meta?.getAttribute("content") ?? "";
-    if (meta) {
-      meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
-    }
-    return () => {
-      if (meta && original) meta.setAttribute("content", original);
-    };
-  }, []);
-
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
   const applyScale = useCallback(
@@ -70,7 +57,9 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
     []
   );
 
+  // 画像のみ: JS カスタムズーム
   useEffect(() => {
+    if (kind !== "image") return;
     const el = containerRef.current;
     if (!el) return;
 
@@ -83,7 +72,6 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
     let panStartX = 0, panStartY = 0;
     let panStartTx = 0, panStartTy = 0;
 
-    // iOS Safari / WKWebView: WebKit 独自の GestureEvent
     const onGestureStart = (e: Event) => {
       e.preventDefault();
       usingGestureAPI = true;
@@ -99,7 +87,6 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
       usingGestureAPI = false;
     };
 
-    // TouchEvent: pinch center 追跡 + Android/非iOS ピンチ計算
     const onTouchStart = (e: TouchEvent) => {
       e.preventDefault();
       if (e.touches.length === 2) {
@@ -149,7 +136,6 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
         pinchInitDist = 0;
       }
     };
-
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = el.getBoundingClientRect();
@@ -173,49 +159,59 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("wheel", onWheel);
     };
-  }, [applyScale]);
+  }, [kind, applyScale]);
 
   const onDoubleClick = (e: React.MouseEvent) => {
+    if (kind !== "image") return;
     const rect = containerRef.current?.getBoundingClientRect();
     applyScale(scaleRef.current > 1 ? 1 : 2, rect ? e.clientX - rect.left : undefined, rect ? e.clientY - rect.top : undefined);
   };
 
+  // ── PDF ──────────────────────────────────────────────────────────────
+  // iframeのネイティブPDFビューアに任せる。
+  // オーバーレイを置かずpointer-events:autoにすることでiOSの標準ピンチズームが動く。
+  if (kind === "pdf") {
+    return (
+      <div className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden">
+        <iframe
+          src={src}
+          title={alt}
+          className="w-full h-full rounded-lg border-0"
+        />
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-white/90 backdrop-blur rounded-lg shadow px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
+        >
+          <ExternalLink size={13} />
+          外部で開く
+        </a>
+      </div>
+    );
+  }
+
+  // ── 画像 ──────────────────────────────────────────────────────────────
   return (
     <div className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden">
+      {/* data-allow-pinch: layout.tsx のグローバルハンドラーがピンチを許可するマーカー */}
       <div
         ref={containerRef}
+        data-allow-pinch="true"
         className="w-full h-full flex items-center justify-center select-none"
         style={{ touchAction: "none", cursor: scale > 1 ? "grab" : "default" }}
         onDoubleClick={onDoubleClick}
       >
-        {kind === "image" ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={src}
-            alt={alt}
-            draggable={false}
-            className="max-w-full max-h-full object-contain rounded-lg pointer-events-none"
-            style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})`, transformOrigin: "center center" }}
-          />
-        ) : (
-          // PDF: iframeのネイティブレンダラーがタッチを横取りするためオーバーレイで捕捉
-          <div className="relative w-full h-full">
-            <iframe
-              src={src}
-              title={alt}
-              className="w-full h-full rounded-lg border-0"
-              style={{
-                transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
-                transformOrigin: "center center",
-                pointerEvents: "none",
-              }}
-            />
-            <div className="absolute inset-0" style={{ touchAction: "none" }} />
-          </div>
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          className="max-w-full max-h-full object-contain rounded-lg pointer-events-none"
+          style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})`, transformOrigin: "center center" }}
+        />
       </div>
 
-      {/* ズームコントロール */}
       <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur rounded-lg shadow px-1 py-1">
         <button type="button" onClick={() => applyScale(scaleRef.current - 0.25)} className="p-1.5 hover:bg-gray-100 rounded-md" aria-label="縮小">
           <ZoomOut size={16} />
@@ -228,19 +224,6 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
           <RotateCcw size={16} />
         </button>
       </div>
-
-      {/* PDF: 外部ビューアで開くボタン（iOS ネイティブPDFビューアはピンチズーム対応） */}
-      {kind === "pdf" && (
-        <a
-          href={src}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-white/90 backdrop-blur rounded-lg shadow px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
-        >
-          <ExternalLink size={13} />
-          外部で開く
-        </a>
-      )}
     </div>
   );
 }
