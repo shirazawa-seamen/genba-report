@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, ExternalLink } from "lucide-react";
 
 interface Props {
   src: string;
@@ -33,6 +33,19 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
 
   useEffect(() => { reset(); }, [src, reset]);
 
+  // ── iOS PWA 対応: user-scalable=no はピンチイベントをOSレベルでブロックするため
+  //    プレビュー表示中だけ viewport meta を切り替えてイベントをJSに届ける ──
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    const original = meta?.getAttribute("content") ?? "";
+    if (meta) {
+      meta.setAttribute("content", "width=device-width, initial-scale=1, viewport-fit=cover");
+    }
+    return () => {
+      if (meta && original) meta.setAttribute("content", original);
+    };
+  }, []);
+
   const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
   const applyScale = useCallback(
@@ -61,44 +74,36 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
     const el = containerRef.current;
     if (!el) return;
 
-    // ── Closure 変数（Reactステート不使用、クロージャーで追跡） ──
-    let usingGestureAPI = false; // iOS GestureEvent 使用中フラグ
+    let usingGestureAPI = false;
     let pinchInitScale = 1;
     let pinchInitDist = 0;
-    let pinchCX = 0; // ピンチ中心X（要素相対）
+    let pinchCX = 0;
     let pinchCY = 0;
     let panActive = false;
     let panStartX = 0, panStartY = 0;
     let panStartTx = 0, panStartTy = 0;
 
-    // ── iOS Safari / WKWebView (PWA含む): WebKit GestureEvent ──
-    // gesturestart/gesturechange はWKWebViewレベルのAPIで、
-    // TouchEvent/PointerEventより前に発火しPWAでも確実に動作する
+    // iOS Safari / WKWebView: WebKit 独自の GestureEvent
     const onGestureStart = (e: Event) => {
       e.preventDefault();
       usingGestureAPI = true;
       pinchInitScale = scaleRef.current;
     };
-
     const onGestureChange = (e: Event) => {
       e.preventDefault();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const gs = e as any;
-      applyScale(pinchInitScale * gs.scale, pinchCX, pinchCY);
+      applyScale(pinchInitScale * (e as any).scale, pinchCX, pinchCY);
     };
-
     const onGestureEnd = (e: Event) => {
       e.preventDefault();
       usingGestureAPI = false;
     };
 
-    // ── TouchEvent: pinchCX/CY の追跡 + Android/非iOS のピンチ計算 ──
+    // TouchEvent: pinch center 追跡 + Android/非iOS ピンチ計算
     const onTouchStart = (e: TouchEvent) => {
       e.preventDefault();
-
       if (e.touches.length === 2) {
-        const a = e.touches[0];
-        const b = e.touches[1];
+        const a = e.touches[0], b = e.touches[1];
         const rect = el.getBoundingClientRect();
         pinchCX = (a.clientX + b.clientX) / 2 - rect.left;
         pinchCY = (a.clientY + b.clientY) / 2 - rect.top;
@@ -113,20 +118,14 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
         panStartTy = tyRef.current;
       }
     };
-
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault();
-
       if (e.touches.length === 2) {
-        const a = e.touches[0];
-        const b = e.touches[1];
+        const a = e.touches[0], b = e.touches[1];
         const rect = el.getBoundingClientRect();
-        // iOS GestureEvent 使用中はcenter更新のみ（gesturechangeがscaleを処理）
         pinchCX = (a.clientX + b.clientX) / 2 - rect.left;
         pinchCY = (a.clientY + b.clientY) / 2 - rect.top;
-
         if (!usingGestureAPI && pinchInitDist > 0) {
-          // 非iOS（Android Chrome等）: 距離からscaleを計算
           const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
           applyScale(pinchInitScale * (dist / pinchInitDist), pinchCX, pinchCY);
         }
@@ -137,10 +136,8 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
         setTy(tyRef.current);
       }
     };
-
     const onTouchEnd = (e: TouchEvent) => {
       if (e.touches.length === 1 && scaleRef.current > 1) {
-        // ピンチ→パンへ遷移
         panActive = true;
         panStartX = e.touches[0].clientX;
         panStartY = e.touches[0].clientY;
@@ -180,9 +177,7 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
 
   const onDoubleClick = (e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
-    const x = rect ? e.clientX - rect.left : undefined;
-    const y = rect ? e.clientY - rect.top : undefined;
-    applyScale(scaleRef.current > 1 ? 1 : 2, x, y);
+    applyScale(scaleRef.current > 1 ? 1 : 2, rect ? e.clientX - rect.left : undefined, rect ? e.clientY - rect.top : undefined);
   };
 
   return (
@@ -200,13 +195,10 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
             alt={alt}
             draggable={false}
             className="max-w-full max-h-full object-contain rounded-lg pointer-events-none"
-            style={{
-              transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
-              transformOrigin: "center center",
-            }}
+            style={{ transform: `translate(${tx}px, ${ty}px) scale(${scale})`, transformOrigin: "center center" }}
           />
         ) : (
-          // PDF: iframeの上に透明オーバーレイを重ねてタッチを捕捉
+          // PDF: iframeのネイティブレンダラーがタッチを横取りするためオーバーレイで捕捉
           <div className="relative w-full h-full">
             <iframe
               src={src}
@@ -223,35 +215,32 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
         )}
       </div>
 
+      {/* ズームコントロール */}
       <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur rounded-lg shadow px-1 py-1">
-        <button
-          type="button"
-          onClick={() => applyScale(scaleRef.current - 0.25)}
-          className="p-1.5 hover:bg-gray-100 rounded-md"
-          aria-label="縮小"
-        >
+        <button type="button" onClick={() => applyScale(scaleRef.current - 0.25)} className="p-1.5 hover:bg-gray-100 rounded-md" aria-label="縮小">
           <ZoomOut size={16} />
         </button>
-        <span className="text-xs text-gray-700 w-10 text-center tabular-nums">
-          {Math.round(scale * 100)}%
-        </span>
-        <button
-          type="button"
-          onClick={() => applyScale(scaleRef.current + 0.25)}
-          className="p-1.5 hover:bg-gray-100 rounded-md"
-          aria-label="拡大"
-        >
+        <span className="text-xs text-gray-700 w-10 text-center tabular-nums">{Math.round(scale * 100)}%</span>
+        <button type="button" onClick={() => applyScale(scaleRef.current + 0.25)} className="p-1.5 hover:bg-gray-100 rounded-md" aria-label="拡大">
           <ZoomIn size={16} />
         </button>
-        <button
-          type="button"
-          onClick={reset}
-          className="p-1.5 hover:bg-gray-100 rounded-md"
-          aria-label="リセット"
-        >
+        <button type="button" onClick={reset} className="p-1.5 hover:bg-gray-100 rounded-md" aria-label="リセット">
           <RotateCcw size={16} />
         </button>
       </div>
+
+      {/* PDF: 外部ビューアで開くボタン（iOS ネイティブPDFビューアはピンチズーム対応） */}
+      {kind === "pdf" && (
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-white/90 backdrop-blur rounded-lg shadow px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
+        >
+          <ExternalLink size={13} />
+          外部で開く
+        </a>
+      )}
     </div>
   );
 }
