@@ -51,7 +51,7 @@ export function MobileBottomNav({ items }: { items: NavItemDef[] }) {
     <>
       {/* Fixed nav — full width */}
       <div
-        className="md:hidden print:!hidden fixed bottom-0 left-0 right-0 z-50 px-3"
+        className="md:hidden print:!hidden fixed bottom-0 left-0 right-0 z-40 px-3"
         style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 8px)" }}
       >
         <div>
