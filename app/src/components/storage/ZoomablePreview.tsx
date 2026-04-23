@@ -227,12 +227,18 @@ function PdfPreview({ src, alt }: { src: string; alt: string }) {
         setLoading(true);
         setError(null);
 
+        // PDF データを先に fetch（CORS 回避: ブラウザが署名付きURLを直接取得）
+        const response = await fetch(src);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.arrayBuffer();
+        if (cancelled) return;
+
         const pdfjsLib = await import("pdfjs-dist");
 
-        // Worker を CDN から読み込む
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        // Worker をローカルから読み込む（CDN 依存を排除）
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-        const doc = await pdfjsLib.getDocument(src).promise;
+        const doc = await pdfjsLib.getDocument({ data }).promise;
         if (cancelled) return;
 
         pdfDocRef.current = doc;
