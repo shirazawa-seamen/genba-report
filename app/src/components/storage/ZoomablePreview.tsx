@@ -172,11 +172,15 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
   // オーバーレイを置かずpointer-events:autoにすることでiOSの標準ピンチズームが動く。
   if (kind === "pdf") {
     return (
-      <div className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden">
+      <div
+        data-preview-pinch-root="true"
+        className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden"
+      >
         <iframe
           src={src}
           title={alt}
           className="w-full h-full rounded-lg border-0"
+          style={{ touchAction: "auto" }}
         />
         <a
           href={src}
@@ -194,10 +198,9 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
   // ── 画像 ──────────────────────────────────────────────────────────────
   return (
     <div className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden">
-      {/* data-allow-pinch: layout.tsx のグローバルハンドラーがピンチを許可するマーカー */}
       <div
         ref={containerRef}
-        data-allow-pinch="true"
+        data-preview-pinch-root="true"
         className="w-full h-full flex items-center justify-center select-none"
         style={{ touchAction: "none", cursor: scale > 1 ? "grab" : "default" }}
         onDoubleClick={onDoubleClick}

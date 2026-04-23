@@ -263,6 +263,44 @@ export function StoragePage({
     return () => document.removeEventListener("mousedown", handler);
   }, [docMenuId, folderMenuId]);
 
+  useEffect(() => {
+    if (!previewUrl) return;
+
+    const { body, documentElement } = document;
+    const prevBodyOverflow = body.style.overflow;
+    const prevBodyOverscroll = body.style.overscrollBehavior;
+    const prevHtmlOverscroll = documentElement.style.overscrollBehavior;
+
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    documentElement.style.overscrollBehavior = "none";
+
+    const handlePinchOutsidePreview = (e: TouchEvent) => {
+      if (e.touches.length < 2) return;
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-preview-pinch-root='true']")) return;
+      e.preventDefault();
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewUrl(null);
+    };
+
+    document.addEventListener("touchstart", handlePinchOutsidePreview, { passive: false });
+    document.addEventListener("touchmove", handlePinchOutsidePreview, { passive: false });
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      body.style.overscrollBehavior = prevBodyOverscroll;
+      documentElement.style.overscrollBehavior = prevHtmlOverscroll;
+      document.removeEventListener("touchstart", handlePinchOutsidePreview);
+      document.removeEventListener("touchmove", handlePinchOutsidePreview);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [previewUrl]);
+
   return (
     <div className="px-4 sm:px-6 py-6 space-y-6">
       {/* ── ヘッダー ── */}
@@ -665,12 +703,10 @@ export function StoragePage({
       {previewUrl && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-          style={{ touchAction: "none" }}
           onClick={() => setPreviewUrl(null)}
         >
           <div
             className="bg-white rounded-2xl max-w-4xl max-h-[90vh] w-full flex flex-col overflow-hidden"
-            style={{ touchAction: "none" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
@@ -684,7 +720,7 @@ export function StoragePage({
                 <X size={18} />
               </button>
             </div>
-            <div className="flex-1 overflow-hidden p-4 bg-gray-50" style={{ touchAction: "none" }}>
+            <div className="flex-1 overflow-hidden p-4 bg-gray-50">
               <ZoomablePreview
                 src={previewUrl}
                 alt={previewFileName}

@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 // maximumScale/userScalable を設定するとiOS PWAでピンチイベントがJS到達前にブロックされる。
-// グローバルtouchstartでモーダル以外のピンチを防ぐ方式に変更。
+// ピンチ制御は各モーダル側で必要時のみ行う。
 export const viewport = {
   width: "device-width",
   initialScale: 1,
@@ -32,14 +32,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" style={{ colorScheme: "light" }}>
-      <head>
-        {/* モーダル外のピンチズームをJSで防止（data-allow-pinch属性がある要素は許可） */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `document.addEventListener('touchstart',function(e){if(e.touches.length>1&&!e.target.closest('[data-allow-pinch]')){e.preventDefault();}},{passive:false});`,
-          }}
-        />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900`}
       >
