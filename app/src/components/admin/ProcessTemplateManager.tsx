@@ -505,8 +505,13 @@ export function ProcessTemplateManager({
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  {isChild && (
-                    <CornerDownRight size={12} className="text-gray-300 flex-shrink-0" />
+                  {isChild ? (
+                    <>
+                      <CornerDownRight size={12} className="text-gray-300 flex-shrink-0" />
+                      <span className="shrink-0 rounded bg-sky-50 px-1 py-0.5 text-[9px] font-bold text-sky-400 leading-none">子</span>
+                    </>
+                  ) : (
+                    <span className="shrink-0 rounded bg-indigo-50 px-1 py-0.5 text-[9px] font-bold text-indigo-400 leading-none">親</span>
                   )}
                   {!isChild && hasChildren && (
                     <button

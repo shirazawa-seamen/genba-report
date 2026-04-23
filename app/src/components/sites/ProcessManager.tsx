@@ -115,6 +115,9 @@ function ChecklistPanel({
         <>
           {items.length > 0 && (
             <div className="space-y-1.5">
+              <div className="flex items-center gap-1 mb-1">
+                <span className="shrink-0 rounded bg-amber-50 px-1 py-0.5 text-[9px] font-bold text-amber-400 leading-none">孫</span>
+              </div>
               {items.map((item) => (
                 <div key={item.id} className="flex items-center gap-2">
                   {isEditing ? (
@@ -842,7 +845,14 @@ export function ProcessManager({
           ) : null}
           <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-2">
-              {isChild && <CornerDownRight size={12} className="shrink-0 text-gray-300" />}
+              {isChild ? (
+                <>
+                  <CornerDownRight size={12} className="shrink-0 text-gray-300" />
+                  <span className="shrink-0 rounded bg-sky-50 px-1 py-0.5 text-[9px] font-bold text-sky-400 leading-none">子</span>
+                </>
+              ) : (
+                <span className="shrink-0 rounded bg-indigo-50 px-1 py-0.5 text-[9px] font-bold text-indigo-400 leading-none">親</span>
+              )}
               <span className={`truncate font-semibold ${isChild ? "text-[13px] text-gray-600" : "text-[14px] text-gray-800"}`}>
                 {process.name}
               </span>

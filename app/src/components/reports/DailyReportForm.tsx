@@ -459,7 +459,8 @@ function Step1({
                         className="w-full rounded-2xl border border-gray-100 bg-gray-50/50 px-4 py-2.5 text-left"
                       >
                         <div className="flex items-center justify-between">
-                          <p className="text-[13px] font-semibold text-gray-500">
+                          <p className="text-[13px] font-semibold text-gray-500 flex items-center gap-1.5">
+                            <span className="shrink-0 rounded bg-indigo-50 px-1 py-0.5 text-[9px] font-bold text-indigo-400 leading-none">親</span>
                             {process.name}
                           </p>
                           <span className="text-[12px] font-medium text-gray-400">
@@ -485,8 +486,16 @@ function Step1({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-[14px] font-semibold text-gray-800">
-                            {isChild ? "↳ " : ""}{process.name}
+                          <p className="text-[14px] font-semibold text-gray-800 flex items-center gap-1.5">
+                            {isChild ? (
+                              <>
+                                <span className="shrink-0 rounded bg-sky-50 px-1 py-0.5 text-[9px] font-bold text-sky-400 leading-none">子</span>
+                                <span className="text-gray-300">↳</span>
+                              </>
+                            ) : (
+                              <span className="shrink-0 rounded bg-indigo-50 px-1 py-0.5 text-[9px] font-bold text-indigo-400 leading-none">親</span>
+                            )}
+                            {process.name}
                           </p>
                           <p className="mt-1 text-[11px] text-gray-400">
                             現在の公式進捗 {process.progress_rate}%
