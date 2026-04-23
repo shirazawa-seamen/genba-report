@@ -61,64 +61,95 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
     const el = containerRef.current;
     if (!el) return;
 
-    // ── PointerEvent + setPointerCapture (iOS PWA / WKWebView 対応) ──
-    const pointers = new Map<number, { x: number; y: number }>();
-    let pinchInitDist = 0;
+    // ── Closure 変数（Reactステート不使用、クロージャーで追跡） ──
+    let usingGestureAPI = false; // iOS GestureEvent 使用中フラグ
     let pinchInitScale = 1;
-    let pinchCX = 0;
+    let pinchInitDist = 0;
+    let pinchCX = 0; // ピンチ中心X（要素相対）
     let pinchCY = 0;
-    let panStartX = 0;
-    let panStartY = 0;
-    let panStartTx = 0;
-    let panStartTy = 0;
+    let panActive = false;
+    let panStartX = 0, panStartY = 0;
+    let panStartTx = 0, panStartTy = 0;
 
-    const onPointerDown = (e: PointerEvent) => {
-      try { el.setPointerCapture(e.pointerId); } catch {}
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // ── iOS Safari / WKWebView (PWA含む): WebKit GestureEvent ──
+    // gesturestart/gesturechange はWKWebViewレベルのAPIで、
+    // TouchEvent/PointerEventより前に発火しPWAでも確実に動作する
+    const onGestureStart = (e: Event) => {
+      e.preventDefault();
+      usingGestureAPI = true;
+      pinchInitScale = scaleRef.current;
+    };
 
-      if (pointers.size === 2) {
-        const pts = Array.from(pointers.values());
-        pinchInitDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        pinchInitScale = scaleRef.current;
+    const onGestureChange = (e: Event) => {
+      e.preventDefault();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gs = e as any;
+      applyScale(pinchInitScale * gs.scale, pinchCX, pinchCY);
+    };
+
+    const onGestureEnd = (e: Event) => {
+      e.preventDefault();
+      usingGestureAPI = false;
+    };
+
+    // ── TouchEvent: pinchCX/CY の追跡 + Android/非iOS のピンチ計算 ──
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+
+      if (e.touches.length === 2) {
+        const a = e.touches[0];
+        const b = e.touches[1];
         const rect = el.getBoundingClientRect();
-        pinchCX = (pts[0].x + pts[1].x) / 2 - rect.left;
-        pinchCY = (pts[0].y + pts[1].y) / 2 - rect.top;
-        panStartX = 0;
-      } else if (pointers.size === 1 && scaleRef.current > 1) {
-        panStartX = e.clientX;
-        panStartY = e.clientY;
+        pinchCX = (a.clientX + b.clientX) / 2 - rect.left;
+        pinchCY = (a.clientY + b.clientY) / 2 - rect.top;
+        pinchInitDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        pinchInitScale = scaleRef.current;
+        panActive = false;
+      } else if (e.touches.length === 1 && scaleRef.current > 1) {
+        panActive = true;
+        panStartX = e.touches[0].clientX;
+        panStartY = e.touches[0].clientY;
         panStartTx = txRef.current;
         panStartTy = tyRef.current;
-        pinchInitDist = 0;
       }
     };
 
-    const onPointerMove = (e: PointerEvent) => {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
 
-      if (pointers.size === 2 && pinchInitDist > 0) {
-        const pts = Array.from(pointers.values());
-        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        applyScale(pinchInitScale * (dist / pinchInitDist), pinchCX, pinchCY);
-      } else if (pointers.size === 1 && panStartX !== 0) {
-        txRef.current = panStartTx + (e.clientX - panStartX);
-        tyRef.current = panStartTy + (e.clientY - panStartY);
+      if (e.touches.length === 2) {
+        const a = e.touches[0];
+        const b = e.touches[1];
+        const rect = el.getBoundingClientRect();
+        // iOS GestureEvent 使用中はcenter更新のみ（gesturechangeがscaleを処理）
+        pinchCX = (a.clientX + b.clientX) / 2 - rect.left;
+        pinchCY = (a.clientY + b.clientY) / 2 - rect.top;
+
+        if (!usingGestureAPI && pinchInitDist > 0) {
+          // 非iOS（Android Chrome等）: 距離からscaleを計算
+          const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+          applyScale(pinchInitScale * (dist / pinchInitDist), pinchCX, pinchCY);
+        }
+      } else if (e.touches.length === 1 && panActive) {
+        txRef.current = panStartTx + (e.touches[0].clientX - panStartX);
+        tyRef.current = panStartTy + (e.touches[0].clientY - panStartY);
         setTx(txRef.current);
         setTy(tyRef.current);
       }
     };
 
-    const onPointerUp = (e: PointerEvent) => {
-      pointers.delete(e.pointerId);
-      if (pointers.size < 2) pinchInitDist = 0;
-      if (pointers.size === 0) { panStartX = 0; }
-      if (pointers.size === 1 && scaleRef.current > 1) {
-        const remaining = Array.from(pointers.values())[0];
-        panStartX = remaining.x;
-        panStartY = remaining.y;
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 1 && scaleRef.current > 1) {
+        // ピンチ→パンへ遷移
+        panActive = true;
+        panStartX = e.touches[0].clientX;
+        panStartY = e.touches[0].clientY;
         panStartTx = txRef.current;
         panStartTy = tyRef.current;
+        pinchInitDist = 0;
+      } else if (e.touches.length === 0) {
+        panActive = false;
+        pinchInitDist = 0;
       }
     };
 
@@ -128,17 +159,21 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
       applyScale(scaleRef.current * (1 + -e.deltaY * 0.01), e.clientX - rect.left, e.clientY - rect.top);
     };
 
-    el.addEventListener("pointerdown", onPointerDown);
-    el.addEventListener("pointermove", onPointerMove);
-    el.addEventListener("pointerup", onPointerUp);
-    el.addEventListener("pointercancel", onPointerUp);
+    el.addEventListener("gesturestart", onGestureStart, { passive: false });
+    el.addEventListener("gesturechange", onGestureChange, { passive: false });
+    el.addEventListener("gestureend", onGestureEnd, { passive: false });
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: false });
     el.addEventListener("wheel", onWheel, { passive: false });
 
     return () => {
-      el.removeEventListener("pointerdown", onPointerDown);
-      el.removeEventListener("pointermove", onPointerMove);
-      el.removeEventListener("pointerup", onPointerUp);
-      el.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("gesturestart", onGestureStart);
+      el.removeEventListener("gesturechange", onGestureChange);
+      el.removeEventListener("gestureend", onGestureEnd);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("wheel", onWheel);
     };
   }, [applyScale]);
@@ -171,7 +206,7 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
             }}
           />
         ) : (
-          // PDF: iframeの上に透明オーバーレイを重ねてポインターを捕捉
+          // PDF: iframeの上に透明オーバーレイを重ねてタッチを捕捉
           <div className="relative w-full h-full">
             <iframe
               src={src}
@@ -183,7 +218,6 @@ export function ZoomablePreview({ src, alt, kind }: Props) {
                 pointerEvents: "none",
               }}
             />
-            {/* ポインター捕捉用オーバーレイ */}
             <div className="absolute inset-0" style={{ touchAction: "none" }} />
           </div>
         )}
