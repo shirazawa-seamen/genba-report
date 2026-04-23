@@ -312,31 +312,8 @@ function PdfPreview({ src, alt }: { src: string; alt: string }) {
     reset();
   }, [pageNum, reset]);
 
-  if (loading) {
-    return (
-      <div className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden flex items-center justify-center">
-        <Loader2 className="animate-spin text-gray-400" size={32} />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden flex flex-col items-center justify-center gap-3">
-        <p className="text-sm text-gray-500">{error}</p>
-        <a
-          href={src}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700"
-        >
-          <ExternalLink size={14} />
-          外部で開く
-        </a>
-      </div>
-    );
-  }
-
+  // containerRef を常に DOM に置く（useZoomPan のリスナー登録に必要）
+  // loading / error はオーバーレイで表示
   return (
     <div className="relative w-full h-[70vh] bg-gray-50 rounded-lg overflow-hidden">
       <div
@@ -350,9 +327,33 @@ function PdfPreview({ src, alt }: { src: string; alt: string }) {
           style={{
             transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
             transformOrigin: "center center",
+            display: loading || error ? "none" : "block",
           }}
         />
       </div>
+
+      {/* ローディング */}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80">
+          <Loader2 className="animate-spin text-gray-400" size={32} />
+        </div>
+      )}
+
+      {/* エラー */}
+      {error && !loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-50/80">
+          <p className="text-sm text-gray-500">{error}</p>
+          <a
+            href={src}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm hover:bg-blue-700"
+          >
+            <ExternalLink size={14} />
+            外部で開く
+          </a>
+        </div>
+      )}
 
       {/* ページ送り */}
       {totalPages > 1 && (
